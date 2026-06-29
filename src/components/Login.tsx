@@ -272,31 +272,24 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
               {/* ── Logo & Header ── */}
               <div className="text-center mb-8">
                 <div className="inline-flex items-center justify-center mb-5 relative">
-                  {/* Amber glow halo behind the FUTO seal */}
                   <div
-                    className="absolute inset-[-12px] rounded-full pointer-events-none"
+                    className="absolute inset-[-16px] rounded-full pointer-events-none"
                     style={{
-                      background: "radial-gradient(circle, rgba(245,158,11,0.22) 0%, transparent 72%)",
+                      background: "radial-gradient(circle, rgba(30,58,110,0.18) 0%, transparent 72%)",
                       animation: "pulse-glow 3.2s ease-in-out infinite",
                     }}
                   />
                   <div className="relative drop-shadow-sm">
-                    <FUTOLogo className="h-[76px] w-[76px]" />
+                    <img src="/logo.png" alt="QuizOS" className="h-[96px] w-auto select-none" />
                   </div>
                 </div>
 
-                <h1 className="text-[10.5px] font-black tracking-[0.20em] text-slate-600 dark:text-slate-300 font-display uppercase leading-snug">
-                  Federal University of Technology
-                </h1>
-                <p className="text-[9px] text-slate-400 dark:text-slate-600 font-mono uppercase tracking-[0.22em] font-bold mt-0.5">
-                  Owerri · P.M.B. 1526 · Technology for Service
+                <p className="text-[9px] text-slate-400 dark:text-slate-600 font-mono uppercase tracking-[0.22em] font-bold mt-1">
+                  Federal University of Technology, Owerri
                 </p>
 
                 <div className="my-5 h-px bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700/70 to-transparent" />
 
-                <h2 className="text-[22px] font-bold tracking-tight text-slate-900 dark:text-white font-display leading-tight">
-                  EduQuiz Portal
-                </h2>
                 <p className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed">
                   Secure examinations &amp; interactive learning
                 </p>
@@ -718,7 +711,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
 
           {/* Below-card tagline */}
           <p className="text-center mt-4 text-[10px] text-slate-400/70 dark:text-slate-700 select-none">
-            FUTO EduQuiz Portal © 2026 · Secure Academic Platform
+            QuizOS © 2026 · FUTO Secure Academic Platform
           </p>
 
         </motion.div>

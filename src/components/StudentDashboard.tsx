@@ -810,9 +810,9 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#010e07]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 flex-shrink-0">
-            <FUTOLogo className="h-8 w-8" />
+            <img src="/logo.png" alt="QuizOS" className="h-8 w-auto select-none" />
             <div className="hidden sm:block">
-              <span className="text-[13px] font-bold text-slate-900 dark:text-white font-display tracking-tight">EduQuiz</span>
+              <span className="text-[13px] font-bold text-slate-900 dark:text-white font-display tracking-tight">QuizOS</span>
               <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono ml-1.5">Student Portal</span>
             </div>
           </div>
