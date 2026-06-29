@@ -203,36 +203,36 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
   const yearsOptions = ["Year 1","Year 2","Year 3","Year 4","Year 5","Extra Year","Postgraduate"];
 
   const labelClass = "block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
-  const linkClass  = "text-[12.5px] text-indigo-600 dark:text-indigo-400 font-semibold hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors cursor-pointer";
+  const linkClass  = "text-[12.5px] text-emerald-700 dark:text-emerald-400 font-semibold hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors cursor-pointer";
 
   return (
     <div className="min-h-screen relative overflow-x-hidden font-sans antialiased">
 
       {/* ── Background gradient ── */}
-      <div className="fixed inset-0 bg-gradient-to-br from-indigo-50 via-white to-violet-50/70 dark:from-[#020208] dark:via-slate-950 dark:to-[#0c0824]" />
+      <div className="fixed inset-0 bg-gradient-to-br from-emerald-50 via-white to-green-50/60 dark:from-[#010e07] dark:via-[#011208] dark:to-[#021a0d]" />
 
       {/* ── Ambient orbs – light mode ── */}
       <div
         className="fixed -top-[18%] -left-[8%] w-[58%] aspect-square rounded-full pointer-events-none orb-1 dark:opacity-0"
-        style={{ background: "radial-gradient(circle, rgba(165,180,252,0.32) 0%, transparent 68%)" }}
+        style={{ background: "radial-gradient(circle, rgba(110,231,183,0.30) 0%, transparent 68%)" }}
       />
       <div
         className="fixed -bottom-[18%] -right-[8%] w-[52%] aspect-square rounded-full pointer-events-none orb-2 dark:opacity-0"
-        style={{ background: "radial-gradient(circle, rgba(196,181,253,0.26) 0%, transparent 68%)" }}
+        style={{ background: "radial-gradient(circle, rgba(167,243,208,0.24) 0%, transparent 68%)" }}
       />
       <div
         className="fixed top-[35%] right-[15%] w-[30%] aspect-square rounded-full pointer-events-none orb-3 dark:opacity-0"
-        style={{ background: "radial-gradient(circle, rgba(186,230,253,0.22) 0%, transparent 70%)" }}
+        style={{ background: "radial-gradient(circle, rgba(209,250,229,0.30) 0%, transparent 70%)" }}
       />
 
       {/* ── Ambient orbs – dark mode ── */}
       <div
         className="fixed top-[5%] left-[2%] w-[50%] aspect-square rounded-full pointer-events-none orb-1 opacity-0 dark:opacity-100"
-        style={{ background: "radial-gradient(circle, rgba(79,70,229,0.18) 0%, transparent 68%)" }}
+        style={{ background: "radial-gradient(circle, rgba(4,120,87,0.22) 0%, transparent 68%)" }}
       />
       <div
         className="fixed bottom-[5%] right-[2%] w-[45%] aspect-square rounded-full pointer-events-none orb-2 opacity-0 dark:opacity-100"
-        style={{ background: "radial-gradient(circle, rgba(124,58,237,0.14) 0%, transparent 68%)" }}
+        style={{ background: "radial-gradient(circle, rgba(5,150,105,0.16) 0%, transparent 68%)" }}
       />
 
       {/* ── Theme toggle ── */}
@@ -402,7 +402,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                         <ArrowLeft className="h-3.5 w-3.5" />
                       </button>
                       <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                        <KeyRound className="h-3.5 w-3.5 text-indigo-500" />
+                        <KeyRound className="h-3.5 w-3.5 text-emerald-600" />
                         Year Maintenance Portal
                       </span>
                     </div>
@@ -462,7 +462,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                     className="space-y-4"
                   >
                     <div className="text-center pb-0.5">
-                      <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">
+                      <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
                         <ClipboardCheck className="h-3 w-3" /> Student Login
                       </span>
                     </div>
@@ -507,7 +507,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                     className="space-y-3.5"
                   >
                     <div className="text-center pb-0.5">
-                      <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">
+                      <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
                         <ClipboardCheck className="h-3 w-3" /> New Student Registration
                       </span>
                     </div>
@@ -594,7 +594,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                     className="space-y-4"
                   >
                     <div className="text-center pb-0.5">
-                      <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">
+                      <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
                         <GraduationCap className="h-3 w-3" /> Academic Staff Login
                       </span>
                     </div>
@@ -634,7 +634,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                     className="space-y-4"
                   >
                     <div className="text-center pb-0.5">
-                      <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">
+                      <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
                         <GraduationCap className="h-3 w-3" /> Staff Registration
                       </span>
                     </div>
@@ -700,12 +700,12 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                       onClick={() => handleQuickFill(p.action)}
                       className="group flex flex-col items-start p-2.5
                         bg-slate-50/80 dark:bg-white/[0.04]
-                        hover:bg-indigo-50 dark:hover:bg-indigo-950/30
+                        hover:bg-emerald-50 dark:hover:bg-emerald-950/30
                         border border-slate-200/55 dark:border-white/[0.055]
-                        hover:border-indigo-200 dark:hover:border-indigo-800/40
+                        hover:border-emerald-200 dark:hover:border-emerald-800/40
                         rounded-[10px] transition-all duration-200 cursor-pointer text-left"
                     >
-                      <span className="text-[9px] font-bold text-slate-400 dark:text-slate-600 font-mono uppercase group-hover:text-indigo-500 transition-colors">{p.label}</span>
+                      <span className="text-[9px] font-bold text-slate-400 dark:text-slate-600 font-mono uppercase group-hover:text-emerald-600 transition-colors">{p.label}</span>
                       <span className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300 mt-0.5 leading-tight">{p.name}</span>
                       <span className="text-[9px] font-mono text-slate-400 dark:text-slate-600 mt-0.5">{p.sub}</span>
                     </button>

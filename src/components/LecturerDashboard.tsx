@@ -504,12 +504,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         }}
         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-[12px] font-medium transition-all duration-150 cursor-pointer ${
           isActive
-            ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/30"
+            ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/30"
             : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white border border-transparent"
         }`}
       >
         <div className="flex items-center gap-2.5">
-          <span className={`flex-shrink-0 ${isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500"}`}>{icon}</span>
+          <span className={`flex-shrink-0 ${isActive ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"}`}>{icon}</span>
           {label}
         </div>
         {live && broadcastingSession && (
@@ -526,7 +526,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
 
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#080818]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06]">
+      <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#010e07]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 flex-shrink-0">
             <FUTOLogo className="h-8 w-8" />
@@ -553,7 +553,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                 size={34}
                 initials={user.name}
                 refreshTrigger={avatarRefreshTrigger}
-                className="ring-2 ring-white dark:ring-slate-800 group-hover:ring-indigo-200 dark:group-hover:ring-indigo-800 transition-all rounded-full"
+                className="ring-2 ring-white dark:ring-slate-800 group-hover:ring-emerald-200 dark:group-hover:ring-emerald-800 transition-all rounded-full"
               />
               <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                 <Camera className="h-3 w-3 text-white" />
@@ -625,7 +625,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 1. GRADEBOOK ── */}
           {activeTab === "gradebook" && (
-            <div id="gradebook-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="gradebook-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Student Assessment Gradebook</h2>
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Evaluate, mark, and adjust examination attempt logs.</p>
@@ -708,7 +708,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       ))
                     ) : filteredAttempts.length > 0 ? (
                       filteredAttempts.map((att) => (
-                        <tr key={att.id} className="hover:bg-indigo-50/30 dark:hover:bg-white/[0.02] transition-colors text-[11px]">
+                        <tr key={att.id} className="hover:bg-emerald-50/30 dark:hover:bg-white/[0.02] transition-colors text-[11px]">
                           <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">{att.student?.fullName}</td>
                           <td className="px-4 py-3 font-mono text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">{att.student?.regNumber}</td>
                           <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{att.student?.department}</td>
@@ -739,11 +739,11 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                                   min="0" max="100" step="0.5"
                                   value={editingScore}
                                   onChange={(e) => setEditingScore(e.target.value)}
-                                  className="w-14 px-1.5 py-1 border border-slate-300 dark:border-slate-600 rounded-lg text-center font-mono text-[10px] bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-indigo-400"
+                                  className="w-14 px-1.5 py-1 border border-slate-300 dark:border-slate-600 rounded-lg text-center font-mono text-[10px] bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-emerald-400"
                                 />
                                 <button
                                   onClick={() => handleSaveScoreAdjustment(att.id)}
-                                  className="p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition cursor-pointer"
+                                  className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition cursor-pointer"
                                 >
                                   <Check className="h-3 w-3" />
                                 </button>
@@ -757,7 +757,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                             ) : (
                               <button
                                 onClick={() => { setEditingAttemptId(att.id); setEditingScore(att.score?.toString() || "0"); }}
-                                className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/[0.10] px-2.5 py-1 bg-slate-50 dark:bg-white/[0.04] hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:text-indigo-700 dark:hover:text-indigo-400 hover:border-indigo-100 dark:hover:border-indigo-900/30 transition rounded-lg cursor-pointer"
+                                className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/[0.10] px-2.5 py-1 bg-slate-50 dark:bg-white/[0.04] hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-700 dark:hover:text-emerald-400 hover:border-emerald-100 dark:hover:border-emerald-900/30 transition rounded-lg cursor-pointer"
                               >
                                 Regrade
                               </button>
@@ -780,7 +780,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 2. LIVE LECTURE ── */}
           {activeTab === "live-lecture" && (
-            <div id="live-lecture-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="live-lecture-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display flex items-center gap-2">
                   <Radio className="h-4 w-4 text-red-500 animate-pulse" />
@@ -791,7 +791,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
               {!broadcastingSession ? (
                 <form onSubmit={handleLaunchLiveLecture} className="space-y-4">
-                  <div className="bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-xl p-4 text-[12.5px] text-indigo-800 dark:text-indigo-300 leading-relaxed">
+                  <div className="bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-4 text-[12.5px] text-emerald-800 dark:text-emerald-300 leading-relaxed">
                     <strong>Instructions:</strong> Creating a live session establishes an active broadcast channel. Students can join, view your slides, and participate in real-time discussions.
                   </div>
 
@@ -898,14 +898,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         )}
                         <div ref={chatEndRef} />
                       </div>
-                      <form onSubmit={handleSendLecturerChat} className="p-2.5 border-t border-slate-100 dark:border-white/[0.06] flex gap-2 bg-white dark:bg-[#0d0d22]">
+                      <form onSubmit={handleSendLecturerChat} className="p-2.5 border-t border-slate-100 dark:border-white/[0.06] flex gap-2 bg-white dark:bg-[#011a0d]">
                         <input
                           type="text"
                           required
                           value={lecturerChatMessage}
                           onChange={(e) => setLecturerChatMessage(e.target.value)}
                           placeholder="Reply to class…"
-                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-300 dark:focus:border-indigo-700 transition-colors"
+                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-emerald-300 dark:focus:border-emerald-700 transition-colors"
                         />
                         <button
                           type="submit"
@@ -924,7 +924,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 3. PUBLISH NOTES ── */}
           {activeTab === "notes" && (
-            <div id="notes-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="notes-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Publish Course Study Notes</h2>
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Upload comprehensive module details for students to study.</p>
@@ -959,7 +959,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 4. DEPLOY QUIZ ── */}
           {activeTab === "quizzes" && (
-            <div id="quizzes-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="quizzes-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Deploy Secure Quiz & Examination</h2>
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Configure timed question sets for instant testing and score logging.</p>
@@ -991,7 +991,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   {quizQuestions.map((q, qIdx) => (
                     <div key={qIdx} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl bg-white dark:bg-white/[0.02] space-y-3">
                       <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-white/[0.06]">
-                        <span className="text-[10px] font-mono font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Question {qIdx + 1}</span>
+                        <span className="text-[10px] font-mono font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest">Question {qIdx + 1}</span>
                         {quizQuestions.length > 1 && (
                           <button type="button" onClick={() => handleRemoveQuestionRow(qIdx)} className="p-1 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600 transition rounded-lg cursor-pointer">
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1029,7 +1029,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   <button
                     type="button"
                     onClick={handleAddQuestionRow}
-                    className="w-full py-2.5 border-2 border-dashed border-slate-200 dark:border-white/[0.10] hover:border-indigo-300 dark:hover:border-indigo-700 text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-[12px] font-semibold rounded-xl transition cursor-pointer"
+                    className="w-full py-2.5 border-2 border-dashed border-slate-200 dark:border-white/[0.10] hover:border-emerald-300 dark:hover:border-emerald-700 text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 text-[12px] font-semibold rounded-xl transition cursor-pointer"
                   >
                     + Add Question
                   </button>
@@ -1045,7 +1045,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 5. COURSE REGISTRY ── */}
           {activeTab === "courses" && (
-            <div id="courses-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="courses-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Course Registry</h2>
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Register new academic course modules.</p>
@@ -1082,9 +1082,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {courses.map((c) => (
-                      <div key={c.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all">
+                      <div key={c.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-emerald-100 dark:hover:border-emerald-900/30 transition-all">
                         <div>
-                          <span className="block font-mono text-[10px] font-bold uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">{c.code}</span>
+                          <span className="block font-mono text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">{c.code}</span>
                           <span className="block text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 leading-tight mt-0.5">{c.title}</span>
                         </div>
                         <span className="text-[9px] font-mono font-bold bg-slate-50 dark:bg-white/[0.04] text-slate-500 dark:text-slate-400 px-2.5 py-1 border border-slate-200 dark:border-white/[0.07] rounded-full">
@@ -1100,7 +1100,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 6. DEPARTMENTS ── */}
           {activeTab === "departments" && (
-            <div id="departments-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="departments-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Academic Departments</h2>
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Establish and manage school departments.</p>
@@ -1133,12 +1133,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                 ) : departments.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {departments.map((dept) => (
-                      <div key={dept.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all">
+                      <div key={dept.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-emerald-100 dark:hover:border-emerald-900/30 transition-all">
                         <div>
                           <span className="block text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 leading-tight">{dept.name}</span>
                           <span className="block font-mono text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-0.5">ID: {dept.id.substring(0, 8)}</span>
                         </div>
-                        <span className="text-[9px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 px-2.5 py-1 border border-indigo-100 dark:border-indigo-900/30 rounded-full">
+                        <span className="text-[9px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 border border-emerald-100 dark:border-emerald-900/30 rounded-full">
                           FUTO
                         </span>
                       </div>

@@ -413,7 +413,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   /* ─── EXAM RESULT SCREEN ─── */
   if (examResult) {
     return (
-      <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-gradient-to-br from-indigo-50 via-white to-violet-50/70 dark:from-[#020208] dark:via-slate-950 dark:to-[#0c0824] font-sans">
+      <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-gradient-to-br from-emerald-50 via-white to-green-50/60 dark:from-[#010e07] dark:via-[#011208] dark:to-[#021a0d] font-sans">
         <motion.div
           id="summary-screen"
           initial={{ opacity: 0, y: 16, scale: 0.97 }}
@@ -425,7 +425,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             {/* Banner */}
             <div
               className="relative overflow-hidden px-8 py-10 text-center"
-              style={{ background: "linear-gradient(135deg, #4f46e5, #7c3aed)" }}
+              style={{ background: "linear-gradient(135deg, #064e3b, #047857)" }}
             >
               <div className="absolute inset-0 opacity-25" style={{ backgroundImage: "radial-gradient(circle at 30% 50%, rgba(255,255,255,0.22) 0%, transparent 55%)" }} />
               <div className="relative">
@@ -443,8 +443,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
             <div className="p-8 space-y-6">
               {/* Score */}
-              <div className="flex flex-col items-center justify-center py-7 bg-gradient-to-br from-indigo-50/80 to-violet-50/50 dark:from-indigo-950/20 dark:to-violet-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl">
-                <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-1">Your Secure Grade</span>
+              <div className="flex flex-col items-center justify-center py-7 bg-gradient-to-br from-emerald-50/80 to-green-50/50 dark:from-emerald-950/20 dark:to-green-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl">
+                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Your Secure Grade</span>
                 <span className="text-6xl font-black text-slate-900 dark:text-white tracking-tight mt-1 font-display tabular-nums">
                   {examResult.score.toFixed(1)}%
                 </span>
@@ -480,13 +480,13 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                               key={opt}
                               className={`text-[11.5px] px-3 py-1.5 rounded-lg flex items-center justify-between ${
                                 studentAns === opt
-                                  ? "bg-indigo-50 dark:bg-indigo-950/40 font-semibold text-indigo-900 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/30"
+                                  ? "bg-emerald-50 dark:bg-emerald-950/40 font-semibold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/30"
                                   : "text-slate-500 dark:text-slate-500"
                               }`}
                             >
                               <span>{opt}</span>
                               {studentAns === opt && (
-                                <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-500">Your pick</span>
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600">Your pick</span>
                               )}
                             </div>
                           ))}
@@ -520,7 +520,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
         {/* Exam top bar */}
         <div className="sticky top-0 z-20 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/80 px-6 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-[10px] font-mono bg-indigo-950/60 text-indigo-400 border border-indigo-900/40 px-2.5 py-1 rounded-lg uppercase tracking-widest font-bold">
+            <span className="text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-900/40 px-2.5 py-1 rounded-lg uppercase tracking-widest font-bold">
               {selectedCourse?.code || "EXAM"}
             </span>
             <h1 className="text-sm font-bold tracking-tight font-display text-white hidden sm:block">{activeQuiz.title}</h1>
@@ -580,12 +580,12 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                               onClick={() => handleSelectOption(q.id, opt)}
                               className={`flex items-center gap-3 p-3.5 rounded-xl border text-left text-[12.5px] font-medium transition-all cursor-pointer ${
                                 isSelected
-                                  ? "bg-indigo-900/40 border-indigo-600/60 text-white"
+                                  ? "bg-emerald-900/40 border-emerald-600/60 text-white"
                                   : "bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-900 hover:border-slate-600 hover:text-slate-200"
                               }`}
                             >
                               <span className={`flex-shrink-0 h-4 w-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                                isSelected ? "border-indigo-400 bg-indigo-500" : "border-slate-600"
+                                isSelected ? "border-emerald-400 bg-emerald-600" : "border-slate-600"
                               }`}>
                                 {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
                               </span>
@@ -698,7 +698,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#080818]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06]">
+      <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#010e07]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 flex-shrink-0">
             <FUTOLogo className="h-8 w-8" />
@@ -717,7 +717,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 <select
                   value={currentYear}
                   onChange={(e) => handlePromoteYear(e.target.value)}
-                  className="text-[9px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 px-1.5 py-0.5 border border-indigo-100 dark:border-indigo-900/40 rounded-md outline-none cursor-pointer"
+                  className="text-[9px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 px-1.5 py-0.5 border border-emerald-100 dark:border-emerald-900/40 rounded-md outline-none cursor-pointer"
                   title="Change academic year"
                 >
                   {["Year 1","Year 2","Year 3","Year 4","Year 5","Extra Year","Postgraduate"].map((y) => (
@@ -738,7 +738,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 size={34}
                 initials={user.fullName}
                 refreshTrigger={avatarRefreshTrigger}
-                className="ring-2 ring-white dark:ring-slate-800 group-hover:ring-indigo-200 dark:group-hover:ring-indigo-800 transition-all rounded-full"
+                className="ring-2 ring-white dark:ring-slate-800 group-hover:ring-emerald-200 dark:group-hover:ring-emerald-800 transition-all rounded-full"
               />
               <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                 <Camera className="h-3 w-3 text-white" />
@@ -790,15 +790,15 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       onClick={() => { fetchCourseDetail(c.id); setSelectedNote(null); setNotesFilterCourseId(c.id); }}
                       className={`w-full flex items-center justify-between p-3 rounded-xl text-left text-[12px] transition-all duration-150 cursor-pointer ${
                         isSelected
-                          ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/30"
+                          ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/30"
                           : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white border border-transparent"
                       }`}
                     >
                       <div className="min-w-0">
-                        <span className={`block font-mono text-[10px] font-bold uppercase tracking-wider ${isSelected ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500"}`}>{c.code}</span>
+                        <span className={`block font-mono text-[10px] font-bold uppercase tracking-wider ${isSelected ? "text-emerald-700 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"}`}>{c.code}</span>
                         <span className="block text-[11px] mt-0.5 leading-tight truncate">{c.title}</span>
                       </div>
-                      <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ml-2 ${isSelected ? "text-indigo-500 translate-x-0.5" : "opacity-20"}`} />
+                      <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ml-2 ${isSelected ? "text-emerald-600 translate-x-0.5" : "opacity-20"}`} />
                     </button>
                   );
                 })
@@ -844,7 +844,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           </div>
 
           {/* Content panel */}
-          <div className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm">
+          <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm">
 
             {/* NOTES VIEW */}
             {activeTab === "notes" && (
@@ -891,10 +891,10 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                         {allNotes.filter(n => !notesFilterCourseId || n.courseId === notesFilterCourseId).map((note) => {
                           const noteCourse = courses.find((c) => c.id === note.courseId) || note.course;
                           return (
-                            <div key={note.id} className="group p-5 border border-slate-200/60 dark:border-white/[0.06] hover:border-indigo-200 dark:hover:border-indigo-800/40 rounded-xl transition-all duration-200 flex flex-col justify-between bg-white dark:bg-white/[0.02] hover:shadow-md dark:hover:shadow-none">
+                            <div key={note.id} className="group p-5 border border-slate-200/60 dark:border-white/[0.06] hover:border-emerald-200 dark:hover:border-emerald-800/40 rounded-xl transition-all duration-200 flex flex-col justify-between bg-white dark:bg-white/[0.02] hover:shadow-md dark:hover:shadow-none">
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-md">
+                                  <span className="px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-400 rounded-md">
                                     {noteCourse?.code || "COURSE"}
                                   </span>
                                   <span className="flex items-center gap-1 text-[9.5px] font-mono text-slate-400 dark:text-slate-500">
@@ -907,7 +907,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                               </div>
                               <button
                                 onClick={() => setSelectedNote(note)}
-                                className="mt-4 pt-3.5 border-t border-slate-100 dark:border-white/[0.06] flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer w-full text-left transition-colors"
+                                className="mt-4 pt-3.5 border-t border-slate-100 dark:border-white/[0.06] flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 cursor-pointer w-full text-left transition-colors"
                               >
                                 Open Lecture Note
                                 <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
@@ -927,7 +927,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   <motion.div id="note-reader" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
                     <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/[0.06] pb-4">
                       <div>
-                        <button onClick={() => setSelectedNote(null)} className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 mb-1.5 inline-flex items-center gap-1 cursor-pointer">
+                        <button onClick={() => setSelectedNote(null)} className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 mb-1.5 inline-flex items-center gap-1 cursor-pointer">
                           ← Back to Materials
                         </button>
                         <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">{selectedNote.title}</h2>
@@ -971,7 +971,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       const attempt = attempts[quiz.id];
                       const isCompleted = attempt?.isCompleted;
                       return (
-                        <div key={quiz.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200/60 dark:border-white/[0.06] hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all bg-white dark:bg-white/[0.02]">
+                        <div key={quiz.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200/60 dark:border-white/[0.06] hover:border-emerald-100 dark:hover:border-emerald-900/30 transition-all bg-white dark:bg-white/[0.02]">
                           <div className="space-y-1 min-w-0">
                             <h4 className="text-[13px] font-semibold text-slate-900 dark:text-white truncate">{quiz.title}</h4>
                             <div className="flex items-center gap-3 text-[10.5px] text-slate-400 dark:text-slate-500 font-mono">
@@ -1095,7 +1095,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                                   </span>
                                   <div className={`px-3 py-2 rounded-2xl leading-relaxed break-words text-[12px] ${
                                     isMe
-                                      ? "bg-indigo-600 text-white rounded-br-md"
+                                      ? "bg-emerald-700 text-white rounded-br-md"
                                       : isStaff
                                         ? "bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/30 text-slate-800 dark:text-slate-200 rounded-bl-md"
                                         : "bg-slate-100 dark:bg-white/[0.06] text-slate-800 dark:text-slate-200 rounded-bl-md"
@@ -1112,19 +1112,19 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                         )}
                         <div ref={chatEndRef} />
                       </div>
-                      <form onSubmit={handleSendChatMessage} className="p-2.5 border-t border-slate-100 dark:border-white/[0.06] flex gap-2 bg-white dark:bg-[#0d0d22]">
+                      <form onSubmit={handleSendChatMessage} className="p-2.5 border-t border-slate-100 dark:border-white/[0.06] flex gap-2 bg-white dark:bg-[#011a0d]">
                         <input
                           type="text"
                           required
                           value={chatMessage}
                           onChange={(e) => setChatMessage(e.target.value)}
                           placeholder="Type a message..."
-                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-300 dark:focus:border-indigo-700 transition-colors"
+                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-emerald-400 dark:focus:border-emerald-600 transition-colors"
                         />
                         <button
                           type="submit"
                           disabled={isSendingChat}
-                          className="flex items-center justify-center w-9 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors cursor-pointer flex-shrink-0"
+                          className="flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 transition-colors cursor-pointer flex-shrink-0"
                         >
                           <Send className="h-3.5 w-3.5 text-white" />
                         </button>

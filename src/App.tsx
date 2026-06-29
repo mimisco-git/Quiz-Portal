@@ -184,22 +184,22 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-br from-indigo-50 via-white to-violet-50/70 dark:from-[#020208] dark:via-slate-950 dark:to-[#0c0824]">
+      <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-br from-emerald-50 via-white to-green-50/60 dark:from-[#010e07] dark:via-[#011208] dark:to-[#021a0d]">
         <div className="flex flex-col items-center gap-4">
           {/* Gradient spinner */}
           <div className="relative w-11 h-11">
-            <div className="absolute inset-0 rounded-full border-[2.5px] border-slate-100 dark:border-slate-800/80" />
+            <div className="absolute inset-0 rounded-full border-[2.5px] border-emerald-100/60 dark:border-emerald-900/40" />
             <div
               className="absolute inset-0 rounded-full border-[2.5px] border-transparent"
               style={{
-                borderTopColor: "#4f46e5",
-                borderRightColor: "#7c3aed",
+                borderTopColor: "#047857",
+                borderRightColor: "#10b981",
                 animation: "spin-smooth 0.85s linear infinite",
               }}
             />
           </div>
           <div className="text-center space-y-0.5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
               Initializing
             </p>
             <p className="text-[9.5px] font-mono text-slate-400 dark:text-slate-600 uppercase tracking-widest">
@@ -212,7 +212,7 @@ export default function App() {
   }
 
   return (
-    <div className="font-sans antialiased text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-950 min-h-screen selection:bg-indigo-500/20 selection:text-indigo-800 relative transition-colors duration-300">
+    <div className="font-sans antialiased text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-950 min-h-screen selection:bg-emerald-500/20 selection:text-emerald-900 relative transition-colors duration-300">
       <AnimatePresence mode="wait">
         {!token || !user ? (
           <motion.div
@@ -324,7 +324,7 @@ export default function App() {
                     animate={{ width: "0%" }}
                     transition={{ duration: sessionCountdown, ease: "linear" }}
                     className="h-full rounded-full"
-                    style={{ background: "linear-gradient(90deg, #4f46e5, #ef4444)" }}
+                    style={{ background: "linear-gradient(90deg, #047857, #ef4444)" }}
                   />
                 </div>
               </div>
