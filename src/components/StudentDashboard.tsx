@@ -120,6 +120,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [skippedCount, setSkippedCount] = useState(0);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -231,11 +233,14 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
         headers: { Authorization: `Bearer ${token}` },
       });
       const quizData = await quizRes.json();
+      if (!quizRes.ok) throw new Error(quizData.error || "Failed to load quiz questions");
 
       setActiveQuiz(quizData);
       setQuizQuestions(quizData.questions || []);
       setActiveAttempt(data.attempt);
       setSubmitError(null);
+      setSkippedCount(0);
+      setShowSubmitConfirm(false);
       setAutoSaveStatus("idle");
       // Restore any locally saved draft for this attempt
       try {
@@ -249,7 +254,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       setRemainingSeconds(initialSeconds);
       startTimerSystem(data.attempt.id, initialSeconds);
     } catch (err: any) {
-      alert(err.message);
+      setSubmitError(err.message);
     }
   };
 
@@ -382,43 +387,50 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     fetchAttempts();
   };
 
-  const handleManualSubmit = async () => {
+  const handleManualSubmit = async (forceSkipped = false) => {
     if (!activeAttempt) return;
-    const confirmSubmit = window.confirm("Are you sure you want to finalize and submit your answers? This cannot be undone.");
-    if (!confirmSubmit) return;
+    if (!forceSkipped && !showSubmitConfirm) {
+      setShowSubmitConfirm(true);
+      return;
+    }
 
     setIsSubmitting(true);
     setSubmitError(null);
+    setSkippedCount(0);
+    setShowSubmitConfirm(false);
     try {
+      const body: any = { attemptId: activeAttempt.id, answers: selectedAnswers };
+      if (forceSkipped) body.confirmSkipped = true;
+
       const res = await fetch("/api/quiz/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ attemptId: activeAttempt.id, answers: selectedAnswers }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
 
+      if (res.status === 400 && data.error === "skipped_questions") {
+        setSkippedCount(data.skippedCount || 0);
+        setSubmitError(`${data.skippedCount} question(s) unanswered. Answer them or submit anyway.`);
+        return;
+      }
+
       if (res.status === 408) {
-        alert("Submission rejected! You exceeded the duration limit including the 10s grace period. Your score was locked.");
         setExamResult({ score: data.attempt?.score || 0, timedOut: true, answers: selectedAnswers, questions: quizQuestions, title: activeQuiz?.title || "Academic Assessment" });
       } else if (!res.ok) {
-        throw new Error(data.error || "Submission failed");
+        setSubmitError(data.error || "Submission failed. Please try again.");
+        return;
       } else {
         setExamResult({ score: data.score, timedOut: false, answers: selectedAnswers, questions: quizQuestions, title: activeQuiz?.title || "Academic Assessment" });
       }
 
       stopTimerSystem();
-      if (activeAttempt) {
-        try { localStorage.removeItem(`exam_draft_${activeAttempt.id}`); } catch { /* ignore */ }
-      }
+      try { localStorage.removeItem(`exam_draft_${activeAttempt.id}`); } catch { /* ignore */ }
       setActiveQuiz(null);
       setActiveAttempt(null);
       fetchAttempts();
     } catch (err: any) {
-      if (err.message === "skipped_questions") {
-        setSubmitError("You have unanswered questions. Answer all questions or confirm skipping them.");
-      } else {
-        setSubmitError(err.message);
-      }
+      setSubmitError(err.message || "Network error. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -430,6 +442,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       scheduleAutoSave(next);
       return next;
     });
+    if (submitError) { setSubmitError(null); setSkippedCount(0); }
+    if (showSubmitConfirm) setShowSubmitConfirm(false);
   };
 
   const scheduleAutoSave = (answers: Record<string, string>) => {
@@ -655,19 +669,62 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
         </div>
 
         {/* Bottom bar */}
-        <div className="bg-slate-900/95 backdrop-blur-xl border-t border-slate-800/80 px-6 py-4 flex items-center justify-between">
-          <div className="text-[11px] text-slate-500 font-mono uppercase tracking-wider">
-            <span className="text-slate-300 font-bold">{Object.keys(selectedAnswers).length}</span> / {quizQuestions.length} answered
+        <div className="bg-slate-900/95 backdrop-blur-xl border-t border-slate-800/80 px-6 py-4 space-y-3">
+          {/* Submit confirm prompt */}
+          {showSubmitConfirm && !isSubmitting && (
+            <div className="flex items-center justify-between gap-3 bg-amber-950/40 border border-amber-700/40 rounded-xl px-4 py-3">
+              <p className="text-[12px] text-amber-300 font-semibold">Finalize and lock your answers? This cannot be undone.</p>
+              <div className="flex gap-2 flex-shrink-0">
+                <button
+                  onClick={() => setShowSubmitConfirm(false)}
+                  className="px-3 py-1.5 text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleManualSubmit(false)}
+                  className="px-3 py-1.5 text-[11px] font-semibold bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg transition cursor-pointer"
+                >
+                  Yes, Submit
+                </button>
+              </div>
+            </div>
+          )}
+          {/* Skipped-questions warning */}
+          {submitError && skippedCount > 0 && (
+            <div className="flex items-center justify-between gap-3 bg-red-950/40 border border-red-700/40 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-red-400 shrink-0" />
+                <p className="text-[12px] text-red-300 font-semibold">{submitError}</p>
+              </div>
+              <button
+                onClick={() => handleManualSubmit(true)}
+                className="px-3 py-1.5 text-[11px] font-semibold bg-red-800 hover:bg-red-700 text-white rounded-lg transition cursor-pointer flex-shrink-0"
+              >
+                Submit Anyway
+              </button>
+            </div>
+          )}
+          {submitError && skippedCount === 0 && (
+            <div className="flex items-center gap-2 bg-red-950/40 border border-red-700/40 rounded-xl px-4 py-3">
+              <ShieldAlert className="h-4 w-4 text-red-400 shrink-0" />
+              <p className="text-[12px] text-red-300 font-semibold">{submitError}</p>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] text-slate-500 font-mono uppercase tracking-wider">
+              <span className="text-slate-300 font-bold">{Object.keys(selectedAnswers).length}</span> / {quizQuestions.length} answered
+            </div>
+            <button
+              id="manual-submit-quiz-btn"
+              onClick={() => handleManualSubmit()}
+              disabled={isSubmitting}
+              className="btn-gradient"
+              style={{ width: "auto", paddingLeft: "24px", paddingRight: "24px" }}
+            >
+              {isSubmitting ? "Scoring..." : "Submit Exam"}
+            </button>
           </div>
-          <button
-            id="manual-submit-quiz-btn"
-            onClick={handleManualSubmit}
-            disabled={isSubmitting}
-            className="btn-gradient"
-            style={{ width: "auto", paddingLeft: "24px", paddingRight: "24px" }}
-          >
-            {isSubmitting ? "Scoring..." : "Submit Exam"}
-          </button>
         </div>
 
         {/* Exam expired modal */}
@@ -1005,6 +1062,14 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Secure timed assessments for your enrolled courses.</p>
                 </div>
 
+                {submitError && !activeQuiz && (
+                  <div className="flex items-center gap-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-800 dark:text-red-300 rounded-xl p-3.5 text-[12.5px]">
+                    <ShieldAlert className="h-4 w-4 shrink-0 text-red-500" />
+                    <span className="font-semibold">{submitError}</span>
+                    <button onClick={() => setSubmitError(null)} className="ml-auto text-red-400 hover:text-red-600 text-[11px] font-bold cursor-pointer">✕</button>
+                  </div>
+                )}
+
                 {loading ? (
                   <div className="space-y-3 animate-pulse" id="quizzes-skeleton">
                     {[1,2,3].map((i) => (
@@ -1115,7 +1180,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           <MarkdownView content={activeLiveSession.content} />
                         </div>
                         <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[9px] font-mono text-slate-600">
-                          <span>Lecturer: {activeLiveSession.lecturerId.substring(0, 8)}</span>
+                          <span>{selectedCourse?.code || "Live"}</span>
                           <span>Started {new Date(activeLiveSession.createdAt).toLocaleTimeString()}</span>
                         </div>
                       </div>
