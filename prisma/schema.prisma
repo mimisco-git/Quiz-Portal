@@ -1,0 +1,108 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Lecturer {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  courses   Course[]
+}
+
+model Student {
+  id               String           @id @default(uuid())
+  fullName         String
+  email            String           @unique @default("student@futo.edu.ng")
+  regNumber        String           @unique // Normalized FUTO/2026/10423
+  department       String           @default("Computer Science")
+  year             String           @default("Year 1")
+  securityQuestion String           @default("What is your favorite academic course?")
+  securityAnswer   String           @default("Computer Science")
+  attempts         StudentAttempt[]
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model Course {
+  id           String           @id @default(uuid())
+  code         String           @unique // e.g. MTH101, CSC201
+  title        String
+  lecturerId   String
+  lecturer     Lecturer         @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  notes        LectureNote[]
+  quizzes      Quiz[]
+  liveSessions LectureSession[]
+}
+
+model LectureNote {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   // Text or rich text Markdown content
+  createdAt DateTime @default(now())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model Quiz {
+  id              String           @id @default(uuid())
+  title           String
+  durationMinutes Int              // Allowed time in minutes
+  courseId        String
+  course          Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions       Question[]
+  attempts        StudentAttempt[]
+}
+
+model Question {
+  id            String @id @default(uuid())
+  quizId        String
+  quiz          Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  text          String // The question prompt
+  optionsJson   String // Serialized JSON array of options: ["A", "B", "C", "D"]
+  correctOption String // The correct option
+}
+
+model StudentAttempt {
+  id          String    @id @default(uuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  quizId      String
+  quiz        Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+  isCompleted Boolean   @default(false)
+  score       Float?    // Calculated score percentage or count
+  answersJson String?   // Serialized JSON of selected answers: {"questionId": "answer"}
+}
+
+model LectureSession {
+  id        String        @id @default(uuid())
+  topic     String
+  content   String        // Text or markdown material for active lecturing
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  courseId  String
+  course    Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chats     LectureChat[]
+}
+
+model LectureChat {
+  id               String         @id @default(uuid())
+  senderId         String         @default("")
+  senderName       String
+  senderRole       String         // "student" | "lecturer"
+  message          String
+  createdAt        DateTime       @default(now())
+  lectureSessionId String
+  lectureSession   LectureSession @relation(fields: [lectureSessionId], references: [id], onDelete: Cascade)
+}
