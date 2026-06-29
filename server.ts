@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { createServer as createViteServer } from "vite";
+// vite is imported dynamically inside startServer() so it's excluded from the Vercel Lambda bundle
 import jwt from "jsonwebtoken";
 import { prisma } from "./src/lib/db.js";
 import { seedDatabase } from "./src/lib/seed.js";
@@ -1125,6 +1125,7 @@ async function startServer() {
 
   // Vite development middleware vs Static Production bundle
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -1143,4 +1144,16 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.env.VERCEL) {
+  // Vercel serverless: serve built frontend + seed DB, then export app
+  const distPath = path.join(process.cwd(), "dist");
+  app.use(express.static(distPath));
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+  seedDatabase().catch(console.error);
+} else {
+  startServer();
+}
+
+export default app;
