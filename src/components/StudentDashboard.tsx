@@ -120,6 +120,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const [syncStatus, setSyncStatus] = useState<"synced" | "syncing" | "error">("synced");
@@ -197,14 +199,13 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   const fetchAttempts = async () => {
     try {
-      const res = await fetch("/api/lecturer/gradebook", {
+      const res = await fetch("/api/student/attempts", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data: StudentAttempt[] = await res.json();
-        const studentAttempts = data.filter((a) => a.studentId === user.id);
         const attemptMap: Record<string, StudentAttempt> = {};
-        studentAttempts.forEach((a) => { attemptMap[a.quizId] = a; });
+        data.forEach((a) => { attemptMap[a.quizId] = a; });
         setAttempts(attemptMap);
       }
     } catch (err) {
@@ -234,8 +235,15 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       setActiveQuiz(quizData);
       setQuizQuestions(quizData.questions || []);
       setActiveAttempt(data.attempt);
-      setSelectedAnswers({});
       setSubmitError(null);
+      setAutoSaveStatus("idle");
+      // Restore any locally saved draft for this attempt
+      try {
+        const draft = localStorage.getItem(`exam_draft_${data.attempt.id}`);
+        setSelectedAnswers(draft ? JSON.parse(draft) : {});
+      } catch {
+        setSelectedAnswers({});
+      }
 
       const initialSeconds = quiz.durationMinutes * 60;
       setRemainingSeconds(initialSeconds);
@@ -310,11 +318,20 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const handleAutoSubmitBackground = async (attemptId: string) => {
     let currentAnswers: Record<string, string> = {};
     setSelectedAnswers((prev) => { currentAnswers = prev; return prev; });
+    // Also try to recover any locally-saved draft
+    try {
+      const draft = localStorage.getItem(`exam_draft_${attemptId}`);
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        currentAnswers = { ...parsed, ...currentAnswers };
+        localStorage.removeItem(`exam_draft_${attemptId}`);
+      }
+    } catch { /* ignore */ }
     try {
       const res = await fetch("/api/quiz/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ attemptId, answers: currentAnswers }),
+        body: JSON.stringify({ attemptId, answers: currentAnswers, isAutoSubmit: true }),
       });
       const data = await res.json();
       setPendingExamResult({
@@ -390,18 +407,45 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       }
 
       stopTimerSystem();
+      if (activeAttempt) {
+        try { localStorage.removeItem(`exam_draft_${activeAttempt.id}`); } catch { /* ignore */ }
+      }
       setActiveQuiz(null);
       setActiveAttempt(null);
       fetchAttempts();
     } catch (err: any) {
-      setSubmitError(err.message);
+      if (err.message === "skipped_questions") {
+        setSubmitError("You have unanswered questions. Answer all questions or confirm skipping them.");
+      } else {
+        setSubmitError(err.message);
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleSelectOption = (questionId: string, option: string) => {
-    setSelectedAnswers((prev) => ({ ...prev, [questionId]: option }));
+    setSelectedAnswers((prev) => {
+      const next = { ...prev, [questionId]: option };
+      scheduleAutoSave(next);
+      return next;
+    });
+  };
+
+  const scheduleAutoSave = (answers: Record<string, string>) => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    setAutoSaveStatus("saving");
+    autoSaveTimerRef.current = setTimeout(() => {
+      if (activeAttempt) {
+        try {
+          localStorage.setItem(`exam_draft_${activeAttempt.id}`, JSON.stringify(answers));
+        } catch {
+          // storage unavailable — silently ignore
+        }
+      }
+      setAutoSaveStatus("saved");
+      autoSaveTimerRef.current = setTimeout(() => setAutoSaveStatus("idle"), 2500);
+    }, 600);
   };
 
   const formatTime = (secs: number) => {
@@ -536,11 +580,19 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               </span>
             </div>
             <div className="flex items-center gap-1.5 border-l border-slate-700/50 pl-3 text-[9px] font-mono text-slate-500 uppercase tracking-wider">
-              <span className={`h-1.5 w-1.5 rounded-full ${
+              <span className={`h-1.5 w-1.5 rounded-full transition-colors ${
                 syncStatus === "synced" ? "bg-emerald-500" : syncStatus === "syncing" ? "bg-amber-500 animate-ping" : "bg-red-500"
               }`} />
               {syncStatus === "syncing" ? "Sync" : "Secure"}
             </div>
+            {autoSaveStatus !== "idle" && (
+              <div className={`flex items-center gap-1.5 border-l border-slate-700/50 pl-3 text-[9px] font-mono uppercase tracking-wider transition-all ${
+                autoSaveStatus === "saving" ? "text-amber-400" : "text-emerald-400"
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${autoSaveStatus === "saving" ? "bg-amber-400 animate-pulse" : "bg-emerald-400"}`} />
+                {autoSaveStatus === "saving" ? "Saving…" : "Saved"}
+              </div>
+            )}
           </div>
         </div>
 

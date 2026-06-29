@@ -415,7 +415,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                       <form onSubmit={handleGetSecurityQuestion} className="space-y-4">
                         <div>
                           <label htmlFor="fix-reg" className={labelClass}>Registration Number</label>
-                          <input id="fix-reg" type="text" required value={fixRegNumber} onChange={(e) => setFixRegNumber(e.target.value)} placeholder="e.g. FUTO/2026/10423" className="premium-input font-mono uppercase" />
+                          <input id="fix-reg" type="text" required value={fixRegNumber} onChange={(e) => setFixRegNumber(e.target.value.toUpperCase())} placeholder="e.g. FUTO/2026/10423" className="premium-input font-mono" />
                         </div>
                         <button type="submit" disabled={loading} className="btn-gradient">
                           {loading ? "Verifying..." : "Retrieve Security Challenge"}
@@ -469,7 +469,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
 
                     <div>
                       <label htmlFor="login-student-reg" className={labelClass}>Registration Number</label>
-                      <input id="login-student-reg" type="text" required value={studentRegNumber} onChange={(e) => setStudentRegNumber(e.target.value)} placeholder="e.g. FUTO/2026/10423" className="premium-input font-mono uppercase" />
+                      <input id="login-student-reg" type="text" required value={studentRegNumber} onChange={(e) => setStudentRegNumber(e.target.value.toUpperCase())} placeholder="e.g. FUTO/2026/10423" className="premium-input font-mono" />
                     </div>
 
                     <div>

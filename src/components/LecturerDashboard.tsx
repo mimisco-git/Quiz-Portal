@@ -136,11 +136,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   const checkActiveLectureOnLoad = async (allCourses: Course[]) => {
     for (const c of allCourses) {
+      if (c.lecturerId !== user.id) continue;
       try {
-        const res = await fetch(`/api/lectures/active/${c.id}`);
+        const res = await fetch(`/api/lectures/active/${c.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.lecturerId === user.id) {
+          if (data && data.isActive) {
             setBroadcastingSession(data);
             setLiveCourseId(c.id);
             setLiveTopic(data.topic);
@@ -211,7 +214,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       return;
     }
     try {
-      const res = await fetch("/api/lecturer/notes", {
+      const res = await fetch("/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ courseId: noteCourseId, title: noteTitle, content: noteContent }),
@@ -264,7 +267,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       if (!q.correctOption.trim()) { showError(`Question ${i + 1} must have a designated correct answer.`); return; }
     }
     try {
-      const res = await fetch("/api/lecturer/quizzes", {
+      const res = await fetch("/api/quizzes", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ courseId: quizCourseId, title: quizTitle, durationMinutes: parseInt(quizDuration), questions: quizQuestions }),
@@ -288,7 +291,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     if (!editingScore) return;
     try {
       const res = await fetch(`/api/attempts/${attemptId}/score`, {
-        method: "POST",
+        method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ score: parseFloat(editingScore) }),
       });
@@ -414,19 +417,18 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   const handleUpdateLiveLecture = async () => {
-    if (!broadcastingSession || !liveTopic.trim() || !liveContent.trim()) return;
+    if (!broadcastingSession || !liveContent.trim()) return;
     try {
-      const res = await fetch("/api/lectures/active", {
-        method: "PUT",
+      const res = await fetch(`/api/lectures/${broadcastingSession.id}/content`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ topic: liveTopic, content: liveContent }),
+        body: JSON.stringify({ content: liveContent }),
       });
       if (res.ok) {
-        const updated = await res.json();
-        setBroadcastingSession(updated);
-        showSuccess("Live slides updated for all connected student panels!");
+        setBroadcastingSession((prev: any) => prev ? { ...prev, topic: liveTopic, content: liveContent } : prev);
+        showSuccess("Live board synced to all connected student panels!");
       } else {
-        showError("Failed to update broadcast materials");
+        showError("Failed to sync broadcast content");
       }
     } catch (err: any) {
       showError(err.message);
@@ -436,10 +438,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const handleEndLiveLecture = async () => {
     if (!broadcastingSession) return;
     try {
-      const res = await fetch("/api/lectures/end", {
+      const res = await fetch(`/api/lectures/${broadcastingSession.id}/end`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ courseId: broadcastingSession.courseId }),
       });
       if (res.ok) {
         setBroadcastingSession(null);

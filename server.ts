@@ -881,6 +881,28 @@ app.post("/api/student/promote-year", authenticateToken, async (req: any, res) =
   }
 });
 
+// Student: get own exam attempts
+app.get("/api/student/attempts", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") {
+    return res.status(403).json({ error: "Only students can access their own attempts." });
+  }
+  try {
+    const attempts = await prisma.studentAttempt.findMany({
+      where: { studentId: req.user.id },
+      include: {
+        quiz: {
+          select: { id: true, title: true, courseId: true, course: { select: { code: true } } },
+        },
+      },
+      orderBy: { startedAt: "desc" },
+    });
+    return res.json(attempts);
+  } catch (error: any) {
+    console.error("Error fetching student attempts:", error);
+    return res.status(500).json({ error: "Error fetching attempts." });
+  }
+});
+
 // -------------------------------------------------------------
 // LIVE LECTURING & STUDY CHANNELS API
 // -------------------------------------------------------------
