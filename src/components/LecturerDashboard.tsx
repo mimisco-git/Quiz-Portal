@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera } from "lucide-react";
+import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import AvatarModal from "./AvatarModal";
@@ -19,48 +19,34 @@ interface LecturerDashboardProps {
 }
 
 export default function LecturerDashboard({ token, user, theme, onToggleTheme, onLogout }: LecturerDashboardProps) {
-  // Navigation State
   const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture">("gradebook");
 
-  // Global Lists
   const [courses, setCourses] = useState<Course[]>([]);
   const [attempts, setAttempts] = useState<StudentAttempt[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // User Profile Avatar State
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [avatarRefreshTrigger, setAvatarRefreshTrigger] = useState(0);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // New Course State
   const [courseCode, setCourseCode] = useState("");
   const [courseTitle, setCourseTitle] = useState("");
 
-  // New Lecture Note State
   const [noteCourseId, setNoteCourseId] = useState("");
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
 
-  // New Quiz State
   const [quizCourseId, setQuizCourseId] = useState("");
   const [quizTitle, setQuizTitle] = useState("");
   const [quizDuration, setQuizDuration] = useState("10");
   const [quizQuestions, setQuizQuestions] = useState<
     Array<{ text: string; options: string[]; correctOption: string }>
-  >([
-    {
-      text: "",
-      options: ["", "", "", ""],
-      correctOption: "",
-    },
-  ]);
+  >([{ text: "", options: ["", "", "", ""], correctOption: "" }]);
 
-  // Departments State
   const [newDeptName, setNewDeptName] = useState("");
 
-  // Live Lectures State
   const [liveCourseId, setLiveCourseId] = useState("");
   const [liveTopic, setLiveTopic] = useState("");
   const [liveContent, setLiveContent] = useState("");
@@ -70,11 +56,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [isSendingChat, setIsSendingChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Manual Grading State
   const [editingAttemptId, setEditingAttemptId] = useState<string | null>(null);
   const [editingScore, setEditingScore] = useState("");
 
-  // Gradebook Filter States
   const [filterCourseId, setFilterCourseId] = useState("");
   const [filterQuizId, setFilterQuizId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -85,7 +69,6 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     fetchDepartments();
   }, []);
 
-  // Poll chats & slides if live-lecture is active
   useEffect(() => {
     let interval: any;
     if (activeTab === "live-lecture" && broadcastingSession) {
@@ -100,7 +83,6 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
               setBroadcastingSession(data);
               setLiveChats(data.chats || []);
             } else {
-              // Ended from somewhere else
               setBroadcastingSession(null);
               setLiveChats([]);
             }
@@ -109,14 +91,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           console.error("Error polling live lecture:", e);
         }
       };
-
       pollLiveDetails();
       interval = setInterval(pollLiveDetails, 4000);
     }
     return () => clearInterval(interval);
   }, [activeTab, broadcastingSession?.courseId]);
 
-  // Scroll live chat
   useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -144,7 +124,6 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           setNoteCourseId(data[0].id);
           setQuizCourseId(data[0].id);
           setLiveCourseId(data[0].id);
-          // Check if any active lecture exists for the first course
           checkActiveLectureOnLoad(data);
         }
       }
@@ -202,21 +181,15 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
-  // Create Course Action
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!courseCode || !courseTitle) return;
-
     try {
       const res = await fetch("/api/courses", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ code: courseCode, title: courseTitle }),
       });
-
       if (res.ok) {
         showSuccess(`Course module ${courseCode} successfully registered.`);
         setCourseCode("");
@@ -231,33 +204,23 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
-  // Publish Note Action
   const handlePublishNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!noteCourseId || !noteTitle || !noteContent) {
       showError("Please fill out all fields.");
       return;
     }
-
     try {
       const res = await fetch("/api/lecturer/notes", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          courseId: noteCourseId,
-          title: noteTitle,
-          content: noteContent,
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ courseId: noteCourseId, title: noteTitle, content: noteContent }),
       });
-
       if (res.ok) {
         showSuccess(`Study Note "${noteTitle}" published successfully!`);
         setNoteTitle("");
         setNoteContent("");
-        fetchCourses(); // refresh note counts
+        fetchCourses();
       } else {
         const d = await res.json();
         showError(d.error || "Failed to publish study note");
@@ -267,7 +230,6 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
-  // Deploy Quiz / Question Upload Action
   const handleQuizQuestionChange = (index: number, field: string, value: string, optIndex?: number) => {
     const updated = [...quizQuestions];
     if (field === "text") {
@@ -281,10 +243,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   const handleAddQuestionRow = () => {
-    setQuizQuestions((prev) => [
-      ...prev,
-      { text: "", options: ["", "", "", ""], correctOption: "" },
-    ]);
+    setQuizQuestions((prev) => [...prev, { text: "", options: ["", "", "", ""], correctOption: "" }]);
   };
 
   const handleRemoveQuestionRow = (index: number) => {
@@ -298,39 +257,18 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       showError("Please provide Quiz metadata.");
       return;
     }
-
-    // Validate questions
     for (let i = 0; i < quizQuestions.length; i++) {
       const q = quizQuestions[i];
-      if (!q.text.trim()) {
-        showError(`Question ${i + 1} has no text question.`);
-        return;
-      }
-      if (q.options.some((o) => !o.trim())) {
-        showError(`Question ${i + 1} is missing option values.`);
-        return;
-      }
-      if (!q.correctOption.trim()) {
-        showError(`Question ${i + 1} must have a designated correct answer.`);
-        return;
-      }
+      if (!q.text.trim()) { showError(`Question ${i + 1} has no text question.`); return; }
+      if (q.options.some((o) => !o.trim())) { showError(`Question ${i + 1} is missing option values.`); return; }
+      if (!q.correctOption.trim()) { showError(`Question ${i + 1} must have a designated correct answer.`); return; }
     }
-
     try {
       const res = await fetch("/api/lecturer/quizzes", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          courseId: quizCourseId,
-          title: quizTitle,
-          durationMinutes: parseInt(quizDuration),
-          questions: quizQuestions,
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ courseId: quizCourseId, title: quizTitle, durationMinutes: parseInt(quizDuration), questions: quizQuestions }),
       });
-
       if (res.ok) {
         showSuccess(`Exam Quiz "${quizTitle}" deployed successfully!`);
         setQuizTitle("");
@@ -346,19 +284,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
-  // Manual Score Adjustment / Grading Action
   const handleSaveScoreAdjustment = async (attemptId: string) => {
     if (!editingScore) return;
     try {
       const res = await fetch(`/api/attempts/${attemptId}/score`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ score: parseFloat(editingScore) }),
       });
-
       if (res.ok) {
         showSuccess("Manual evaluation scorecard recorded successfully.");
         setEditingAttemptId(null);
@@ -372,20 +305,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
-  // Download Gradebook Excel / CSV action
   const handleDownloadExcel = () => {
     if (attempts.length === 0) {
       showError("No attempt records available to export.");
       return;
     }
-
-    // Apply any active filters
     const filteredAttempts = attempts.filter((att) => {
-      // Course filter
       if (filterCourseId && att.quiz?.courseId !== filterCourseId) return false;
-      // Quiz filter
       if (filterQuizId && att.quizId !== filterQuizId) return false;
-      // Search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         const nameMatch = att.student?.fullName?.toLowerCase().includes(query);
@@ -401,63 +328,36 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       return;
     }
 
-    // Headers compatible with requested fields
-    const headers = [
-      "Student Name",
-      "Registration Number",
-      "Department",
-      "Study Year",
-      "Course Code",
-      "Course Title",
-      "Exam/Quiz Title",
-      "Status",
-      "Score (%)",
-      "Date Started",
-      "Date Submitted"
-    ];
+    const headers = ["Student Name","Registration Number","Department","Study Year","Course Code","Course Title","Exam/Quiz Title","Status","Score (%)","Date Started","Date Submitted"];
+    const rows = filteredAttempts.map((att) => [
+      att.student?.fullName || "",
+      att.student?.regNumber || "",
+      att.student?.department || "",
+      att.student?.year || "",
+      att.quiz?.course?.code || "",
+      att.quiz?.course?.title || "",
+      att.quiz?.title || "",
+      att.isCompleted ? "SUBMITTED" : "IN PROGRESS",
+      att.score !== null && att.score !== undefined ? att.score.toFixed(1) : "N/A",
+      att.startedAt ? new Date(att.startedAt).toLocaleString() : "",
+      att.submittedAt ? new Date(att.submittedAt).toLocaleString() : "",
+    ]);
 
-    const rows = filteredAttempts.map((att) => {
-      return [
-        att.student?.fullName || "",
-        att.student?.regNumber || "",
-        att.student?.department || "",
-        att.student?.year || "",
-        att.quiz?.course?.code || "",
-        att.quiz?.course?.title || "",
-        att.quiz?.title || "",
-        att.isCompleted ? "SUBMITTED" : "IN PROGRESS",
-        att.score !== null && att.score !== undefined ? att.score.toFixed(1) : "N/A",
-        att.startedAt ? new Date(att.startedAt).toLocaleString() : "",
-        att.submittedAt ? new Date(att.submittedAt).toLocaleString() : ""
-      ];
-    });
-
-    // Generate CSV content with escaping
     const csvContent = [
       headers.join(","),
-      ...rows.map((row) =>
-        row
-          .map((val) => {
-            const str = String(val).replace(/"/g, '""');
-            return str.includes(",") || str.includes("\n") || str.includes('"') ? `"${str}"` : str;
-          })
-          .join(",")
-      )
+      ...rows.map((row) => row.map((val) => { const str = String(val).replace(/"/g, '""'); return str.includes(",") || str.includes("\n") || str.includes('"') ? `"${str}"` : str; }).join(",")),
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-
-    // Create a descriptive file name
     let fileName = "FUTO_Student_Exam_Attempts";
     if (filterCourseId) {
       const selectedC = courses.find((c) => c.id === filterCourseId);
       if (selectedC) fileName += `_${selectedC.code}`;
     }
     fileName += `_${new Date().toISOString().split("T")[0]}.csv`;
-
     link.setAttribute("download", fileName);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
@@ -466,21 +366,15 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     showSuccess("Exam student list downloaded successfully in Excel/CSV format!");
   };
 
-  // Department management Action
   const handleCreateDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDeptName.trim()) return;
-
     try {
       const res = await fetch("/api/departments", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: newDeptName }),
       });
-
       if (res.ok) {
         showSuccess(`Department "${newDeptName}" registered successfully!`);
         setNewDeptName("");
@@ -494,28 +388,18 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
-  // Live Lectures Broadcasting Actions
   const handleLaunchLiveLecture = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!liveCourseId || !liveTopic.trim() || !liveContent.trim()) {
       showError("Fill out all required live lecture fields");
       return;
     }
-
     try {
       const res = await fetch("/api/lectures", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          courseId: liveCourseId,
-          topic: liveTopic,
-          content: liveContent,
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ courseId: liveCourseId, topic: liveTopic, content: liveContent }),
       });
-
       if (res.ok) {
         const data = await res.json();
         setBroadcastingSession(data);
@@ -534,16 +418,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     try {
       const res = await fetch("/api/lectures/active", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          topic: liveTopic,
-          content: liveContent,
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ topic: liveTopic, content: liveContent }),
       });
-
       if (res.ok) {
         const updated = await res.json();
         setBroadcastingSession(updated);
@@ -561,13 +438,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     try {
       const res = await fetch("/api/lectures/end", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ courseId: broadcastingSession.courseId }),
       });
-
       if (res.ok) {
         setBroadcastingSession(null);
         setLiveChats([]);
@@ -588,17 +461,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     const msg = lecturerChatMessage.trim();
     setLecturerChatMessage("");
     setIsSendingChat(true);
-
     try {
       const res = await fetch(`/api/lectures/${broadcastingSession.id}/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ message: msg }),
       });
-
       if (res.ok) {
         const chat = await res.json();
         setLiveChats((prev) => [...prev, chat]);
@@ -611,11 +479,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   const filteredAttempts = attempts.filter((att) => {
-    // Course filter
     if (filterCourseId && att.quiz?.courseId !== filterCourseId) return false;
-    // Quiz/Exam filter
     if (filterQuizId && att.quizId !== filterQuizId) return false;
-    // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const nameMatch = att.student?.fullName?.toLowerCase().includes(q);
@@ -627,310 +492,243 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     return true;
   });
 
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      
-      {/* Top Header */}
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FUTOLogo className="h-9 w-9" />
-          <span className="text-md font-bold text-slate-950 font-display tracking-tight uppercase">
-            FUTO • Lecturers Workspace
-          </span>
+  /* ─── nav item helpers ─── */
+  const navBtn = (id: string, label: string, icon: React.ReactNode, live?: boolean) => {
+    const isActive = activeTab === id;
+    return (
+      <button
+        onClick={() => {
+          setActiveTab(id as any);
+          if (id === "gradebook") fetchGradebook();
+          if (id === "departments") fetchDepartments();
+        }}
+        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-[12px] font-medium transition-all duration-150 cursor-pointer ${
+          isActive
+            ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/30"
+            : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white border border-transparent"
+        }`}
+      >
+        <div className="flex items-center gap-2.5">
+          <span className={`flex-shrink-0 ${isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500"}`}>{icon}</span>
+          {label}
         </div>
+        {live && broadcastingSession && (
+          <span className="h-2 w-2 bg-red-500 rounded-full animate-ping flex-shrink-0" />
+        )}
+      </button>
+    );
+  };
 
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setIsAvatarModalOpen(true)}
-            className="group relative flex items-center justify-center cursor-pointer focus:outline-none"
-            title="Click to update your FUTO academic identity photo / avatar"
-          >
-            <UserAvatar
-              userId={user.id}
-              role="lecturer"
-              size={36}
-              initials={user.name}
-              refreshTrigger={avatarRefreshTrigger}
-              className="border border-slate-300 dark:border-slate-700 hover:border-slate-900 dark:hover:border-slate-100 transition-colors"
-            />
-            <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-              <Camera className="h-3 w-3 text-white" />
+  /* ─── label helper ─── */
+  const lbl = "block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5";
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
+
+      {/* Header */}
+      <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#080818]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 flex-shrink-0">
+            <FUTOLogo className="h-8 w-8" />
+            <div className="hidden sm:block">
+              <span className="text-[13px] font-bold text-slate-900 dark:text-white font-display tracking-tight">EduQuiz</span>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono ml-1.5">Lecturer</span>
             </div>
-          </button>
-
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-bold text-slate-900 leading-none">{user.name}</p>
-            <p className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider mt-1">{user.email}</p>
           </div>
-          {/* Theme Toggle Button */}
-          <button
-            id="theme-toggle-lecturer-btn"
-            onClick={onToggleTheme}
-            className="flex items-center justify-center p-2 text-slate-500 dark:text-slate-400 hover:text-slate-950 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-none transition cursor-pointer border border-slate-200 dark:border-slate-800"
-            title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
-          >
-            {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-          </button>
-          <button
-            onClick={onLogout}
-            className="flex items-center justify-center p-2 text-slate-500 hover:text-slate-950 hover:bg-slate-50 rounded-none transition cursor-pointer border border-slate-200 text-xs font-bold uppercase tracking-wider gap-1"
-          >
-            Sign Out
-          </button>
+
+          <div className="flex items-center gap-2.5">
+            <div className="hidden md:block text-right mr-1">
+              <p className="text-[12px] font-bold text-slate-900 dark:text-white leading-tight">{user.name}</p>
+              <p className="text-[9.5px] font-mono text-slate-400 dark:text-slate-500 mt-0.5">{user.email}</p>
+            </div>
+
+            <button
+              onClick={() => setIsAvatarModalOpen(true)}
+              className="group relative flex-shrink-0 cursor-pointer"
+              title="Update profile photo"
+            >
+              <UserAvatar
+                userId={user.id}
+                role="lecturer"
+                size={34}
+                initials={user.name}
+                refreshTrigger={avatarRefreshTrigger}
+                className="ring-2 ring-white dark:ring-slate-800 group-hover:ring-indigo-200 dark:group-hover:ring-indigo-800 transition-all rounded-full"
+              />
+              <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <Camera className="h-3 w-3 text-white" />
+              </div>
+            </button>
+
+            <button
+              id="theme-toggle-lecturer-btn"
+              onClick={onToggleTheme}
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-white/[0.07] text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.12] transition-colors cursor-pointer"
+            >
+              {theme === "light" ? <Moon className="h-[15px] w-[15px]" /> : <Sun className="h-[15px] w-[15px]" />}
+            </button>
+
+            <button
+              onClick={onLogout}
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-white/[0.07] text-slate-600 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
+            >
+              <LogOut className="h-[15px] w-[15px]" />
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Grid Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 p-6">
-        
-        {/* Left Side Navigation Drawer */}
-        <aside className="lg:col-span-3 space-y-4">
-          <div className="bg-white p-5 border border-slate-200 rounded-none shadow-xs">
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Academic Management</h3>
+      {/* Main grid */}
+      <main className="flex-1 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 sm:p-6">
+
+        {/* Sidebar nav */}
+        <aside className="lg:col-span-3">
+          <div className="bg-white dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-4 shadow-sm">
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 px-1">Workspace</p>
             <nav className="space-y-1">
-              <button
-                onClick={() => {
-                  setActiveTab("gradebook");
-                  fetchGradebook();
-                }}
-                className={`w-full flex items-center gap-2.5 p-3 rounded-none text-left text-xs uppercase tracking-wider font-bold transition cursor-pointer border ${
-                  activeTab === "gradebook"
-                    ? "bg-slate-50 text-slate-950 border-slate-900 font-bold"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-950 border-transparent"
-                }`}
-              >
-                <ClipboardList className="h-4 w-4" />
-                Registry Gradebook
-              </button>
-
-              <button
-                onClick={() => setActiveTab("live-lecture")}
-                className={`w-full flex items-center justify-between p-3 rounded-none text-left text-xs uppercase tracking-wider font-bold transition cursor-pointer border ${
-                  activeTab === "live-lecture"
-                    ? "bg-slate-550 text-slate-950 border-slate-900 bg-slate-50 font-bold"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-950 border-transparent"
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Radio className="h-4 w-4 text-red-500 animate-pulse" />
-                  Live Virtual Lecture
-                </div>
-                {broadcastingSession && (
-                  <span className="h-1.5 w-1.5 bg-red-600 rounded-full animate-ping"></span>
-                )}
-              </button>
-
-              <button
-                onClick={() => setActiveTab("notes")}
-                className={`w-full flex items-center gap-2.5 p-3 rounded-none text-left text-xs uppercase tracking-wider font-bold transition cursor-pointer border ${
-                  activeTab === "notes"
-                    ? "bg-slate-50 text-slate-950 border-slate-900 font-bold"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-950 border-transparent"
-                }`}
-              >
-                <PlusCircle className="h-4 w-4" />
-                Publish Study Notes
-              </button>
-
-              <button
-                onClick={() => setActiveTab("quizzes")}
-                className={`w-full flex items-center gap-2.5 p-3 rounded-none text-left text-xs uppercase tracking-wider font-bold transition cursor-pointer border ${
-                  activeTab === "quizzes"
-                    ? "bg-slate-50 text-slate-950 border-slate-900 font-bold"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-950 border-transparent"
-                }`}
-              >
-                <Award className="h-4 w-4" />
-                Deploy Term Exam
-              </button>
-
-              <button
-                onClick={() => setActiveTab("courses")}
-                className={`w-full flex items-center gap-2.5 p-3 rounded-none text-left text-xs uppercase tracking-wider font-bold transition cursor-pointer border ${
-                  activeTab === "courses"
-                    ? "bg-slate-50 text-slate-950 border-slate-900 font-bold"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-950 border-transparent"
-                }`}
-              >
-                <BookOpen className="h-4 w-4" />
-                Course Modules
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab("departments");
-                  fetchDepartments();
-                }}
-                className={`w-full flex items-center gap-2.5 p-3 rounded-none text-left text-xs uppercase tracking-wider font-bold transition cursor-pointer border ${
-                  activeTab === "departments"
-                    ? "bg-slate-50 text-slate-950 border-slate-900 font-bold"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-950 border-transparent"
-                }`}
-              >
-                <Users className="h-4 w-4" />
-                Departments List
-              </button>
+              {navBtn("gradebook",    "Registry Gradebook",    <ClipboardList className="h-4 w-4" />)}
+              {navBtn("live-lecture", "Live Virtual Lecture",  <Radio className="h-4 w-4 text-red-500 animate-pulse" />, true)}
+              {navBtn("notes",        "Publish Study Notes",   <PlusCircle className="h-4 w-4" />)}
+              {navBtn("quizzes",      "Deploy Term Exam",      <Award className="h-4 w-4" />)}
+              {navBtn("courses",      "Course Modules",        <BookOpen className="h-4 w-4" />)}
+              {navBtn("departments",  "Departments",           <Users className="h-4 w-4" />)}
             </nav>
           </div>
         </aside>
 
-        {/* Right Side Main Console */}
-        <section className="lg:col-span-9 space-y-6">
-          
-          {/* Action Toasts */}
+        {/* Content area */}
+        <section className="lg:col-span-9 space-y-4">
+
+          {/* Toast notifications */}
           {successMsg && (
-            <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 rounded-none p-4 flex items-center gap-2 text-xs">
-              <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300 rounded-xl p-3.5 flex items-center gap-2.5 text-[12.5px] shadow-sm"
+            >
+              <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <span className="font-semibold">{successMsg}</span>
-            </div>
+            </motion.div>
           )}
 
           {errorMsg && (
-            <div className="bg-red-50 border border-red-200 text-red-750 rounded-none p-4 flex items-center gap-2 text-xs">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-800 dark:text-red-300 rounded-xl p-3.5 flex items-center gap-2.5 text-[12.5px] shadow-sm"
+            >
+              <AlertTriangle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
               <span className="font-semibold">{errorMsg}</span>
-            </div>
+            </motion.div>
           )}
 
-          {/* 1. REGISTRY GRADEBOOK */}
+          {/* ── 1. GRADEBOOK ── */}
           {activeTab === "gradebook" && (
-            <div id="gradebook-panel" className="bg-white border border-slate-200 rounded-none shadow-xs p-6 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <h2 className="text-md font-bold text-slate-900 uppercase tracking-tight font-display">Student Assessment Gradebook</h2>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Evaluate, mark, score, and adjust examination attempt logs manually here.</p>
-                </div>
+            <div id="gradebook-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+              <div>
+                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Student Assessment Gradebook</h2>
+                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Evaluate, mark, and adjust examination attempt logs.</p>
               </div>
 
-              {/* Filter and Download controls */}
-              <div className="bg-slate-50 p-4 border border-slate-200 flex flex-col md:flex-row gap-4 items-end justify-between">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full md:max-w-3xl">
-                  
-                  {/* Search Student Input */}
-                  <div className="text-left">
-                    <label htmlFor="search-student" className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Search Student</label>
+              {/* Filters */}
+              <div className="bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label htmlFor="search-student" className={lbl}>Search Student</label>
                     <input
                       id="search-student"
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Name, Reg No, Dept, Year..."
-                      className="w-full px-3 py-1.5 border border-slate-250 bg-white rounded-none text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-slate-900"
+                      placeholder="Name, Reg No, Dept…"
+                      className="form-input"
                     />
                   </div>
-
-                  {/* Course Filter Dropdown */}
-                  <div className="text-left">
-                    <label htmlFor="filter-course" className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Filter Course</label>
+                  <div>
+                    <label htmlFor="filter-course" className={lbl}>Filter Course</label>
                     <select
                       id="filter-course"
                       value={filterCourseId}
-                      onChange={(e) => {
-                        setFilterCourseId(e.target.value);
-                        setFilterQuizId(""); // Reset quiz filter when course changes
-                      }}
-                      className="w-full px-3 py-1.5 border border-slate-250 bg-white rounded-none text-xs text-slate-750 outline-none focus:border-slate-900"
+                      onChange={(e) => { setFilterCourseId(e.target.value); setFilterQuizId(""); }}
+                      className="form-input"
                     >
                       <option value="">All Courses</option>
-                      {courses.map((c) => (
-                        <option key={c.id} value={c.id}>{c.code} - {c.title}</option>
-                      ))}
+                      {courses.map((c) => <option key={c.id} value={c.id}>{c.code} – {c.title}</option>)}
                     </select>
                   </div>
-
-                  {/* Exam/Quiz Filter Dropdown */}
-                  <div className="text-left">
-                    <label htmlFor="filter-quiz" className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">Filter Exam/Quiz</label>
+                  <div>
+                    <label htmlFor="filter-quiz" className={lbl}>Filter Exam / Quiz</label>
                     <select
                       id="filter-quiz"
                       value={filterQuizId}
                       onChange={(e) => setFilterQuizId(e.target.value)}
-                      className="w-full px-3 py-1.5 border border-slate-250 bg-white rounded-none text-xs text-slate-750 outline-none focus:border-slate-900"
+                      className="form-input"
                     >
-                      <option value="">All Exams / Quizzes</option>
-                      {attempts
-                        .reduce((acc: any[], att) => {
-                          if (att.quiz && !acc.some(q => q.id === att.quizId)) {
-                            if (!filterCourseId || att.quiz.courseId === filterCourseId) {
-                              acc.push(att.quiz);
-                            }
-                          }
-                          return acc;
-                        }, [])
-                        .map((q) => (
-                          <option key={q.id} value={q.id}>{q.title}</option>
-                        ))
-                      }
+                      <option value="">All Exams</option>
+                      {attempts.reduce((acc: any[], att) => {
+                        if (att.quiz && !acc.some(q => q.id === att.quizId)) {
+                          if (!filterCourseId || att.quiz.courseId === filterCourseId) acc.push(att.quiz);
+                        }
+                        return acc;
+                      }, []).map((q) => <option key={q.id} value={q.id}>{q.title}</option>)}
                     </select>
                   </div>
-
                 </div>
-
-                {/* Download Button */}
-                <button
-                  type="button"
-                  onClick={handleDownloadExcel}
-                  className="w-full md:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold uppercase tracking-wider text-xs rounded-none border border-emerald-700 flex items-center justify-center gap-1.5 transition cursor-pointer shrink-0"
-                >
-                  <Download className="h-4 w-4" />
-                  Download Student List (Excel/CSV)
-                </button>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleDownloadExcel}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[12px] rounded-xl border border-emerald-700 transition cursor-pointer shadow-sm"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download CSV
+                  </button>
+                </div>
               </div>
 
-              <div className="overflow-x-auto border border-slate-200 rounded-none">
-                <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider font-mono text-[10px]">
+              {/* Table */}
+              <div className="overflow-x-auto rounded-xl border border-slate-200/60 dark:border-white/[0.06]">
+                <table className="min-w-full divide-y divide-slate-200/60 dark:divide-white/[0.06] text-left">
+                  <thead className="bg-slate-50/80 dark:bg-white/[0.03]">
                     <tr>
-                      <th className="px-4 py-3">Student Name</th>
-                      <th className="px-4 py-3">Registration No.</th>
-                      <th className="px-4 py-3">Department</th>
-                      <th className="px-4 py-3">Study Year</th>
-                      <th className="px-4 py-3">Exam Target</th>
-                      <th className="px-4 py-3 text-center">Status</th>
-                      <th className="px-4 py-3 text-center">Score Grade</th>
-                      <th className="px-4 py-3 text-center">Action Manual</th>
+                      {["Student Name","Reg. No.","Department","Year","Exam Target","Status","Score","Action"].map((h) => (
+                        <th key={h} className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 font-mono whitespace-nowrap">{h}</th>
+                      ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200 text-slate-700">
+                  <tbody className="divide-y divide-slate-100/70 dark:divide-white/[0.04]">
                     {loading ? (
-                      [1, 2, 3, 4, 5].map((i) => (
+                      [1,2,3,4,5].map((i) => (
                         <tr key={i} className="animate-pulse">
-                          <td className="px-4 py-3"><div className="h-3.5 bg-slate-200 dark:bg-slate-800 w-24"></div></td>
-                          <td className="px-4 py-3"><div className="h-3.5 bg-slate-200 dark:bg-slate-800 w-20"></div></td>
-                          <td className="px-4 py-3"><div className="h-3.5 bg-slate-200 dark:bg-slate-800 w-24"></div></td>
-                          <td className="px-4 py-3"><div className="h-3.5 bg-slate-200 dark:bg-slate-800 w-12"></div></td>
-                          <td className="px-4 py-3">
-                            <div className="h-3.5 bg-slate-200 dark:bg-slate-800 w-32 mb-1"></div>
-                            <div className="h-2.5 bg-slate-100 dark:bg-slate-900 w-16"></div>
-                          </td>
-                          <td className="px-4 py-3 text-center"><div className="h-4 bg-slate-200 dark:bg-slate-800 w-16 mx-auto"></div></td>
-                          <td className="px-4 py-3 text-center"><div className="h-4 bg-slate-200 dark:bg-slate-800 w-12 mx-auto"></div></td>
-                          <td className="px-4 py-3 text-center"><div className="h-6 bg-slate-200 dark:bg-slate-800 w-16 mx-auto"></div></td>
+                          {[1,2,3,4,5,6,7,8].map((j) => (
+                            <td key={j} className="px-4 py-3"><div className="h-3.5 bg-slate-200 dark:bg-slate-700 rounded-md w-full" /></td>
+                          ))}
                         </tr>
                       ))
                     ) : filteredAttempts.length > 0 ? (
                       filteredAttempts.map((att) => (
-                        <tr key={att.id} className="hover:bg-slate-50/50 text-[11px]">
-                          <td className="px-4 py-3 font-semibold text-slate-900">{att.student?.fullName}</td>
-                          <td className="px-4 py-3 font-mono uppercase text-slate-500 font-bold">{att.student?.regNumber}</td>
-                          <td className="px-4 py-3 text-slate-600">{att.student?.department}</td>
-                          <td className="px-4 py-3 font-mono text-slate-500 font-bold">{att.student?.year}</td>
-                          <td className="px-4 py-3 text-slate-800">
-                            <span className="font-bold block leading-none">{att.quiz?.title}</span>
-                            <span className="text-[9px] font-mono opacity-60 uppercase font-bold mt-1 block">{att.quiz?.course?.code}</span>
+                        <tr key={att.id} className="hover:bg-indigo-50/30 dark:hover:bg-white/[0.02] transition-colors text-[11px]">
+                          <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">{att.student?.fullName}</td>
+                          <td className="px-4 py-3 font-mono text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">{att.student?.regNumber}</td>
+                          <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{att.student?.department}</td>
+                          <td className="px-4 py-3 font-mono text-[10px] text-slate-500 dark:text-slate-400 font-bold">{att.student?.year}</td>
+                          <td className="px-4 py-3">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 block leading-none">{att.quiz?.title}</span>
+                            <span className="text-[9px] font-mono text-slate-400 dark:text-slate-500 font-bold uppercase mt-0.5 block">{att.quiz?.course?.code}</span>
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-4 py-3">
                             {att.isCompleted ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-none text-[9px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
-                                SUBMITTED
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9.5px] font-semibold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30">
+                                Submitted
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-none text-[9px] font-mono font-bold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
-                                IN PROGRESS
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9.5px] font-semibold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30 animate-pulse">
+                                In Progress
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-center text-xs font-mono font-bold text-slate-900">
+                          <td className="px-4 py-3 text-[11px] font-mono font-bold text-slate-900 dark:text-slate-100 text-center">
                             {att.score !== null ? `${att.score?.toFixed(1)}%` : "—"}
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -938,37 +736,30 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                               <div className="flex items-center gap-1 justify-center">
                                 <input
                                   type="number"
-                                  min="0"
-                                  max="100"
-                                  step="0.5"
+                                  min="0" max="100" step="0.5"
                                   value={editingScore}
                                   onChange={(e) => setEditingScore(e.target.value)}
-                                  className="w-12 px-1 py-0.5 border border-slate-300 rounded-none text-center font-mono text-[10px]"
-                                  required
+                                  className="w-14 px-1.5 py-1 border border-slate-300 dark:border-slate-600 rounded-lg text-center font-mono text-[10px] bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-indigo-400"
                                 />
                                 <button
                                   onClick={() => handleSaveScoreAdjustment(att.id)}
-                                  className="bg-slate-900 text-white p-1 hover:bg-slate-800"
-                                  title="Save Evaluation"
+                                  className="p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition cursor-pointer"
                                 >
                                   <Check className="h-3 w-3" />
                                 </button>
                                 <button
                                   onClick={() => setEditingAttemptId(null)}
-                                  className="bg-slate-100 text-slate-600 p-1 hover:bg-slate-200"
+                                  className="p-1.5 bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-600 dark:text-slate-400 rounded-lg transition cursor-pointer text-[10px]"
                                 >
                                   ✕
                                 </button>
                               </div>
                             ) : (
                               <button
-                                onClick={() => {
-                                  setEditingAttemptId(att.id);
-                                  setEditingScore(att.score?.toString() || "0");
-                                }}
-                                className="text-[10px] font-bold text-slate-900 border border-slate-200 px-2 py-1 bg-slate-50 hover:bg-slate-100 transition rounded-none uppercase tracking-wide cursor-pointer"
+                                onClick={() => { setEditingAttemptId(att.id); setEditingScore(att.score?.toString() || "0"); }}
+                                className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/[0.10] px-2.5 py-1 bg-slate-50 dark:bg-white/[0.04] hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:text-indigo-700 dark:hover:text-indigo-400 hover:border-indigo-100 dark:hover:border-indigo-900/30 transition rounded-lg cursor-pointer"
                               >
-                                Mark/Regrade
+                                Regrade
                               </button>
                             )}
                           </td>
@@ -976,8 +767,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={8} className="text-center py-12 text-slate-400 font-mono">
-                          No student attempts or active sessions match your active filter criteria.
+                        <td colSpan={8} className="text-center py-12 text-slate-400 dark:text-slate-600 text-[12px]">
+                          No student attempts match the current filters.
                         </td>
                       </tr>
                     )}
@@ -987,175 +778,119 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
             </div>
           )}
 
-          {/* 2. LIVE VIRTUAL LECTURE BROADCAST */}
+          {/* ── 2. LIVE LECTURE ── */}
           {activeTab === "live-lecture" && (
-            <div id="live-lecture-panel" className="bg-white border border-slate-200 rounded-none shadow-xs p-6 space-y-6">
+            <div id="live-lecture-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
               <div>
-                <h2 className="text-md font-bold text-slate-900 uppercase tracking-tight font-display flex items-center gap-2">
-                  <Radio className="h-5 w-5 text-red-500 animate-pulse" />
+                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display flex items-center gap-2">
+                  <Radio className="h-4 w-4 text-red-500 animate-pulse" />
                   Live Broadcasting Station
                 </h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">Post real-time lecture slides/notebooks and coordinate live chats with student audiences.</p>
+                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Post real-time lecture slides and coordinate live discussions.</p>
               </div>
 
               {!broadcastingSession ? (
                 <form onSubmit={handleLaunchLiveLecture} className="space-y-4">
-                  <div className="p-4 bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
-                    <strong>Virtual Lecturing Station Instructions:</strong> Creating a live session establishes an active channel. Any student connected to their dashboard can enter your classroom, see live slides, and participate in discussion threads.
+                  <div className="bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-xl p-4 text-[12.5px] text-indigo-800 dark:text-indigo-300 leading-relaxed">
+                    <strong>Instructions:</strong> Creating a live session establishes an active broadcast channel. Students can join, view your slides, and participate in real-time discussions.
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="live-course" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Target Course Module</label>
-                      <select
-                        id="live-course"
-                        value={liveCourseId}
-                        onChange={(e) => setLiveCourseId(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none text-xs"
-                      >
-                        {courses.map((c) => (
-                          <option key={c.id} value={c.id}>{c.code} - {c.title}</option>
-                        ))}
+                      <label htmlFor="live-course" className={lbl}>Target Course Module</label>
+                      <select id="live-course" value={liveCourseId} onChange={(e) => setLiveCourseId(e.target.value)} className="form-input">
+                        {courses.map((c) => <option key={c.id} value={c.id}>{c.code} – {c.title}</option>)}
                       </select>
                     </div>
-
                     <div>
-                      <label htmlFor="live-topic" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Broadcasting Topic</label>
-                      <input
-                        id="live-topic"
-                        type="text"
-                        required
-                        value={liveTopic}
-                        onChange={(e) => setLiveTopic(e.target.value)}
-                        placeholder="e.g. Lecture 4: Relational Algebra Operations"
-                        className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none text-xs"
-                      />
+                      <label htmlFor="live-topic" className={lbl}>Lecture Topic</label>
+                      <input id="live-topic" type="text" required value={liveTopic} onChange={(e) => setLiveTopic(e.target.value)} placeholder="e.g. Lecture 4: Relational Algebra" className="form-input" />
                     </div>
                   </div>
 
                   <div>
-                    <label htmlFor="live-content" className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Slides & Board Content (Supports Markdown syntax)</label>
-                    <textarea
-                      id="live-content"
-                      required
-                      rows={6}
-                      value={liveContent}
-                      onChange={(e) => setLiveContent(e.target.value)}
-                      placeholder="# Markdown Headings&#10;Write detailed lecture concepts here. Code notebooks or definitions also supported."
-                      className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none text-xs font-mono"
-                    />
+                    <label htmlFor="live-content" className={lbl}>Slides & Board Content (Markdown)</label>
+                    <textarea id="live-content" required rows={7} value={liveContent} onChange={(e) => setLiveContent(e.target.value)} placeholder={"# Heading\nWrite lecture content here with full Markdown support…"} className="form-input" />
                   </div>
 
-                  <button
-                    type="submit"
-                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-widest text-xs border border-red-700 cursor-pointer transition flex items-center justify-center gap-2"
-                  >
-                    <Radio className="h-4 w-4 text-white" />
-                    Launch Interactive Broadcast
+                  <button type="submit" className="btn-gradient">
+                    <Radio className="h-4 w-4" />
+                    Launch Broadcast
                   </button>
                 </form>
               ) : (
-                <div className="space-y-6">
-                  {/* Active Broadcaster Control Hub */}
-                  <div className="p-4 bg-red-50 border border-red-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="space-y-5">
+                  {/* Live banner */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-xl p-4">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 bg-red-600 rounded-full animate-ping"></span>
-                        <span className="text-[10px] font-mono font-bold text-red-700 uppercase tracking-wider">Broadcasting Live Stream Channel</span>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="h-2 w-2 bg-red-600 rounded-full animate-ping" />
+                        <span className="text-[10px] font-mono font-bold text-red-700 dark:text-red-400 uppercase tracking-widest">Broadcasting Live</span>
                       </div>
-                      <h4 className="text-xs font-bold text-slate-800 uppercase mt-1">
-                        Topic: {broadcastingSession.topic}
-                      </h4>
+                      <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-200">Topic: {broadcastingSession.topic}</p>
                     </div>
                     <button
                       onClick={handleEndLiveLecture}
-                      className="px-4 py-2 bg-slate-900 text-white hover:bg-slate-850 border border-slate-950 rounded-none text-xs font-bold uppercase tracking-wider cursor-pointer"
+                      className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-red-700 dark:hover:bg-red-700 text-white rounded-xl text-[12px] font-semibold transition cursor-pointer border border-slate-950 dark:border-slate-700 flex-shrink-0"
                     >
-                      Disconnect Broadcast Stream
+                      End Broadcast
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    {/* Live slides update form */}
-                    <div className="lg:col-span-7 space-y-4">
-                      <div className="bg-slate-50 p-4 border border-slate-200 space-y-4">
-                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Update Live Blackboard Material</h4>
-                        
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    {/* Update form */}
+                    <div className="lg:col-span-7 space-y-3">
+                      <div className="bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 space-y-3">
+                        <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Update Board Material</p>
                         <div>
-                          <label htmlFor="live-topic-active" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Lecture Topic</label>
-                          <input
-                            id="live-topic-active"
-                            type="text"
-                            required
-                            value={liveTopic}
-                            onChange={(e) => setLiveTopic(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-250 bg-white rounded-none text-xs text-slate-800 font-bold"
-                          />
+                          <label htmlFor="live-topic-active" className={lbl}>Topic</label>
+                          <input id="live-topic-active" type="text" required value={liveTopic} onChange={(e) => setLiveTopic(e.target.value)} className="form-input" />
                         </div>
-
                         <div>
-                          <label htmlFor="live-content-active" className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Board Markdown Content</label>
-                          <textarea
-                            id="live-content-active"
-                            required
-                            rows={8}
-                            value={liveContent}
-                            onChange={(e) => setLiveContent(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-250 bg-white rounded-none text-xs font-mono"
-                          />
+                          <label htmlFor="live-content-active" className={lbl}>Board Content (Markdown)</label>
+                          <textarea id="live-content-active" required rows={8} value={liveContent} onChange={(e) => setLiveContent(e.target.value)} className="form-input" />
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={handleUpdateLiveLecture}
-                          className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold uppercase tracking-widest border border-slate-950 cursor-pointer"
-                        >
-                          Sync Board to Students Panels
+                        <button type="button" onClick={handleUpdateLiveLecture} className="btn-gradient">
+                          <Save className="h-4 w-4" />
+                          Sync to Students
                         </button>
                       </div>
                     </div>
 
-                    {/* Chat group thread list */}
-                    <div className="lg:col-span-5 border border-slate-200 bg-slate-50 flex flex-col h-[400px]">
-                      <div className="p-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider font-mono">Students Class Chat</span>
-                        <span className="text-[9px] font-mono bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-none font-bold">
-                          {liveChats.length} Messages
-                        </span>
+                    {/* Chat panel */}
+                    <div className="lg:col-span-5 border border-slate-200/60 dark:border-white/[0.06] rounded-xl overflow-hidden flex flex-col h-[420px] bg-white dark:bg-white/[0.02]">
+                      <div className="px-3.5 py-2.5 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between bg-slate-50/80 dark:bg-white/[0.03]">
+                        <span className="text-[10.5px] font-semibold text-slate-700 dark:text-slate-300">Class Chat</span>
+                        <span className="text-[9px] font-mono bg-slate-100 dark:bg-white/[0.06] text-slate-500 px-1.5 py-0.5 rounded-md font-bold">{liveChats.length}</span>
                       </div>
-
-                      <div className="flex-1 p-3 overflow-y-auto space-y-2 text-xs">
+                      <div className="flex-1 p-3 overflow-y-auto space-y-3">
                         {liveChats.length === 0 ? (
-                          <div className="h-full flex items-center justify-center text-slate-450 font-mono text-[10px]">
-                            Waiting for students to respond to slides...
+                          <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-600 text-[11px] font-medium text-center">
+                            Waiting for student responses…
                           </div>
                         ) : (
                           liveChats.map((chat) => {
                             const isMe = chat.senderRole === "lecturer" || chat.senderId === user.id || !chat.studentId;
                             const isStaff = chat.senderRole === "lecturer" || !chat.studentId;
-                            const displayName = chat.senderName || chat.studentName || chat.lecturerName || (isMe ? "Staff Admin" : "Anonymous");
+                            const displayName = chat.senderName || chat.studentName || chat.lecturerName || (isMe ? "You" : "Student");
                             const senderId = chat.senderId || chat.studentId || chat.lecturerId || "";
-                            const role = isStaff ? "lecturer" : "student";
-
                             return (
-                              <div key={chat.id} className={`flex items-start gap-2.5 max-w-[90%] ${isMe ? "flex-row-reverse self-end" : "flex-row self-start"}`}>
-                                <UserAvatar
-                                  userId={senderId}
-                                  role={role}
-                                  size={28}
-                                  initials={displayName}
-                                  className="mt-1 shrink-0"
-                                />
-                                <div className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                                  <div className="flex items-center gap-1 mb-0.5 text-[9px] font-mono font-bold text-slate-500">
-                                    <span className={isMe ? "text-amber-800" : ""}>{displayName}</span>
-                                    <span>• {new Date(chat.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                  </div>
-                                  <div className={`p-2 rounded-none leading-relaxed break-words ${
-                                    isMe ? "bg-amber-100 border border-amber-200 text-slate-800 font-medium" : "bg-white border border-slate-200 text-slate-800"
+                              <div key={chat.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                                <UserAvatar userId={senderId} role={isStaff ? "lecturer" : "student"} size={26} initials={displayName} className="shrink-0" />
+                                <div className={`max-w-[75%] flex flex-col gap-0.5 ${isMe ? "items-end" : "items-start"}`}>
+                                  <span className={`text-[9px] font-bold font-mono uppercase tracking-wide ${isMe ? "text-amber-600 dark:text-amber-500" : "text-slate-400 dark:text-slate-500"}`}>
+                                    {displayName}
+                                  </span>
+                                  <div className={`px-3 py-2 rounded-2xl leading-relaxed break-words text-[12px] ${
+                                    isMe
+                                      ? "bg-amber-100 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/30 text-slate-800 dark:text-slate-200 rounded-br-md"
+                                      : "bg-slate-100 dark:bg-white/[0.06] text-slate-800 dark:text-slate-200 rounded-bl-md"
                                   }`}>
                                     {chat.message}
                                   </div>
+                                  <span className="text-[8.5px] text-slate-400 dark:text-slate-600 font-mono">
+                                    {new Date(chat.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
                                 </div>
                               </div>
                             );
@@ -1163,22 +898,21 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         )}
                         <div ref={chatEndRef} />
                       </div>
-
-                      <form onSubmit={handleSendLecturerChat} className="p-2 border-t border-slate-200 bg-white flex gap-1.5">
+                      <form onSubmit={handleSendLecturerChat} className="p-2.5 border-t border-slate-100 dark:border-white/[0.06] flex gap-2 bg-white dark:bg-[#0d0d22]">
                         <input
                           type="text"
                           required
                           value={lecturerChatMessage}
                           onChange={(e) => setLecturerChatMessage(e.target.value)}
-                          placeholder="Reply to class..."
-                          className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-none focus:outline-none text-slate-900"
+                          placeholder="Reply to class…"
+                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-300 dark:focus:border-indigo-700 transition-colors"
                         />
                         <button
                           type="submit"
                           disabled={isSendingChat}
-                          className="px-3 bg-slate-900 text-white text-xs font-bold uppercase tracking-wider rounded-none cursor-pointer flex items-center justify-center"
+                          className="flex items-center justify-center w-9 h-9 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 transition-colors cursor-pointer flex-shrink-0"
                         >
-                          <Send className="h-3.5 w-3.5" />
+                          <Send className="h-3.5 w-3.5 text-white" />
                         </button>
                       </form>
                     </div>
@@ -1188,175 +922,104 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
             </div>
           )}
 
-          {/* 3. PUBLISH STUDY NOTES */}
+          {/* ── 3. PUBLISH NOTES ── */}
           {activeTab === "notes" && (
-            <div id="notes-panel" className="bg-white border border-slate-200 rounded-none shadow-xs p-6 space-y-6">
+            <div id="notes-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
               <div>
-                <h2 className="text-md font-bold text-slate-900 uppercase tracking-tight font-display">Publish Course Study Notes</h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">Upload comprehensive module details and notes for students to read.</p>
+                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Publish Course Study Notes</h2>
+                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Upload comprehensive module details for students to study.</p>
               </div>
 
               <form onSubmit={handlePublishNote} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Target Course Module</label>
-                    <select
-                      value={noteCourseId}
-                      onChange={(e) => setNoteCourseId(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none text-xs text-slate-750 outline-none"
-                    >
-                      {courses.map((c) => (
-                        <option key={c.id} value={c.id}>{c.code} - {c.title}</option>
-                      ))}
+                    <label className={lbl}>Target Course Module</label>
+                    <select value={noteCourseId} onChange={(e) => setNoteCourseId(e.target.value)} className="form-input">
+                      {courses.map((c) => <option key={c.id} value={c.id}>{c.code} – {c.title}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Lecture Note Title</label>
-                    <input
-                      type="text"
-                      required
-                      value={noteTitle}
-                      onChange={(e) => setNoteTitle(e.target.value)}
-                      placeholder="e.g. Chapter 3: Normalization and Functional Dependencies"
-                      className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none text-xs text-slate-700 outline-none"
-                    />
+                    <label className={lbl}>Lecture Note Title</label>
+                    <input type="text" required value={noteTitle} onChange={(e) => setNoteTitle(e.target.value)} placeholder="e.g. Chapter 3: Normalization…" className="form-input" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Markdown Body Content</label>
-                  <textarea
-                    required
-                    rows={12}
-                    value={noteContent}
-                    onChange={(e) => setNoteContent(e.target.value)}
-                    placeholder="Provide full academic notes with markdown support..."
-                    className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none font-mono text-xs text-slate-700 outline-none focus:ring-1 focus:ring-slate-900"
-                  />
+                  <label className={lbl}>Markdown Body Content</label>
+                  <textarea required rows={12} value={noteContent} onChange={(e) => setNoteContent(e.target.value)} placeholder="Provide full academic notes with markdown support…" className="form-input" />
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-none text-xs font-bold uppercase tracking-widest border border-slate-950 transition cursor-pointer"
-                >
-                  Publish Note to Course Syllabus
+                <button type="submit" className="btn-gradient">
+                  <PlusCircle className="h-4 w-4" />
+                  Publish Note
                 </button>
               </form>
             </div>
           )}
 
-          {/* 4. DEPLOY SECURE EXAM QUIZ */}
+          {/* ── 4. DEPLOY QUIZ ── */}
           {activeTab === "quizzes" && (
-            <div id="quizzes-panel" className="bg-white border border-slate-200 rounded-none shadow-xs p-6 space-y-6">
+            <div id="quizzes-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
               <div>
-                <h2 className="text-md font-bold text-slate-900 uppercase tracking-tight font-display">Deploy Secure Quiz & Examination</h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">Configure timed question sets to deliver instant testing and score logging.</p>
+                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Deploy Secure Quiz & Examination</h2>
+                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Configure timed question sets for instant testing and score logging.</p>
               </div>
 
               <form onSubmit={handleDeployQuizSubmit} className="space-y-6">
-                
-                {/* Meta Details Row */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 border border-slate-250 rounded-none">
+                {/* Meta */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4">
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Course Module</label>
-                    <select
-                      value={quizCourseId}
-                      onChange={(e) => setQuizCourseId(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none text-xs text-slate-750"
-                    >
-                      {courses.map((c) => (
-                        <option key={c.id} value={c.id}>{c.code} - {c.title}</option>
-                      ))}
+                    <label className={lbl}>Course Module</label>
+                    <select value={quizCourseId} onChange={(e) => setQuizCourseId(e.target.value)} className="form-input">
+                      {courses.map((c) => <option key={c.id} value={c.id}>{c.code} – {c.title}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Quiz Title</label>
-                    <input
-                      type="text"
-                      required
-                      value={quizTitle}
-                      onChange={(e) => setQuizTitle(e.target.value)}
-                      placeholder="e.g. Mid-Term Examination 2026"
-                      className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none text-xs text-slate-700 outline-none"
-                    />
+                    <label className={lbl}>Quiz Title</label>
+                    <input type="text" required value={quizTitle} onChange={(e) => setQuizTitle(e.target.value)} placeholder="e.g. Mid-Term 2026" className="form-input" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">SLA Timer Duration (Minutes)</label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      value={quizDuration}
-                      onChange={(e) => setQuizDuration(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none text-xs text-slate-700 outline-none font-mono"
-                    />
+                    <label className={lbl}>Duration (Minutes)</label>
+                    <input type="number" required min="1" value={quizDuration} onChange={(e) => setQuizDuration(e.target.value)} className="form-input" />
                   </div>
                 </div>
 
-                {/* Upload Question Builder */}
-                <div className="space-y-4">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-display">Questions Upload Manager</h3>
-                  
+                {/* Questions */}
+                <div className="space-y-3">
+                  <h3 className="text-[12px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Questions</h3>
+
                   {quizQuestions.map((q, qIdx) => (
-                    <div key={qIdx} className="p-4 border border-slate-200 rounded-none bg-white space-y-3 relative">
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                        <span className="text-[10px] font-mono font-bold text-slate-400">QUESTION {qIdx + 1}</span>
+                    <div key={qIdx} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl bg-white dark:bg-white/[0.02] space-y-3">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-white/[0.06]">
+                        <span className="text-[10px] font-mono font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Question {qIdx + 1}</span>
                         {quizQuestions.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveQuestionRow(qIdx)}
-                            className="p-1 hover:bg-red-50 text-red-500 hover:text-red-700 transition"
-                            title="Remove Question"
-                          >
+                          <button type="button" onClick={() => handleRemoveQuestionRow(qIdx)} className="p-1 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600 transition rounded-lg cursor-pointer">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         )}
                       </div>
 
                       <div>
-                        <label className="block text-[9px] font-bold uppercase text-slate-400 mb-1">Question Text</label>
-                        <input
-                          type="text"
-                          required
-                          value={q.text}
-                          onChange={(e) => handleQuizQuestionChange(qIdx, "text", e.target.value)}
-                          placeholder="e.g. What does SQL stand for?"
-                          className="w-full px-3 py-2 border border-slate-200 rounded-none text-xs text-slate-700 outline-none focus:border-slate-900"
-                        />
+                        <label className={lbl}>Question Text</label>
+                        <input type="text" required value={q.text} onChange={(e) => handleQuizQuestionChange(qIdx, "text", e.target.value)} placeholder="e.g. What does SQL stand for?" className="form-input" />
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {q.options.map((opt, optIdx) => (
                           <div key={optIdx}>
-                            <label className="block text-[9px] font-bold uppercase text-slate-400 mb-0.5">Option {["A", "B", "C", "D"][optIdx]}</label>
-                            <input
-                              type="text"
-                              required
-                              value={opt}
-                              onChange={(e) => handleQuizQuestionChange(qIdx, "option", e.target.value, optIdx)}
-                              placeholder={`Option ${["A", "B", "C", "D"][optIdx]}`}
-                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-none text-xs text-slate-700 outline-none focus:border-slate-900"
-                            />
+                            <label className={lbl}>Option {["A","B","C","D"][optIdx]}</label>
+                            <input type="text" required value={opt} onChange={(e) => handleQuizQuestionChange(qIdx, "option", e.target.value, optIdx)} placeholder={`Option ${["A","B","C","D"][optIdx]}`} className="form-input" />
                           </div>
                         ))}
                       </div>
 
-                      <div className="pt-2">
-                        <label className="block text-[9px] font-bold uppercase text-slate-550 mb-1">Correct designated option</label>
-                        <select
-                          required
-                          value={q.correctOption}
-                          onChange={(e) => handleQuizQuestionChange(qIdx, "correctOption", e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-none text-xs font-bold text-slate-700 outline-none"
-                        >
-                          <option value="">-- Choose correct option --</option>
+                      <div>
+                        <label className={lbl}>Correct Option</label>
+                        <select required value={q.correctOption} onChange={(e) => handleQuizQuestionChange(qIdx, "correctOption", e.target.value)} className="form-input">
+                          <option value="">-- Select correct answer --</option>
                           {q.options.map((opt, oIdx) => {
-                            const optLabel = ["A", "B", "C", "D"][oIdx];
-                            return (
-                              <option key={oIdx} value={opt}>
-                                {optLabel}: {opt || `(Option ${optLabel} empty)`}
-                              </option>
-                            );
+                            const optLabel = ["A","B","C","D"][oIdx];
+                            return <option key={oIdx} value={opt}>{optLabel}: {opt || `(Option ${optLabel} empty)`}</option>;
                           })}
                         </select>
                       </div>
@@ -1366,85 +1029,66 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   <button
                     type="button"
                     onClick={handleAddQuestionRow}
-                    className="w-full py-2 border border-dashed border-slate-300 hover:border-slate-900 text-slate-600 hover:text-slate-900 text-xs font-bold uppercase tracking-wider rounded-none transition"
+                    className="w-full py-2.5 border-2 border-dashed border-slate-200 dark:border-white/[0.10] hover:border-indigo-300 dark:hover:border-indigo-700 text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-[12px] font-semibold rounded-xl transition cursor-pointer"
                   >
-                    + Append Question Form Row
+                    + Add Question
                   </button>
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-none text-xs font-bold uppercase tracking-widest border border-slate-950 transition cursor-pointer"
-                >
-                  Publish and Deploy Secure Quiz
+                <button type="submit" className="btn-gradient">
+                  <Award className="h-4 w-4" />
+                  Deploy Secure Quiz
                 </button>
               </form>
             </div>
           )}
 
-          {/* 5. COURSE REGISTRY */}
+          {/* ── 5. COURSE REGISTRY ── */}
           {activeTab === "courses" && (
-            <div id="courses-panel" className="bg-white border border-slate-200 rounded-none shadow-xs p-6 space-y-6">
+            <div id="courses-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
               <div>
-                <h2 className="text-md font-bold text-slate-900 uppercase tracking-tight font-display">Course Registry</h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">Register new academic course modules to organize syllabus contents.</p>
+                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Course Registry</h2>
+                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Register new academic course modules.</p>
               </div>
 
-              <form onSubmit={handleCreateCourse} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end bg-slate-50 p-4 border border-slate-250 rounded-none">
+              <form onSubmit={handleCreateCourse} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Course Code</label>
-                  <input
-                    type="text"
-                    required
-                    value={courseCode}
-                    onChange={(e) => setCourseCode(e.target.value)}
-                    placeholder="e.g. CSC301"
-                    className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none focus:ring-1 focus:ring-slate-900 text-xs text-slate-700 outline-none uppercase font-mono"
-                  />
+                  <label className={lbl}>Course Code</label>
+                  <input type="text" required value={courseCode} onChange={(e) => setCourseCode(e.target.value)} placeholder="e.g. CSC301" className="form-input uppercase font-mono" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Course Title</label>
-                  <input
-                    type="text"
-                    required
-                    value={courseTitle}
-                    onChange={(e) => setCourseTitle(e.target.value)}
-                    placeholder="e.g. Database Systems"
-                    className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none focus:ring-1 focus:ring-slate-900 text-xs text-slate-700 outline-none"
-                  />
+                  <label className={lbl}>Course Title</label>
+                  <input type="text" required value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)} placeholder="e.g. Database Systems" className="form-input" />
                 </div>
-                <button
-                  type="submit"
-                  className="py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-none text-xs font-bold uppercase tracking-widest border border-slate-950 cursor-pointer transition"
-                >
-                  Register Course
+                <button type="submit" className="btn-gradient" style={{ marginTop: "24px" }}>
+                  Register
                 </button>
               </form>
 
-              <div className="space-y-2">
-                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Registered Modules</h3>
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Registered Modules ({courses.length})</p>
                 {loading ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-pulse" id="courses-skeleton">
-                    {[1, 2, 3, 4].map((i) => (
-                      <div key={i} className="p-4 border border-slate-200 dark:border-slate-800 rounded-none flex items-center justify-between bg-white dark:bg-slate-900 shadow-xs">
+                    {[1,2,3,4].map((i) => (
+                      <div key={i} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between">
                         <div className="space-y-2 w-2/3">
-                          <div className="h-3 bg-slate-200 dark:bg-slate-800 w-16"></div>
-                          <div className="h-4 bg-slate-200 dark:bg-slate-800 w-full"></div>
+                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-md w-16" />
+                          <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-full" />
                         </div>
-                        <div className="h-5 bg-slate-200 dark:bg-slate-800 w-12"></div>
+                        <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded-full w-16" />
                       </div>
                     ))}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {courses.map((c) => (
-                      <div key={c.id} className="p-4 border border-slate-200 rounded-none flex items-center justify-between bg-white shadow-xs">
+                      <div key={c.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all">
                         <div>
-                          <span className="block font-mono text-[10px] font-bold uppercase text-slate-400 tracking-wider">{c.code}</span>
-                          <span className="block text-xs font-bold text-slate-800 leading-tight mt-0.5">{c.title}</span>
+                          <span className="block font-mono text-[10px] font-bold uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">{c.code}</span>
+                          <span className="block text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 leading-tight mt-0.5">{c.title}</span>
                         </div>
-                        <span className="text-[9px] font-mono font-bold bg-slate-150 text-slate-750 px-2 py-0.5 border border-slate-200 rounded-none">
-                          {c._count?.notes || 0} NOTES
+                        <span className="text-[9px] font-mono font-bold bg-slate-50 dark:bg-white/[0.04] text-slate-500 dark:text-slate-400 px-2.5 py-1 border border-slate-200 dark:border-white/[0.07] rounded-full">
+                          {c._count?.notes || 0} notes
                         </span>
                       </div>
                     ))}
@@ -1454,68 +1098,56 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
             </div>
           )}
 
-          {/* 6. DEPARTMENTS LIST & MANAGEMENT */}
+          {/* ── 6. DEPARTMENTS ── */}
           {activeTab === "departments" && (
-            <div id="departments-panel" className="bg-white border border-slate-200 p-6 rounded-none shadow-xs space-y-6">
+            <div id="departments-panel" className="bg-white dark:bg-[#0d0d22] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
               <div>
-                <h2 className="text-md font-bold text-slate-900 uppercase tracking-tight font-display">Academic Departments</h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">Establish, maintain, and examine school departments inside FUTO.</p>
+                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Academic Departments</h2>
+                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Establish and manage school departments.</p>
               </div>
 
-              <form onSubmit={handleCreateDepartment} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end bg-slate-50 p-4 border border-slate-250 rounded-none">
+              <form onSubmit={handleCreateDepartment} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4">
                 <div className="md:col-span-2">
-                  <label htmlFor="dept-name" className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">New Department Name</label>
-                  <input
-                    id="dept-name"
-                    type="text"
-                    required
-                    value={newDeptName}
-                    onChange={(e) => setNewDeptName(e.target.value)}
-                    placeholder="e.g. Information Technology"
-                    className="w-full px-3 py-2 border border-slate-200 bg-white rounded-none focus:ring-1 focus:ring-slate-900 text-xs text-slate-750 outline-none"
-                  />
+                  <label htmlFor="dept-name" className={lbl}>New Department Name</label>
+                  <input id="dept-name" type="text" required value={newDeptName} onChange={(e) => setNewDeptName(e.target.value)} placeholder="e.g. Information Technology" className="form-input" />
                 </div>
-                <button
-                  type="submit"
-                  className="py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-none text-xs font-bold uppercase tracking-widest border border-slate-950 cursor-pointer transition"
-                >
-                  Create Department
+                <button type="submit" className="btn-gradient" style={{ marginTop: "24px" }}>
+                  Create
                 </button>
               </form>
 
-              <div className="space-y-2">
-                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Departments</h3>
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Active Departments ({departments.length})</p>
                 {loading ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-pulse" id="departments-skeleton">
-                    {[1, 2, 3, 4].map((i) => (
-                      <div key={i} className="p-4 border border-slate-200 dark:border-slate-800 rounded-none flex items-center justify-between bg-white dark:bg-slate-900 shadow-xs">
+                    {[1,2,3,4].map((i) => (
+                      <div key={i} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between">
                         <div className="space-y-2 w-2/3">
-                          <div className="h-4 bg-slate-200 dark:bg-slate-800 w-3/4"></div>
-                          <div className="h-3 bg-slate-200 dark:bg-slate-800 w-24"></div>
+                          <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-md w-3/4" />
+                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-md w-24" />
                         </div>
-                        <div className="h-5 bg-slate-200 dark:bg-slate-800 w-16"></div>
+                        <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded-full w-16" />
+                      </div>
+                    ))}
+                  </div>
+                ) : departments.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {departments.map((dept) => (
+                      <div key={dept.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all">
+                        <div>
+                          <span className="block text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 leading-tight">{dept.name}</span>
+                          <span className="block font-mono text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-0.5">ID: {dept.id.substring(0, 8)}</span>
+                        </div>
+                        <span className="text-[9px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 px-2.5 py-1 border border-indigo-100 dark:border-indigo-900/30 rounded-full">
+                          FUTO
+                        </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {departments.length > 0 ? (
-                      departments.map((dept) => (
-                        <div key={dept.id} className="p-4 border border-slate-200 rounded-none flex items-center justify-between bg-white shadow-xs">
-                          <div>
-                            <span className="block text-xs font-bold text-slate-800 leading-tight">{dept.name}</span>
-                            <span className="block font-mono text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-1">ID: {dept.id.substring(0, 8)}</span>
-                          </div>
-                          <span className="text-[9px] font-mono font-bold bg-slate-100 text-slate-600 px-2 py-0.5 border border-slate-200 rounded-none">
-                            FUTO SCHOOL
-                          </span>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="col-span-2 py-8 text-center text-slate-400 font-mono text-xs border border-dashed border-slate-250">
-                        No departments established yet.
-                      </div>
-                    )}
+                  <div className="py-12 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
+                    <Users className="h-7 w-7 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
+                    <p className="text-[12px] text-slate-400 dark:text-slate-500 font-medium">No departments established yet.</p>
                   </div>
                 )}
               </div>
@@ -1523,7 +1155,6 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           )}
 
         </section>
-
       </main>
 
       <AvatarModal

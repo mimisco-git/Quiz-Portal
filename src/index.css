@@ -222,6 +222,51 @@ select.premium-input {
 }
 
 /* ───────────────────────────────────────────────
+   FORM INPUT (Compact — for dashboard forms)
+   ─────────────────────────────────────────────── */
+
+.form-input {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: var(--font-sans);
+  color: #1e293b;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1.5px solid rgba(226, 232, 240, 0.8);
+  border-radius: 10px;
+  outline: none;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-appearance: none;
+}
+.form-input::placeholder { color: #94a3b8; }
+.form-input:focus {
+  background: #fff;
+  border-color: rgba(99, 102, 241, 0.72);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.10);
+}
+.dark .form-input {
+  background: rgba(11, 9, 28, 0.65) !important;
+  border-color: rgba(99, 102, 241, 0.15) !important;
+  color: #f1f5f9 !important;
+}
+.dark .form-input::placeholder { color: #475569 !important; }
+.dark .form-input:focus {
+  background: rgba(11, 9, 33, 0.88) !important;
+  border-color: rgba(129, 140, 248, 0.62) !important;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.10) !important;
+}
+select.form-input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 32px;
+  cursor: pointer;
+}
+textarea.form-input { resize: vertical; }
+
+/* ───────────────────────────────────────────────
    ORB FLOAT ANIMATION CLASSES
    ─────────────────────────────────────────────── */
 
