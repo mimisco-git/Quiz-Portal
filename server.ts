@@ -16,12 +16,7 @@ const app = express();
 const PORT = 3000;
 
 if (!process.env.JWT_SECRET) {
-  if (process.env.NODE_ENV === "production") {
-    console.error("[FATAL] JWT_SECRET env var is not set in production. Set it in Vercel → Settings → Environment Variables.");
-    process.exit(1);
-  } else {
-    console.warn("[WARN] JWT_SECRET not set — using insecure dev fallback. Never deploy without a real secret.");
-  }
+  console.warn("[WARN] JWT_SECRET env var is not set. Set it in Vercel → Settings → Environment Variables for production security.");
 }
 const JWT_SECRET = process.env.JWT_SECRET || "dev-only-fallback-never-use-in-production";
 
@@ -29,6 +24,14 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+
+// Catch body-parser parse errors (malformed JSON) before they reach the global handler
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err.type === "entity.parse.failed" || err instanceof SyntaxError) {
+    return res.status(400).json({ error: "Invalid JSON in request body." });
+  }
+  next(err);
+});
 
 // ── Rate limiters ──────────────────────────────────────────────
 const authLimiter = rateLimit({

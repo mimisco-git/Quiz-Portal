@@ -102,11 +102,17 @@ export default function LandingScreen({
   }, []);
 
   /* ─── handlers ───────────────────────────────────────── */
+  // Safe JSON parser — prevents raw "Unexpected token" errors reaching the UI
+  const apiJSON = async (res: Response) => {
+    const text = await res.text();
+    try { return JSON.parse(text); } catch { throw new Error("Server error. Please try again."); }
+  };
+
   const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setError(null); setSuccess(null); setLoading(true);
     try {
       const res  = await fetch("/api/auth/student-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regNumber: studentRegNumber, year: studentYear }) });
-      const data = await res.json();
+      const data = await apiJSON(res);
       if (!res.ok) throw new Error(data.error || "Failed to log in");
       setSuccess("Login successful! Redirecting…");
       setTimeout(() => onLoginSuccess(data.token, data.user), 500);
@@ -117,7 +123,7 @@ export default function LandingScreen({
     e.preventDefault(); setError(null); setSuccess(null); setLoading(true);
     try {
       const res  = await fetch("/api/auth/student-register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fullName: regFullName, email: regEmail, regNumber: regRegNumber, department: regDepartment, year: regYear, securityQuestion, securityAnswer }) });
-      const data = await res.json();
+      const data = await apiJSON(res);
       if (!res.ok) throw new Error(data.error || "Registration failed");
       setSuccess("Account registered! Welcome aboard.");
       setTimeout(() => onLoginSuccess(data.token, data.user), 1000);
@@ -128,7 +134,7 @@ export default function LandingScreen({
     e.preventDefault(); setError(null); setSuccess(null); setLoading(true);
     try {
       const res  = await fetch("/api/auth/lecturer-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: lecturerEmail, password: lecturerPassword }) });
-      const data = await res.json();
+      const data = await apiJSON(res);
       if (!res.ok) throw new Error(data.error || "Lecturer verification failed");
       setSuccess("Authorization granted!");
       setTimeout(() => onLoginSuccess(data.token, data.user), 500);
@@ -139,7 +145,7 @@ export default function LandingScreen({
     e.preventDefault(); setError(null); setSuccess(null); setLoading(true);
     try {
       const res  = await fetch("/api/auth/lecturer-register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: regLecturerName, email: regLecturerEmail, password: regLecturerPassword }) });
-      const data = await res.json();
+      const data = await apiJSON(res);
       if (!res.ok) throw new Error(data.error || "Lecturer registration failed");
       setSuccess("Lecturer account created!");
       setTimeout(() => onLoginSuccess(data.token, data.user), 1000);
@@ -150,7 +156,7 @@ export default function LandingScreen({
     e.preventDefault(); setError(null); setLoading(true);
     try {
       const res  = await fetch("/api/auth/student-get-security-question", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regNumber: fixRegNumber }) });
-      const data = await res.json();
+      const data = await apiJSON(res);
       if (!res.ok) throw new Error(data.error || "Verification failed");
       setFixQuestion(data.securityQuestion); setFixStep("answer-question");
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
@@ -160,7 +166,7 @@ export default function LandingScreen({
     e.preventDefault(); setError(null); setSuccess(null); setLoading(true);
     try {
       const res  = await fetch("/api/auth/student-fix-year", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regNumber: fixRegNumber, securityAnswer: fixAnswer, newYear: fixNewYear }) });
-      const data = await res.json();
+      const data = await apiJSON(res);
       if (!res.ok) throw new Error(data.error || "Incorrect answer");
       setSuccess("Year updated! Logging in…");
       setTimeout(() => onLoginSuccess(data.token, data.user), 1000);
