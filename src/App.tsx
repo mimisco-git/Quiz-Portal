@@ -116,7 +116,7 @@ export default function App() {
       const customFetch = async (...args: any[]) => {
         try {
           const response = await originalFetch(...(args as [RequestInfo | URL, RequestInit?]));
-          if (response.status === 401 || response.status === 403) {
+          if (response.status === 401) {
             if (!showSessionExpired) {
               setShowSessionExpired(true);
               setSessionCountdown(10);
