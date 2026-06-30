@@ -202,8 +202,8 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
 
   const yearsOptions = ["Year 1","Year 2","Year 3","Year 4","Year 5","Extra Year","Postgraduate"];
 
-  const labelClass = "block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
-  const linkClass  = "text-[12.5px] text-emerald-700 dark:text-emerald-400 font-semibold hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors cursor-pointer";
+  const labelClass = "block text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
+  const linkClass  = "text-[13px] text-emerald-700 dark:text-emerald-400 font-semibold hover:text-emerald-600 dark:hover:text-emerald-300 transition-colors cursor-pointer";
 
   return (
     <div className="min-h-screen relative overflow-x-hidden font-sans antialiased">
@@ -239,6 +239,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
       <div className="fixed top-4 right-4 z-30 sm:top-6 sm:right-6">
         <button
           onClick={onToggleTheme}
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           title={theme === "dark" ? "Switch to light" : "Switch to dark"}
           className="flex items-center justify-center w-9 h-9 rounded-full
             bg-white/75 dark:bg-white/10
@@ -289,34 +290,39 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                 </div>
 
                 {/* Motto */}
-                <p className="text-[12.5px] font-semibold tracking-[0.24em] uppercase text-slate-400 dark:text-slate-500 mt-2">
-                  Assess&nbsp;&nbsp;·&nbsp;&nbsp;Learn&nbsp;&nbsp;·&nbsp;&nbsp;Excel
+                <p className="text-[13px] font-semibold tracking-[0.14em] uppercase text-slate-400 dark:text-slate-500 mt-2">
+                  Assess · Learn · Excel
                 </p>
 
                 <div className="mt-5 mb-4 h-px bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700/60 to-transparent" />
 
                 {/* Description */}
-                <p className="text-[15px] font-normal text-slate-500 dark:text-slate-400 leading-[1.65] max-w-[285px] mx-auto">
+                <p className="text-base text-slate-500 dark:text-slate-400 leading-[1.65] max-w-[285px] mx-auto">
                   FUTO's secure academic portal — timed examinations, live lectures &amp; instant results.
                 </p>
               </div>
 
               {/* ── Pill Tab Switcher ── */}
               {mode !== "security-fix" && (
-                <div className="relative bg-slate-100/90 dark:bg-white/[0.055] rounded-[14px] p-1 mb-6 flex">
-                  {/* Sliding indicator */}
+                <div role="tablist" className="relative bg-slate-100/90 dark:bg-white/[0.055] rounded-[14px] p-1 mb-6 flex">
+                  {/* Sliding indicator — uses transform (GPU composited, no layout thrash) */}
                   <div
-                    className="absolute top-1 bottom-1 rounded-[11px] bg-white dark:bg-white/[0.14] shadow-sm
-                      transition-[left] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                    className="absolute top-1 bottom-1 rounded-[10px] bg-white dark:bg-white/[0.14] shadow-sm
+                      transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
                     style={{
                       width: "calc(50% - 4px)",
-                      left: activeTab === "student" ? "4px" : "calc(50%)",
+                      left: "4px",
+                      transform: activeTab === "student" ? "translateX(0)" : "translateX(100%)",
+                      willChange: "transform",
                     }}
                   />
                   <button
                     id="student-tab-btn"
+                    role="tab"
+                    aria-selected={activeTab === "student"}
+                    aria-controls="student-tab-panel"
                     onClick={() => { setActiveTab("student"); setError(null); setSuccess(null); }}
-                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold rounded-[11px] transition-colors duration-200 cursor-pointer ${
+                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-semibold rounded-[10px] transition-colors duration-200 cursor-pointer ${
                       activeTab === "student"
                         ? "text-slate-800 dark:text-white"
                         : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
@@ -327,8 +333,11 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                   </button>
                   <button
                     id="lecturer-tab-btn"
+                    role="tab"
+                    aria-selected={activeTab === "lecturer"}
+                    aria-controls="lecturer-tab-panel"
                     onClick={() => { setActiveTab("lecturer"); setError(null); setSuccess(null); }}
-                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold rounded-[11px] transition-colors duration-200 cursor-pointer ${
+                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-semibold rounded-[10px] transition-colors duration-200 cursor-pointer ${
                       activeTab === "lecturer"
                         ? "text-slate-800 dark:text-white"
                         : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
@@ -488,7 +497,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                     </div>
 
                     <button id="student-submit-btn" type="submit" disabled={loading} className="btn-gradient">
-                      {loading ? "Authorizing..." : "Access Assessment Hub"}
+                      {loading ? "Signing in..." : "Sign In"}
                       <ArrowRight className="h-4 w-4" />
                     </button>
                   </motion.form>
@@ -506,7 +515,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                     className="space-y-3.5"
                   >
                     <div className="text-center pb-0.5">
-                      <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+                      <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
                         <ClipboardCheck className="h-3 w-3" /> New Student Registration
                       </span>
                     </div>
@@ -615,7 +624,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                     </div>
 
                     <button id="lecturer-submit-btn" type="submit" disabled={loading} className="btn-gradient">
-                      {loading ? "Authenticating..." : "Enter Lecturer Workspace"}
+                      {loading ? "Signing in..." : "Sign In"}
                       <ArrowRight className="h-4 w-4" />
                     </button>
                   </motion.form>

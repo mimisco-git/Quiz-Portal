@@ -15,12 +15,14 @@
    ═══════════════════════════════════════════════ */
 
 :root {
+  color-scheme: light dark;
+
   /* FUTO green palette — deep forest → vibrant emerald */
   --brand:            #047857;  /* emerald-700 */
   --brand-mid:        #059669;  /* emerald-600 */
   --brand-end:        #10b981;  /* emerald-500 */
   --brand-light:      #34d399;  /* emerald-400 */
-  --brand-gradient:   linear-gradient(135deg, #064e3b 0%, #047857 42%, #10b981 100%);
+  --brand-gradient:   linear-gradient(135deg, #064e3b 0%, #047857 25%, #10b981 100%);
 
   --glass:            rgba(255, 255, 255, 0.82);
   --glass-dark:       rgba(1, 14, 7, 0.82);
@@ -96,10 +98,14 @@
 
 .glass-card {
   background: var(--glass);
-  backdrop-filter: blur(40px) saturate(200%);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-card { background: rgba(255,255,255,0.97); }
+  .dark .glass-card { background: rgba(1,20,10,0.97); }
 }
 .dark .glass-card {
   background: var(--glass-dark);
@@ -125,16 +131,18 @@
 .premium-input {
   display: block;
   width: 100%;
-  padding: 13px 16px;
-  font-size: 14px;
+  padding: 12px 16px;
+  font-size: 15px;
   line-height: 1.5;
   font-family: var(--font-sans);
   color: #1e293b;
-  background: rgba(240, 253, 244, 0.80);
-  border: 1.5px solid rgba(187, 247, 208, 0.90);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1.5px solid #d1d5db;
   border-radius: 12px;
   outline: none;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   -webkit-font-smoothing: antialiased;
   -webkit-appearance: none;
 }
@@ -144,8 +152,8 @@
 }
 .premium-input:focus {
   background: #fff;
-  border-color: rgba(5, 150, 105, 0.75);
-  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.13), 0 2px 8px rgba(4, 120, 87, 0.07);
+  border-color: #059669;
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.22), 0 2px 8px rgba(4, 120, 87, 0.08);
 }
 
 /* Dark mode – !important beats the global .dark input override */
@@ -179,8 +187,8 @@ select.premium-input {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  padding: 14px 24px;
-  font-size: 14px;
+  padding: 15px 24px;
+  font-size: 15px;
   font-weight: 600;
   font-family: var(--font-sans);
   letter-spacing: 0.012em;
@@ -191,7 +199,9 @@ select.premium-input {
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: var(--shadow-brand);
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -217,7 +227,7 @@ select.premium-input {
   transform: skewX(-15deg) translateX(-160%);
 }
 .btn-gradient:hover:not(:disabled)::after {
-  animation: shimmer-slide 0.72s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: shimmer-slide 0.38s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 /* ───────────────────────────────────────────────
@@ -263,7 +273,7 @@ select.form-input {
   padding-right: 32px;
   cursor: pointer;
 }
-textarea.form-input { resize: vertical; }
+textarea.form-input { resize: none; }
 
 /* ───────────────────────────────────────────────
    ORB FLOAT ANIMATION CLASSES
@@ -294,9 +304,9 @@ textarea.form-input { resize: vertical; }
 .dark .text-slate-900   { color: #f8fafc !important; }
 .dark .text-slate-800,
 .dark .text-slate-700   { color: #cbd5e1 !important; }
-.dark .text-slate-600,
-.dark .text-slate-500   { color: #94a3b8 !important; }
-.dark .text-slate-400   { color: #64748b !important; }
+.dark .text-slate-600   { color: #94a3b8 !important; }
+.dark .text-slate-500   { color: #b0b8c8 !important; }
+.dark .text-slate-400   { color: #c8d0de !important; }
 
 .dark .hover\:bg-slate-50:hover  { background-color: #02210f !important; }
 .dark .hover\:bg-slate-100:hover { background-color: #063320 !important; }

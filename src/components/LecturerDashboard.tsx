@@ -521,7 +521,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   /* ─── label helper ─── */
-  const lbl = "block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5";
+  const lbl = "block text-[12px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5";
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
@@ -533,14 +533,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
             <img src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"} alt="QuizOS" className="h-9 w-auto select-none rounded-md" />
             <div className="hidden sm:block">
               <span className="text-[13px] font-bold text-slate-900 dark:text-white font-display tracking-tight">QuizOS</span>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono ml-1.5">Lecturer</span>
+              <span className="text-[12px] text-slate-400 dark:text-slate-500 font-mono ml-1.5">Lecturer</span>
             </div>
           </div>
 
           <div className="flex items-center gap-2.5">
             <div className="hidden md:block text-right mr-1">
               <p className="text-[12px] font-bold text-slate-900 dark:text-white leading-tight">{user.name}</p>
-              <p className="text-[9.5px] font-mono text-slate-400 dark:text-slate-500 mt-0.5">{user.email}</p>
+              <p className="text-[11px] font-mono text-slate-400 dark:text-slate-500 mt-0.5">{user.email}</p>
             </div>
 
             <button
@@ -585,10 +585,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         {/* Sidebar nav */}
         <aside className="lg:col-span-3">
           <div className="bg-white dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-4 shadow-sm">
-            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 px-1">Workspace</p>
+            <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 px-1">Workspace</p>
             <nav className="space-y-1">
               {navBtn("gradebook",    "Registry Gradebook",    <ClipboardList className="h-4 w-4" />)}
-              {navBtn("live-lecture", "Live Virtual Lecture",  <Radio className="h-4 w-4 text-red-500 animate-pulse" />, true)}
+              {navBtn("live-lecture", "Live Virtual Lecture",  <Radio className={`h-4 w-4 ${broadcastingSession ? "text-red-500 animate-pulse" : "text-slate-400"}`} />, true)}
               {navBtn("notes",        "Publish Study Notes",   <PlusCircle className="h-4 w-4" />)}
               {navBtn("quizzes",      "Deploy Term Exam",      <Award className="h-4 w-4" />)}
               {navBtn("courses",      "Course Modules",        <BookOpen className="h-4 w-4" />)}
@@ -694,7 +694,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   <thead className="bg-slate-50/80 dark:bg-white/[0.03]">
                     <tr>
                       {["Student Name","Reg. No.","Department","Year","Exam Target","Status","Score","Action"].map((h) => (
-                        <th key={h} className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 font-mono whitespace-nowrap">{h}</th>
+                        <th key={h} className="px-4 py-3 text-[12px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -709,22 +709,22 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       ))
                     ) : filteredAttempts.length > 0 ? (
                       filteredAttempts.map((att) => (
-                        <tr key={att.id} className="hover:bg-emerald-50/30 dark:hover:bg-white/[0.02] transition-colors text-[11px]">
+                        <tr key={att.id} className="hover:bg-emerald-50/30 dark:hover:bg-white/[0.02] transition-colors text-[13px]">
                           <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">{att.student?.fullName}</td>
-                          <td className="px-4 py-3 font-mono text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">{att.student?.regNumber}</td>
+                          <td className="px-4 py-3 font-mono text-[12px] text-slate-500 dark:text-slate-400 font-bold uppercase">{att.student?.regNumber}</td>
                           <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{att.student?.department}</td>
-                          <td className="px-4 py-3 font-mono text-[10px] text-slate-500 dark:text-slate-400 font-bold">{att.student?.year}</td>
+                          <td className="px-4 py-3 font-mono text-[12px] text-slate-500 dark:text-slate-400 font-bold">{att.student?.year}</td>
                           <td className="px-4 py-3">
                             <span className="font-semibold text-slate-800 dark:text-slate-200 block leading-none">{att.quiz?.title}</span>
-                            <span className="text-[9px] font-mono text-slate-400 dark:text-slate-500 font-bold uppercase mt-0.5 block">{att.quiz?.course?.code}</span>
+                            <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 font-bold uppercase mt-0.5 block">{att.quiz?.course?.code}</span>
                           </td>
                           <td className="px-4 py-3">
                             {att.isCompleted ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9.5px] font-semibold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30">
                                 Submitted
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9.5px] font-semibold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30 animate-pulse">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30 animate-pulse">
                                 In Progress
                               </span>
                             )}
@@ -740,7 +740,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                                   min="0" max="100" step="0.5"
                                   value={editingScore}
                                   onChange={(e) => setEditingScore(e.target.value)}
-                                  className="w-14 px-1.5 py-1 border border-slate-300 dark:border-slate-600 rounded-lg text-center font-mono text-[10px] bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-emerald-400"
+                                  className="w-14 px-1.5 py-1 border border-slate-300 dark:border-slate-600 rounded-lg text-center font-mono text-[12px] bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:border-emerald-400"
                                 />
                                 <button
                                   onClick={() => handleSaveScoreAdjustment(att.id)}
@@ -750,7 +750,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                                 </button>
                                 <button
                                   onClick={() => setEditingAttemptId(null)}
-                                  className="p-1.5 bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-600 dark:text-slate-400 rounded-lg transition cursor-pointer text-[10px]"
+                                  className="p-1.5 bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-600 dark:text-slate-400 rounded-lg transition cursor-pointer text-[12px]"
                                 >
                                   ✕
                                 </button>
@@ -758,7 +758,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                             ) : (
                               <button
                                 onClick={() => { setEditingAttemptId(att.id); setEditingScore(att.score?.toString() || "0"); }}
-                                className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/[0.10] px-2.5 py-1 bg-slate-50 dark:bg-white/[0.04] hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-700 dark:hover:text-emerald-400 hover:border-emerald-100 dark:hover:border-emerald-900/30 transition rounded-lg cursor-pointer"
+                                className="text-[12px] font-semibold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/[0.10] px-2.5 py-1 bg-slate-50 dark:bg-white/[0.04] hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-700 dark:hover:text-emerald-400 hover:border-emerald-100 dark:hover:border-emerald-900/30 transition rounded-lg cursor-pointer"
                               >
                                 Regrade
                               </button>
@@ -826,7 +826,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="h-2 w-2 bg-red-600 rounded-full animate-ping" />
-                        <span className="text-[10px] font-mono font-bold text-red-700 dark:text-red-400 uppercase tracking-widest">Broadcasting Live</span>
+                        <span className="text-[12px] font-mono font-bold text-red-700 dark:text-red-400 uppercase tracking-widest">Broadcasting Live</span>
                       </div>
                       <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-200">Topic: {broadcastingSession.topic}</p>
                     </div>
@@ -842,7 +842,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                     {/* Update form */}
                     <div className="lg:col-span-7 space-y-3">
                       <div className="bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 space-y-3">
-                        <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Update Board Material</p>
+                        <p className="text-[12px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Update Board Material</p>
                         <div>
                           <label htmlFor="live-topic-active" className={lbl}>Topic</label>
                           <input id="live-topic-active" type="text" required value={liveTopic} onChange={(e) => setLiveTopic(e.target.value)} className="form-input" />
@@ -862,7 +862,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                     <div className="lg:col-span-5 border border-slate-200/60 dark:border-white/[0.06] rounded-xl overflow-hidden flex flex-col h-[420px] bg-white dark:bg-white/[0.02]">
                       <div className="px-3.5 py-2.5 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between bg-slate-50/80 dark:bg-white/[0.03]">
                         <span className="text-[10.5px] font-semibold text-slate-700 dark:text-slate-300">Class Chat</span>
-                        <span className="text-[9px] font-mono bg-slate-100 dark:bg-white/[0.06] text-slate-500 px-1.5 py-0.5 rounded-md font-bold">{liveChats.length}</span>
+                        <span className="text-[11px] font-mono bg-slate-100 dark:bg-white/[0.06] text-slate-500 px-1.5 py-0.5 rounded-md font-bold">{liveChats.length}</span>
                       </div>
                       <div className="flex-1 p-3 overflow-y-auto space-y-3">
                         {liveChats.length === 0 ? (
@@ -879,7 +879,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                               <div key={chat.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
                                 <UserAvatar userId={senderId} role={isStaff ? "lecturer" : "student"} size={26} initials={displayName} className="shrink-0" />
                                 <div className={`max-w-[75%] flex flex-col gap-0.5 ${isMe ? "items-end" : "items-start"}`}>
-                                  <span className={`text-[9px] font-bold font-mono uppercase tracking-wide ${isMe ? "text-amber-600 dark:text-amber-500" : "text-slate-400 dark:text-slate-500"}`}>
+                                  <span className={`text-[11px] font-bold font-mono uppercase tracking-wide ${isMe ? "text-amber-600 dark:text-amber-500" : "text-slate-400 dark:text-slate-500"}`}>
                                     {displayName}
                                   </span>
                                   <div className={`px-3 py-2 rounded-2xl leading-relaxed break-words text-[12px] ${
@@ -911,7 +911,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         <button
                           type="submit"
                           disabled={isSendingChat}
-                          className="flex items-center justify-center w-9 h-9 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 transition-colors cursor-pointer flex-shrink-0"
+                          className="flex items-center justify-center w-9 h-9 rounded-xl bg-amber-700 hover:bg-amber-800 disabled:opacity-50 transition-colors cursor-pointer flex-shrink-0"
                         >
                           <Send className="h-3.5 w-3.5 text-white" />
                         </button>
@@ -992,7 +992,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   {quizQuestions.map((q, qIdx) => (
                     <div key={qIdx} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl bg-white dark:bg-white/[0.02] space-y-3">
                       <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-white/[0.06]">
-                        <span className="text-[10px] font-mono font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest">Question {qIdx + 1}</span>
+                        <span className="text-[12px] font-mono font-bold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest">Question {qIdx + 1}</span>
                         {quizQuestions.length > 1 && (
                           <button type="button" onClick={() => handleRemoveQuestionRow(qIdx)} className="p-1 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600 transition rounded-lg cursor-pointer">
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1067,7 +1067,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
               </form>
 
               <div className="space-y-3">
-                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Registered Modules ({courses.length})</p>
+                <p className="text-[12px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Registered Modules ({courses.length})</p>
                 {loading ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-pulse" id="courses-skeleton">
                     {[1,2,3,4].map((i) => (
@@ -1085,10 +1085,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                     {courses.map((c) => (
                       <div key={c.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-emerald-100 dark:hover:border-emerald-900/30 transition-all">
                         <div>
-                          <span className="block font-mono text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">{c.code}</span>
+                          <span className="block font-mono text-[12px] font-bold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">{c.code}</span>
                           <span className="block text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 leading-tight mt-0.5">{c.title}</span>
                         </div>
-                        <span className="text-[9px] font-mono font-bold bg-slate-50 dark:bg-white/[0.04] text-slate-500 dark:text-slate-400 px-2.5 py-1 border border-slate-200 dark:border-white/[0.07] rounded-full">
+                        <span className="text-[11px] font-mono font-bold bg-slate-50 dark:bg-white/[0.04] text-slate-500 dark:text-slate-400 px-2.5 py-1 border border-slate-200 dark:border-white/[0.07] rounded-full">
                           {c._count?.notes || 0} notes
                         </span>
                       </div>
@@ -1118,7 +1118,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
               </form>
 
               <div className="space-y-3">
-                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Active Departments ({departments.length})</p>
+                <p className="text-[12px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Active Departments ({departments.length})</p>
                 {loading ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-pulse" id="departments-skeleton">
                     {[1,2,3,4].map((i) => (
@@ -1137,9 +1137,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       <div key={dept.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-emerald-100 dark:hover:border-emerald-900/30 transition-all">
                         <div>
                           <span className="block text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 leading-tight">{dept.name}</span>
-                          <span className="block font-mono text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-0.5">ID: {dept.id.substring(0, 8)}</span>
+                          <span className="block font-mono text-[11px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-0.5">ID: {dept.id.substring(0, 8)}</span>
                         </div>
-                        <span className="text-[9px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 border border-emerald-100 dark:border-emerald-900/30 rounded-full">
+                        <span className="text-[11px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 border border-emerald-100 dark:border-emerald-900/30 rounded-full">
                           FUTO
                         </span>
                       </div>
