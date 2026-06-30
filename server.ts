@@ -1144,6 +1144,12 @@ async function startServer() {
   });
 }
 
+// Global JSON error handler — 4-param signature required for Express error middleware
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: err.message || "Internal server error" });
+});
+
 if (!process.env.VERCEL) {
   startServer();
 }
