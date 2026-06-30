@@ -18,8 +18,8 @@ if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production") {
 const JWT_SECRET = process.env.JWT_SECRET || "futo-quizos-fallback-secret-2026-set-jwt-secret-env-var";
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Helper Middleware to verify authentication
 function authenticateToken(req: any, res: any, next: any) {

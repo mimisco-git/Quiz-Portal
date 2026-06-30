@@ -886,36 +886,44 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       {/* ── LEFT SIDEBAR ── */}
       <aside className="w-[56px] sm:w-[232px] flex-shrink-0 flex flex-col h-full bg-[#e8e8ed] dark:bg-[#111113] border-r border-black/[0.07] dark:border-white/[0.06]">
 
-        {/* Traffic lights */}
-        <div className="flex items-center gap-2 px-4 pt-5 pb-3 flex-shrink-0">
-          <span className="h-3 w-3 rounded-full bg-[#ff5f57] flex-shrink-0" />
-          <span className="h-3 w-3 rounded-full bg-[#ffbd2e] flex-shrink-0 hidden sm:inline-block" />
-          <span className="h-3 w-3 rounded-full bg-[#28c840] flex-shrink-0 hidden sm:inline-block" />
+        {/* Traffic lights + logo */}
+        <div className="flex items-center justify-between px-4 pt-5 pb-4 flex-shrink-0">
+          <div className="flex items-center gap-[6px]">
+            <span className="h-[13px] w-[13px] rounded-full bg-[#ff5f57] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)] flex-shrink-0" />
+            <span className="h-[13px] w-[13px] rounded-full bg-[#ffbd2e] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)] flex-shrink-0 hidden sm:inline-block" />
+            <span className="h-[13px] w-[13px] rounded-full bg-[#28c840] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)] flex-shrink-0 hidden sm:inline-block" />
+          </div>
+          <img
+            src="/logo-dark.png"
+            alt="QuizOS"
+            className="hidden sm:block h-[34px] w-auto opacity-80 dark:opacity-50"
+            style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.12))" }}
+          />
         </div>
 
         {/* Avatar */}
-        <div className="px-2 pb-3 flex-shrink-0">
+        <div className="px-3 pb-3 flex-shrink-0">
           <button
             onClick={() => setIsAvatarModalOpen(true)}
-            className="group w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition cursor-pointer text-left"
+            className="group w-full flex items-center gap-3 p-2.5 rounded-[12px] hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition cursor-pointer text-left"
             title="Update profile photo"
           >
             <div className="relative flex-shrink-0">
               <UserAvatar
                 userId={user.id}
                 role="student"
-                size={30}
+                size={34}
                 initials={user.fullName}
                 refreshTrigger={avatarRefreshTrigger}
-                className="rounded-full ring-2 ring-white/80 dark:ring-white/10"
+                className="rounded-full ring-[1.5px] ring-black/10 dark:ring-white/15 shadow-sm"
               />
-              <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                <Camera className="h-2.5 w-2.5 text-white" />
+              <div className="absolute inset-0 bg-black/45 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <Camera className="h-3 w-3 text-white" />
               </div>
             </div>
             <div className="hidden sm:block min-w-0 flex-1">
               <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 leading-tight truncate">{user.fullName}</p>
-              <p className="text-[11px] text-[#6e6e73] dark:text-white/40 font-mono truncate">{user.regNumber}</p>
+              <p className="text-[11px] text-[#6e6e73] dark:text-white/38 font-mono truncate mt-0.5">{user.regNumber}</p>
             </div>
           </button>
         </div>
@@ -1036,25 +1044,23 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* Top toolbar */}
-        <header className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-black/[0.07] dark:border-white/[0.06] bg-[#f5f5f7]/80 dark:bg-[#161618]/80 backdrop-blur-sm">
-          <h1 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white/90">
+        <header className="flex-shrink-0 flex items-center justify-between px-5 h-[44px] border-b border-black/[0.07] dark:border-white/[0.06] bg-[#f5f5f7]/90 dark:bg-[#161618]/90 backdrop-blur-md">
+          <h1 className="text-[13.5px] font-semibold text-[#1d1d1f] dark:text-white/88 tracking-[-0.01em]">
             {activeTab === "notes" ? "Lecture Materials"
               : activeTab === "quizzes" ? "Academic Quizzes"
               : activeTab === "exams" ? "Written Examinations"
               : "Virtual Classroom"}
           </h1>
-          <div className="flex items-center gap-3">
-            {selectedCourse && (
-              <span className="hidden md:inline text-[12px] font-mono font-bold text-[#6e6e73] dark:text-white/40 uppercase tracking-wider">
-                {selectedCourse.code}
-              </span>
-            )}
-            <img src="/logo-dark.png" className="h-7 w-auto opacity-80 dark:opacity-60" alt="QuizOS" />
-          </div>
+          {selectedCourse && (
+            <span className="hidden md:inline px-2.5 py-1 rounded-full bg-black/[0.05] dark:bg-white/[0.07] text-[11px] font-mono font-bold text-[#6e6e73] dark:text-white/45 uppercase tracking-wider">
+              {selectedCourse.code}
+            </span>
+          )}
         </header>
 
         {/* Scrollable content */}
-        <main className="flex-1 overflow-y-auto p-5">
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-5 max-w-5xl mx-auto w-full space-y-4">
 
           {/* ── NOTES TAB ── */}
           {activeTab === "notes" && (
@@ -1514,6 +1520,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             </div>
           )}
 
+          </div>{/* /max-w-5xl */}
         </main>
       </div>
 
