@@ -3,23 +3,59 @@ import path from "path";
 import fs from "fs";
 // vite is imported dynamically inside startServer() so it's excluded from the Vercel Lambda bundle
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import multer from "multer";
 import mammoth from "mammoth";
 import JSZip from "jszip";
 import OpenAI from "openai";
+import rateLimit from "express-rate-limit";
 import { prisma } from "./src/lib/db.js";
 import { seedDatabase } from "./src/lib/seed.js";
 
 const app = express();
 const PORT = 3000;
-if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production") {
-  console.warn("[WARN] JWT_SECRET env var is not set — using fallback. Set it in Vercel → Settings → Environment Variables for proper security.");
-}
-const JWT_SECRET = process.env.JWT_SECRET || "futo-quizos-fallback-secret-2026-set-jwt-secret-env-var";
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    console.error("[FATAL] JWT_SECRET env var is not set in production. Set it in Vercel → Settings → Environment Variables.");
+    process.exit(1);
+  } else {
+    console.warn("[WARN] JWT_SECRET not set — using insecure dev fallback. Never deploy without a real secret.");
+  }
+}
+const JWT_SECRET = process.env.JWT_SECRET || "dev-only-fallback-never-use-in-production";
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+
+// ── Rate limiters ──────────────────────────────────────────────
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests from this IP. Please wait 15 minutes before trying again." },
+});
+
+const strictLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Please wait 1 hour before trying again." },
+});
+
+// ── Input length constants ─────────────────────────────────────
+const MAX_NAME   = 120;
+const MAX_EMAIL  = 254;
+const MAX_REG    = 30;
+const MAX_DEPT   = 100;
+const MAX_YEAR   = 30;
+const MAX_STR    = 500;
+const MAX_ANSWER = 10_000;  // exam text answers
+const MAX_AVATAR = 1_500_000; // ~1 MB base64 (~750 KB actual image)
 
 // Helper Middleware to verify authentication
 function authenticateToken(req: any, res: any, next: any) {
@@ -44,34 +80,33 @@ function authenticateToken(req: any, res: any, next: any) {
 // -------------------------------------------------------------
 
 // Student Registration Route
-app.post("/api/auth/student-register", async (req, res) => {
+app.post("/api/auth/student-register", authLimiter, async (req, res) => {
   const { fullName, email, regNumber, department, year, securityQuestion, securityAnswer } = req.body;
 
   if (!fullName || !email || !regNumber || !department || !year || !securityQuestion || !securityAnswer) {
     return res.status(400).json({ error: "All registration fields are required." });
+  }
+  if (fullName.length > MAX_NAME || email.length > MAX_EMAIL || regNumber.length > MAX_REG ||
+      department.length > MAX_DEPT || year.length > MAX_YEAR ||
+      securityQuestion.length > MAX_STR || securityAnswer.length > MAX_STR) {
+    return res.status(400).json({ error: "One or more fields exceed the maximum allowed length." });
   }
 
   try {
     const normalizedReg = regNumber.trim().toUpperCase();
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check if registration number is already registered
-    const existingReg = await prisma.student.findUnique({
-      where: { regNumber: normalizedReg },
-    });
+    const existingReg = await prisma.student.findUnique({ where: { regNumber: normalizedReg } });
     if (existingReg) {
       return res.status(400).json({ error: "This Registration Number is already registered." });
     }
-
-    // Check if email already exists
-    const existingEmail = await prisma.student.findUnique({
-      where: { email: normalizedEmail },
-    });
+    const existingEmail = await prisma.student.findUnique({ where: { email: normalizedEmail } });
     if (existingEmail) {
       return res.status(400).json({ error: "This email address is already in use." });
     }
 
-    // Create the student
+    const hashedAnswer = await bcrypt.hash(securityAnswer.trim().toLowerCase(), 10);
+
     const student = await prisma.student.create({
       data: {
         fullName: fullName.trim(),
@@ -80,7 +115,7 @@ app.post("/api/auth/student-register", async (req, res) => {
         department: department.trim(),
         year: year.trim(),
         securityQuestion: securityQuestion.trim(),
-        securityAnswer: securityAnswer.trim().toLowerCase(),
+        securityAnswer: hashedAnswer,
       },
     });
 
@@ -115,7 +150,7 @@ app.post("/api/auth/student-register", async (req, res) => {
 });
 
 // Student Login Route (with only regNumber and year)
-app.post("/api/auth/student-login", async (req, res) => {
+app.post("/api/auth/student-login", authLimiter, async (req, res) => {
   const { regNumber, year } = req.body;
 
   if (!regNumber || !year) {
@@ -176,7 +211,7 @@ app.post("/api/auth/student-login", async (req, res) => {
 });
 
 // Get student's security question
-app.post("/api/auth/student-get-security-question", async (req, res) => {
+app.post("/api/auth/student-get-security-question", strictLimiter, async (req, res) => {
   const { regNumber } = req.body;
   if (!regNumber) {
     return res.status(400).json({ error: "Registration Number is required." });
@@ -200,11 +235,14 @@ app.post("/api/auth/student-get-security-question", async (req, res) => {
 });
 
 // Answer security question and fix/update year
-app.post("/api/auth/student-fix-year", async (req, res) => {
+app.post("/api/auth/student-fix-year", strictLimiter, async (req, res) => {
   const { regNumber, securityAnswer, newYear } = req.body;
 
   if (!regNumber || !securityAnswer || !newYear) {
     return res.status(400).json({ error: "Registration Number, security answer, and target Year of Study are required." });
+  }
+  if (regNumber.length > MAX_REG || securityAnswer.length > MAX_STR || newYear.length > MAX_YEAR) {
+    return res.status(400).json({ error: "One or more fields exceed the maximum allowed length." });
   }
 
   try {
@@ -214,12 +252,26 @@ app.post("/api/auth/student-fix-year", async (req, res) => {
     });
 
     if (!student) {
-      return res.status(404).json({ error: "Registration Number not found." });
+      // Return a generic message to prevent account enumeration
+      return res.status(400).json({ error: "Incorrect registration number or security answer." });
     }
 
-    // Compare security answers
-    if (student.securityAnswer.toLowerCase().trim() !== securityAnswer.toLowerCase().trim()) {
-      return res.status(400).json({ error: "Incorrect answer to security question. Access denied." });
+    // Compare security answers — support both bcrypt hashes and legacy plaintext (auto-upgrade)
+    const normalizedInput = securityAnswer.trim().toLowerCase();
+    let answerMatches = false;
+    if (student.securityAnswer.startsWith("$2")) {
+      answerMatches = await bcrypt.compare(normalizedInput, student.securityAnswer);
+    } else {
+      // Legacy plaintext — compare and upgrade on success
+      answerMatches = student.securityAnswer.toLowerCase().trim() === normalizedInput;
+      if (answerMatches) {
+        const hashed = await bcrypt.hash(normalizedInput, 10);
+        await prisma.student.update({ where: { id: student.id }, data: { securityAnswer: hashed } });
+      }
+    }
+
+    if (!answerMatches) {
+      return res.status(400).json({ error: "Incorrect registration number or security answer." });
     }
 
     // Security answer is correct, update the student's year!
@@ -261,29 +313,33 @@ app.post("/api/auth/student-fix-year", async (req, res) => {
 });
 
 // Lecturer Registration Route
-app.post("/api/auth/lecturer-register", async (req, res) => {
+app.post("/api/auth/lecturer-register", authLimiter, async (req, res) => {
   const { name, email, password } = req.body;
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: "Name, email, and password are required." });
   }
+  if (password.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters." });
+  }
+  if (name.length > MAX_NAME || email.length > MAX_EMAIL || password.length > 128) {
+    return res.status(400).json({ error: "One or more fields exceed the maximum allowed length." });
+  }
 
   try {
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Verify if email already registered
-    const existingLecturer = await prisma.lecturer.findUnique({
-      where: { email: normalizedEmail },
-    });
+    const existingLecturer = await prisma.lecturer.findUnique({ where: { email: normalizedEmail } });
     if (existingLecturer) {
       return res.status(400).json({ error: "This email address is already registered as a lecturer." });
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
     const lecturer = await prisma.lecturer.create({
       data: {
         name: name.trim(),
         email: normalizedEmail,
-        password: password, // In production we should hash this, but for school assessment mock/auth plain text works
+        password: hashedPassword,
       },
     });
 
@@ -314,7 +370,7 @@ app.post("/api/auth/lecturer-register", async (req, res) => {
 });
 
 // Lecturer Login Route
-app.post("/api/auth/lecturer-login", async (req, res) => {
+app.post("/api/auth/lecturer-login", authLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -326,7 +382,21 @@ app.post("/api/auth/lecturer-login", async (req, res) => {
       where: { email: email.trim().toLowerCase() },
     });
 
-    if (!lecturer || lecturer.password !== password) {
+    // Support both bcrypt hashes and legacy plaintext (auto-upgrade on login)
+    let passwordMatches = false;
+    if (lecturer) {
+      if (lecturer.password.startsWith("$2")) {
+        passwordMatches = await bcrypt.compare(password, lecturer.password);
+      } else {
+        passwordMatches = lecturer.password === password;
+        if (passwordMatches) {
+          const hashed = await bcrypt.hash(password, 10);
+          await prisma.lecturer.update({ where: { id: lecturer.id }, data: { password: hashed } });
+        }
+      }
+    }
+
+    if (!lecturer || !passwordMatches) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
@@ -668,7 +738,7 @@ app.get("/api/quiz/remaining-time/:attemptId", authenticateToken, async (req: an
       include: { quiz: true },
     });
 
-    if (!attempt) {
+    if (!attempt || attempt.studentId !== req.user.id) {
       return res.status(404).json({ error: "Quiz session attempt not found" });
     }
 
@@ -711,6 +781,11 @@ app.post("/api/quiz/submit", authenticateToken, async (req: any, res) => {
         },
       },
     });
+
+    // Ownership check — prevent IDOR
+    if (attempt && attempt.studentId !== req.user.id) {
+      return res.status(404).json({ error: "Quiz attempt not found" });
+    }
 
     if (!attempt) {
       return res.status(404).json({ error: "Quiz attempt not found" });
@@ -1015,6 +1090,9 @@ app.post("/api/lectures/:id/end", authenticateToken, async (req: any, res) => {
   }
   const { id } = req.params;
   try {
+    const session = await prisma.lectureSession.findUnique({ where: { id }, include: { course: { select: { lecturerId: true } } } });
+    if (!session) return res.status(404).json({ error: "Lecture not found" });
+    if (session.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     const ended = await prisma.lectureSession.update({
       where: { id },
       data: { isActive: false },
@@ -1037,6 +1115,9 @@ app.patch("/api/lectures/:id/content", authenticateToken, async (req: any, res) 
   }
 
   try {
+    const session = await prisma.lectureSession.findUnique({ where: { id }, include: { course: { select: { lecturerId: true } } } });
+    if (!session) return res.status(404).json({ error: "Lecture not found" });
+    if (session.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     const updated = await prisma.lectureSession.update({
       where: { id },
       data: { content },
@@ -1107,15 +1188,25 @@ app.delete("/api/lectures/:id/hand-raises/:raiseId", authenticateToken, async (r
   }
 });
 
+// Helper — verify caller owns the lecture session
+async function requireLectureOwner(sessionId: string, lecturerId: string) {
+  const session = await prisma.lectureSession.findUnique({ where: { id: sessionId }, include: { course: { select: { lecturerId: true } } } });
+  if (!session) return "not_found";
+  if (session.course.lecturerId !== lecturerId) return "forbidden";
+  return "ok";
+}
+
 // Lecturer creates a poll
 app.post("/api/lectures/:id/poll", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const ownership = await requireLectureOwner(req.params.id, req.user.id).catch(() => "error");
+  if (ownership === "not_found") return res.status(404).json({ error: "Lecture not found" });
+  if (ownership !== "ok") return res.status(403).json({ error: "Access denied." });
   const { question, options } = req.body;
   if (!question || !Array.isArray(options) || options.length < 2) {
     return res.status(400).json({ error: "Question and at least 2 options required" });
   }
   try {
-    // Close any existing active poll first
     await prisma.lecturePoll.updateMany({ where: { sessionId: req.params.id, isActive: true }, data: { isActive: false } });
     const poll = await prisma.lecturePoll.create({
       data: { sessionId: req.params.id, question, optionsJson: JSON.stringify(options) },
@@ -1129,6 +1220,8 @@ app.post("/api/lectures/:id/poll", authenticateToken, async (req: any, res) => {
 // Close active poll
 app.delete("/api/lectures/:id/poll", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const ownership = await requireLectureOwner(req.params.id, req.user.id).catch(() => "error");
+  if (ownership !== "ok") return res.status(ownership === "not_found" ? 404 : 403).json({ error: ownership === "not_found" ? "Lecture not found" : "Access denied." });
   try {
     await prisma.lecturePoll.updateMany({ where: { sessionId: req.params.id, isActive: true }, data: { isActive: false } });
     return res.json({ ok: true });
@@ -1154,9 +1247,11 @@ app.post("/api/lectures/:id/poll/:pollId/respond", authenticateToken, async (req
   }
 });
 
-// Advance slide (lecturer)
+// Advance slide (lecturer — must own session)
 app.post("/api/lectures/:id/slide", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const ownership = await requireLectureOwner(req.params.id, req.user.id).catch(() => "error");
+  if (ownership !== "ok") return res.status(ownership === "not_found" ? 404 : 403).json({ error: ownership === "not_found" ? "Lecture not found" : "Access denied." });
   const { slide } = req.body;
   if (slide === undefined) return res.status(400).json({ error: "Slide index required" });
   try {
@@ -1167,10 +1262,18 @@ app.post("/api/lectures/:id/slide", authenticateToken, async (req: any, res) => 
   }
 });
 
-// Upload file attachment
+// Upload file attachment (must own session)
 app.post("/api/lectures/:id/attachment", authenticateToken, upload.single("file"), async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const ownership = await requireLectureOwner(req.params.id, req.user.id).catch(() => "error");
+  if (ownership !== "ok") return res.status(ownership === "not_found" ? 404 : 403).json({ error: ownership === "not_found" ? "Lecture not found" : "Access denied." });
   if (!req.file) return res.status(400).json({ error: "File required" });
+  // Only allow safe document/image types for attachments
+  const allowed = ["application/pdf","image/jpeg","image/png","image/webp","text/plain",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+  if (!allowed.includes(req.file.mimetype)) {
+    return res.status(400).json({ error: "Unsupported file type." });
+  }
   try {
     const b64 = req.file.buffer.toString("base64");
     const dataUrl = `data:${req.file.mimetype};base64,${b64}`;
@@ -1209,6 +1312,8 @@ async function extractPptxSlides(buffer: Buffer): Promise<string[]> {
 
 app.post("/api/lectures/:id/pptx", authenticateToken, upload.single("file"), async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const ownership = await requireLectureOwner(req.params.id, req.user.id).catch(() => "error");
+  if (ownership !== "ok") return res.status(ownership === "not_found" ? 404 : 403).json({ error: ownership === "not_found" ? "Lecture not found" : "Access denied." });
   if (!req.file) return res.status(400).json({ error: "File required" });
   try {
     const slides = await extractPptxSlides(req.file.buffer);
@@ -1232,9 +1337,10 @@ app.post("/api/lectures/:id/summarize", authenticateToken, async (req: any, res)
   try {
     const session = await prisma.lectureSession.findUnique({
       where: { id: req.params.id },
-      include: { chats: { orderBy: { createdAt: "asc" } } },
+      include: { chats: { orderBy: { createdAt: "asc" } }, course: { select: { lecturerId: true } } },
     });
     if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
 
     const chatLog = session.chats.map((c: any) => `[${c.senderRole}] ${c.senderName}: ${c.message}`).join("\n");
     const nvidia = getNvidiaClient();
@@ -1269,11 +1375,15 @@ app.patch("/api/attempts/:id/score", authenticateToken, async (req: any, res) =>
   if (score === undefined || score === null) {
     return res.status(400).json({ error: "Score is required." });
   }
+  const numScore = parseFloat(score);
+  if (!Number.isFinite(numScore) || numScore < 0 || numScore > 100) {
+    return res.status(400).json({ error: "Score must be a finite number between 0 and 100." });
+  }
 
   try {
     const updated = await prisma.studentAttempt.update({
       where: { id },
-      data: { score: parseFloat(score) },
+      data: { score: numScore },
     });
     return res.json(updated);
   } catch (error: any) {
@@ -1400,26 +1510,30 @@ app.get("/api/exams/:id", authenticateToken, async (req: any, res) => {
   }
 });
 
-// Upload answer key (lecturer only)
+// Upload answer key (lecturer only — must own the exam)
 app.post("/api/exams/:id/answer-key", authenticateToken, upload.single("file"), async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   try {
+    const exam = await prisma.exam.findUnique({ where: { id: req.params.id }, include: { course: { select: { lecturerId: true } } } });
+    if (!exam) return res.status(404).json({ error: "Exam not found" });
+    if (exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     const answerKeyText = req.file ? await extractTextFromFile(req.file) : req.body.answerKeyText;
     if (!answerKeyText) return res.status(400).json({ error: "Answer key file or text required" });
-    const exam = await prisma.exam.update({ where: { id: req.params.id }, data: { answerKeyText } });
-    return res.json(exam);
+    const updated = await prisma.exam.update({ where: { id: req.params.id }, data: { answerKeyText } });
+    return res.json(updated);
   } catch (err) {
     console.error("Error uploading answer key:", err);
     return res.status(500).json({ error: "Failed to upload answer key" });
   }
 });
 
-// Close / reopen exam
+// Close / reopen exam (must own the exam)
 app.post("/api/exams/:id/toggle", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   try {
-    const exam = await prisma.exam.findUnique({ where: { id: req.params.id } });
+    const exam = await prisma.exam.findUnique({ where: { id: req.params.id }, include: { course: { select: { lecturerId: true } } } });
     if (!exam) return res.status(404).json({ error: "Exam not found" });
+    if (exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     const updated = await prisma.exam.update({ where: { id: req.params.id }, data: { isOpen: !exam.isOpen } });
     return res.json(updated);
   } catch (err) {
@@ -1432,6 +1546,9 @@ app.post("/api/exams/:id/submit", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
   const { answersText } = req.body;
   if (!answersText?.trim()) return res.status(400).json({ error: "Answers cannot be empty" });
+  if (answersText.length > MAX_ANSWER) {
+    return res.status(400).json({ error: "Answer text exceeds the maximum allowed length (10,000 characters)." });
+  }
   try {
     const exam = await prisma.exam.findUnique({ where: { id: req.params.id } });
     if (!exam) return res.status(404).json({ error: "Exam not found" });
@@ -1452,10 +1569,13 @@ app.post("/api/exams/:id/submit", authenticateToken, async (req: any, res) => {
   }
 });
 
-// Lecturer: view all submissions for an exam
+// Lecturer: view all submissions for an exam (must own the exam)
 app.get("/api/exams/:id/submissions", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   try {
+    const exam = await prisma.exam.findUnique({ where: { id: req.params.id }, include: { course: { select: { lecturerId: true } } } });
+    if (!exam) return res.status(404).json({ error: "Exam not found" });
+    if (exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     const submissions = await prisma.examSubmission.findMany({
       where: { examId: req.params.id },
       include: { student: { select: { fullName: true, regNumber: true, department: true } } },
@@ -1480,15 +1600,16 @@ app.get("/api/exams/:id/my-submission", authenticateToken, async (req: any, res)
   }
 });
 
-// Lecturer: grade all ungraded submissions with AI
+// Lecturer: grade all ungraded submissions with AI (must own the exam)
 app.post("/api/exams/:id/grade", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   try {
     const exam = await prisma.exam.findUnique({
       where: { id: req.params.id },
-      include: { submissions: { include: { student: { select: { fullName: true } } } } },
+      include: { submissions: { include: { student: { select: { fullName: true } } } }, course: { select: { lecturerId: true } } },
     });
     if (!exam) return res.status(404).json({ error: "Exam not found" });
+    if (exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     if (!exam.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
     if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
 
@@ -1521,10 +1642,13 @@ app.post("/api/exams/:id/grade", authenticateToken, async (req: any, res) => {
   }
 });
 
-// Delete exam
+// Delete exam (must own the exam)
 app.delete("/api/exams/:id", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   try {
+    const exam = await prisma.exam.findUnique({ where: { id: req.params.id }, include: { course: { select: { lecturerId: true } } } });
+    if (!exam) return res.status(404).json({ error: "Exam not found" });
+    if (exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     await prisma.exam.delete({ where: { id: req.params.id } });
     return res.json({ success: true });
   } catch (err) {
@@ -1542,6 +1666,13 @@ app.delete("/api/exams/:id", authenticateToken, async (req: any, res) => {
 app.post("/api/user/avatar", authenticateToken, async (req: any, res) => {
   const { avatar } = req.body;
   if (!avatar) return res.status(400).json({ error: "Avatar base64 data is required." });
+  if (typeof avatar !== "string" || avatar.length > MAX_AVATAR) {
+    return res.status(413).json({ error: "Avatar image is too large. Maximum size is 1 MB." });
+  }
+  // Only allow base64-encoded images (jpeg, png, webp, gif)
+  if (!/^data:image\/(jpeg|png|webp|gif);base64,/.test(avatar)) {
+    return res.status(400).json({ error: "Invalid image format. Only JPEG, PNG, WebP, and GIF are accepted." });
+  }
 
   try {
     const { role, id } = req.user;
@@ -1557,9 +1688,16 @@ app.post("/api/user/avatar", authenticateToken, async (req: any, res) => {
   }
 });
 
-// Fetch Avatar Base64
-app.get("/api/user/avatar/:role/:id", async (req, res) => {
+// Fetch Avatar Base64 — authenticated; users can only fetch their own avatar
+app.get("/api/user/avatar/:role/:id", authenticateToken, async (req: any, res) => {
   const { role, id } = req.params;
+  // Only allow fetching your own avatar
+  if (req.user.id !== id) {
+    return res.status(403).json({ error: "Access denied." });
+  }
+  if (role !== "lecturer" && role !== "student") {
+    return res.status(400).json({ error: "Invalid role." });
+  }
   try {
     let avatar = "";
     if (role === "lecturer") {
@@ -1607,7 +1745,8 @@ async function startServer() {
 // Global JSON error handler — 4-param signature required for Express error middleware
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("Unhandled error:", err);
-  res.status(500).json({ error: err.message || "Internal server error" });
+  // Never expose internal error messages (stack traces, DB schema, file paths) to clients
+  res.status(500).json({ error: "An unexpected server error occurred. Please try again." });
 });
 
 if (!process.env.VERCEL) {

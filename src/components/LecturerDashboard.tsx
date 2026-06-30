@@ -41,8 +41,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [quizTitle, setQuizTitle] = useState("");
   const [quizDuration, setQuizDuration] = useState("10");
   const [quizQuestions, setQuizQuestions] = useState<
-    Array<{ text: string; options: string[]; correctOption: string }>
-  >([{ text: "", options: ["", "", "", ""], correctOption: "" }]);
+    Array<{ uid: string; text: string; options: string[]; correctOption: string }>
+  >([{ uid: crypto.randomUUID(), text: "", options: ["", "", "", ""], correctOption: "" }]);
 
   const [newDeptName, setNewDeptName] = useState("");
 
@@ -289,7 +289,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   const handleAddQuestionRow = () => {
-    setQuizQuestions((prev) => [...prev, { text: "", options: ["", "", "", ""], correctOption: "" }]);
+    setQuizQuestions((prev) => [...prev, { uid: crypto.randomUUID(), text: "", options: ["", "", "", ""], correctOption: "" }]);
   };
 
   const handleRemoveQuestionRow = (index: number) => {
@@ -1388,7 +1388,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   <div className="space-y-3">
                     <h3 className="text-[12px] font-bold text-[#3a3a3c] dark:text-white/70 uppercase tracking-wider">Questions</h3>
                     {quizQuestions.map((q, qIdx) => (
-                      <div key={qIdx} className="p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] space-y-3">
+                      <div key={q.uid} className="p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] space-y-3">
                         <div className="flex items-center justify-between pb-1.5 border-b border-black/[0.06] dark:border-white/[0.06]">
                           <span className="text-[12px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Question {qIdx + 1}</span>
                           {quizQuestions.length > 1 && (

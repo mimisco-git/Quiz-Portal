@@ -413,7 +413,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       });
       const data = await res.json();
       setPendingExamResult({
-        score: data.attempt?.score || data.score || 0,
+        score: data.attempt?.score ?? data.score ?? 0,
         timedOut: true,
         answers: currentAnswers,
         questions: quizQuestions,
@@ -761,7 +761,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 </button>
                 <button
                   onClick={() => handleManualSubmit(false)}
-                  className="px-3 py-1.5 text-[11px] font-semibold bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg transition cursor-pointer"
+                  disabled={isSubmitting}
+                  className="px-3 py-1.5 text-[11px] font-semibold bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition cursor-pointer"
                 >
                   Yes, Submit
                 </button>
