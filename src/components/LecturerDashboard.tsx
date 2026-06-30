@@ -715,10 +715,16 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f0f0f5] dark:bg-[#141416] font-sans">
+    <div className="flex h-screen overflow-hidden bg-[#f0f0f5] dark:bg-[#141416] font-sans relative">
 
-      {/* ── LEFT SIDEBAR ── */}
-      <aside className="w-[56px] sm:w-[232px] flex-shrink-0 flex flex-col h-full apple-sidebar">
+      {/* Subtle radial bg gradients */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div style={{ position: "absolute", width: 800, height: 800, top: -200, right: -150, background: "radial-gradient(ellipse at center, rgba(10,148,99,0.055) 0%, transparent 62%)" }} />
+        <div style={{ position: "absolute", width: 600, height: 600, bottom: -100, left: -100, background: "radial-gradient(ellipse at center, rgba(4,120,87,0.035) 0%, transparent 62%)" }} />
+      </div>
+
+      {/* ── LEFT SIDEBAR — desktop only ── */}
+      <aside className="hidden sm:flex sm:w-[232px] flex-shrink-0 flex-col h-full apple-sidebar relative z-10">
 
         {/* Traffic lights */}
         <div className="flex items-center gap-[6px] px-4 pt-5 pb-3 flex-shrink-0">
@@ -799,7 +805,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       </aside>
 
       {/* ── MAIN PANEL ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
 
         {/* Top toolbar */}
         <header className="flex-shrink-0 flex items-center justify-between px-6 h-[44px] border-b border-black/[0.06] dark:border-white/[0.05] bg-[#f0f0f5]/85 dark:bg-[#141416]/85 backdrop-blur-xl"
@@ -817,7 +823,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
         {/* Scrollable content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="p-5 max-w-5xl mx-auto w-full space-y-4">
+          <div className="px-6 py-5 pb-[96px] sm:pb-5 max-w-5xl mx-auto w-full space-y-5">
 
           {/* Toast notifications */}
           {successMsg && (
@@ -845,7 +851,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 1. GRADEBOOK ── */}
           {activeTab === "gradebook" && (
-            <div id="gradebook-panel" className="apple-card">
+            <motion.div id="gradebook-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
               <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                 <h2 className="apple-title">Student Assessment Gradebook</h2>
                 <p className="apple-subtitle">Evaluate, mark, and adjust examination attempt logs.</p>
@@ -997,12 +1003,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   </table>
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* ── 2. LIVE LECTURE ── */}
           {activeTab === "live-lecture" && (
-            <div id="live-lecture-panel" className="apple-card">
+            <motion.div id="live-lecture-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
               <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                 <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90 flex items-center gap-2">
                   <Radio className="h-4 w-4 text-red-500 animate-pulse" />
@@ -1299,12 +1305,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   );
                 })()}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* ── 3. PUBLISH NOTES ── */}
           {activeTab === "notes" && (
-            <div id="notes-panel" className="apple-card">
+            <motion.div id="notes-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
               <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                 <h2 className="apple-title">Publish Course Study Notes</h2>
                 <p className="apple-subtitle">Upload comprehensive module details for students to study.</p>
@@ -1333,12 +1339,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   </button>
                 </form>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* ── 4. DEPLOY QUIZ ── */}
           {activeTab === "quizzes" && (
-            <div id="quizzes-panel" className="apple-card">
+            <motion.div id="quizzes-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
               <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                 <h2 className="apple-title">Deploy Secure Quiz & Examination</h2>
                 <p className="apple-subtitle">Configure timed question sets for instant testing and score logging.</p>
@@ -1413,12 +1419,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   </button>
                 </form>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* ── 5. COURSE REGISTRY ── */}
           {activeTab === "courses" && (
-            <div id="courses-panel" className="apple-card">
+            <motion.div id="courses-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
               <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                 <h2 className="apple-title">Course Registry</h2>
                 <p className="apple-subtitle">Register new academic course modules.</p>
@@ -1469,12 +1475,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   )}
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* ── 6. DEPARTMENTS ── */}
           {activeTab === "departments" && (
-            <div id="departments-panel" className="apple-card">
+            <motion.div id="departments-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
               <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                 <h2 className="apple-title">Academic Departments</h2>
                 <p className="apple-subtitle">Establish and manage school departments.</p>
@@ -1526,14 +1532,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   )}
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* ── 7. WRITTEN EXAMS ── */}
           {activeTab === "exams" && (
             <div className="space-y-5">
               {!selectedExam ? (
-                <div className="apple-card">
+                <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
                   <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                     <h2 className="apple-title">Written Exams: AI Grading</h2>
                     <p className="apple-subtitle">Upload a document with exam questions. Students type their answers. Upload the answer key and the AI grades automatically.</p>
@@ -1600,7 +1606,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       )}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ) : (
                 <div className="space-y-4">
                   <button onClick={() => { setSelectedExam(null); setExamSubmissions([]); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer">
@@ -1719,6 +1725,45 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           </div>{/* /max-w-5xl */}
         </main>
       </div>
+
+      {/* ── MOBILE BOTTOM DOCK ── */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 px-5 pb-7 pt-2" aria-label="Main navigation">
+        <div className="apple-bottom-dock flex items-center justify-around h-[60px] px-3">
+          {([
+            { id: "gradebook",    icon: "gradebook",    label: "Grades"    },
+            { id: "live-lecture", icon: "live",         label: "Live"      },
+            { id: "notes",        icon: "notes",        label: "Notes"     },
+            { id: "quizzes",      icon: "quizzes",      label: "Quizzes"   },
+            { id: "exams",        icon: "exams",        label: "Exams"     },
+          ] as const).map((item) => {
+            const isActive = activeTab === item.id;
+            const Icon = item.id === "gradebook" ? ClipboardList
+              : item.id === "live-lecture" ? Radio
+              : item.id === "notes" ? PlusCircle
+              : item.id === "quizzes" ? Award
+              : FileText;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id as any);
+                  if (item.id === "gradebook") fetchGradebook();
+                }}
+                className="flex flex-col items-center justify-center gap-[5px] min-w-[52px] min-h-[44px] px-1.5 rounded-[14px] transition-all"
+                style={{ transform: isActive ? "scale(1.06)" : "scale(1)", transition: "transform 220ms cubic-bezier(0.34,1.56,0.64,1)" }}
+              >
+                <Icon
+                  className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"} ${item.id === "live-lecture" && broadcastingSession ? "text-red-500 animate-pulse" : ""}`}
+                  strokeWidth={isActive ? 2.2 : 1.6}
+                />
+                <span className={`text-[9.5px] font-semibold tracking-[0.01em] transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`}>
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       <AvatarModal
         isOpen={isAvatarModalOpen}

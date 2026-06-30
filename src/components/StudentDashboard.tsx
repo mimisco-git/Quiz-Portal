@@ -881,10 +881,16 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   /* ─── MAIN DASHBOARD ─── */
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f0f0f5] dark:bg-[#141416] font-sans">
+    <div className="flex h-screen overflow-hidden bg-[#f0f0f5] dark:bg-[#141416] font-sans relative">
 
-      {/* ── LEFT SIDEBAR ── */}
-      <aside className="w-[56px] sm:w-[232px] flex-shrink-0 flex flex-col h-full apple-sidebar">
+      {/* Subtle radial bg gradients — barely visible, add depth */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div style={{ position: "absolute", width: 800, height: 800, top: -200, right: -150, background: "radial-gradient(ellipse at center, rgba(10,148,99,0.055) 0%, transparent 62%)" }} />
+        <div style={{ position: "absolute", width: 600, height: 600, bottom: -100, left: -100, background: "radial-gradient(ellipse at center, rgba(4,120,87,0.035) 0%, transparent 62%)" }} />
+      </div>
+
+      {/* ── LEFT SIDEBAR — desktop only ── */}
+      <aside className="hidden sm:flex sm:w-[232px] flex-shrink-0 flex-col h-full apple-sidebar relative z-10">
 
         {/* Traffic lights */}
         <div className="flex items-center gap-[6px] px-4 pt-5 pb-3 flex-shrink-0">
@@ -1043,7 +1049,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       </aside>
 
       {/* ── MAIN PANEL ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
 
         {/* Top toolbar */}
         <header className="flex-shrink-0 flex items-center justify-between px-6 h-[44px] border-b border-black/[0.06] dark:border-white/[0.05] bg-[#f0f0f5]/85 dark:bg-[#141416]/85 backdrop-blur-xl"
@@ -1063,13 +1069,13 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
         {/* Scrollable content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="p-5 max-w-5xl mx-auto w-full space-y-4">
+          <div className="px-6 py-5 pb-[96px] sm:pb-5 max-w-5xl mx-auto w-full space-y-5">
 
           {/* ── NOTES TAB ── */}
           {activeTab === "notes" && (
             <div id="notes-view-container">
               {!selectedNote ? (
-                <div className="apple-card">
+                <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
                   <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                       <h2 className="apple-title">Lecture Materials</h2>
@@ -1135,13 +1141,16 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                         })}
                       </div>
                     ) : (
-                      <div className="py-16 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
-                        <FileText className="h-8 w-8 text-black/20 dark:text-white/20 mx-auto mb-3" />
-                        <p className="text-[12px] text-[#6e6e73] dark:text-white/40 font-medium">No lecture materials found.</p>
+                      <div className="apple-empty-state">
+                        <div className="apple-empty-state__icon">
+                          <FileText className="h-6 w-6 text-[#8e8e93] dark:text-white/30" />
+                        </div>
+                        <p className="apple-empty-state__title">No lecture materials</p>
+                        <p className="apple-empty-state__body">Lecture notes uploaded by your lecturers will appear here automatically.</p>
                       </div>
                     )}
                   </div>
-                </div>
+                </motion.div>
               ) : (
                 <motion.div id="note-reader" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="apple-card">
                   <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-start justify-between gap-4">
@@ -1169,7 +1178,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           {/* ── QUIZZES TAB ── */}
           {activeTab === "quizzes" && (
             <div id="quizzes-view-container">
-              <div className="apple-card">
+              <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
                 <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                   <h2 className="apple-title">Academic Quizzes</h2>
                   <p className="apple-subtitle">Secure timed assessments for your enrolled courses.</p>
@@ -1234,20 +1243,23 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       })}
                     </div>
                   ) : (
-                    <div className="py-16 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
-                      <Award className="h-8 w-8 text-black/20 dark:text-white/20 mx-auto mb-3" />
-                      <p className="text-[12px] text-[#6e6e73] dark:text-white/40 font-medium">No exams scheduled for this course.</p>
+                    <div className="apple-empty-state">
+                      <div className="apple-empty-state__icon">
+                        <Award className="h-6 w-6 text-[#8e8e93] dark:text-white/30" />
+                      </div>
+                      <p className="apple-empty-state__title">No quizzes available</p>
+                      <p className="apple-empty-state__body">Quizzes assigned by your lecturers will appear here when activated.</p>
                     </div>
                   )}
                 </div>
-              </div>
+              </motion.div>
             </div>
           )}
 
           {/* ── LIVE CLASSROOM TAB ── */}
           {activeTab === "live-classroom" && (
             <div id="live-classroom-view-container">
-              <div className="apple-card">
+              <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
                 <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90 flex items-center gap-2">
@@ -1412,24 +1424,27 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                     );
                   })()}
                 </div>
-              </div>
+              </motion.div>
             </div>
           )}
 
           {/* ── EXAMS TAB ── */}
           {activeTab === "exams" && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {!activeExam ? (
-                <div className="apple-card">
+                <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
                   <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                     <h2 className="apple-title">Written Examinations</h2>
                     <p className="apple-subtitle">Read each question carefully and type your answers. The AI will grade your submission.</p>
                   </div>
                   <div className="p-5">
                     {exams.length === 0 ? (
-                      <div className="py-12 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
-                        <Upload className="h-7 w-7 text-black/20 dark:text-white/20 mx-auto mb-2" />
-                        <p className="text-[12px] text-[#6e6e73] dark:text-white/40">No exams available yet.</p>
+                      <div className="apple-empty-state">
+                        <div className="apple-empty-state__icon">
+                          <Upload className="h-6 w-6 text-[#8e8e93] dark:text-white/30" />
+                        </div>
+                        <p className="apple-empty-state__title">No exams yet</p>
+                        <p className="apple-empty-state__body">Written examinations will appear here when your lecturer activates them.</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -1448,7 +1463,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       </div>
                     )}
                   </div>
-                </div>
+                </motion.div>
               ) : mySubmission ? (
                 <div className="apple-card">
                   <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
@@ -1526,6 +1541,43 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           </div>{/* /max-w-5xl */}
         </main>
       </div>
+
+      {/* ── MOBILE BOTTOM DOCK ── */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 px-5 pb-7 pt-2" aria-label="Main navigation">
+        <div className="apple-bottom-dock flex items-center justify-around h-[60px] px-3">
+          {([
+            { id: "notes",          icon: FileText, label: "Materials"  },
+            { id: "quizzes",        icon: Award,    label: "Quizzes"    },
+            { id: "exams",          icon: Upload,   label: "Exams"      },
+            { id: "live-classroom", icon: Radio,    label: "Live"       },
+          ] as const).map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className="flex flex-col items-center justify-center gap-[5px] min-w-[56px] min-h-[44px] px-2 rounded-[14px] transition-all"
+                style={{ transform: isActive ? "scale(1.06)" : "scale(1)", transition: "transform 220ms cubic-bezier(0.34,1.56,0.64,1)" }}
+              >
+                {item.id === "live-classroom" && !isActive ? (
+                  <span className="relative flex items-center justify-center h-5 w-5">
+                    <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-red-400 opacity-60" />
+                    <item.icon className="relative h-5 w-5 text-[#8e8e93]" strokeWidth={1.6} />
+                  </span>
+                ) : (
+                  <item.icon
+                    className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`}
+                    strokeWidth={isActive ? 2.2 : 1.6}
+                  />
+                )}
+                <span className={`text-[9.5px] font-semibold tracking-[0.01em] transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`}>
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       <AvatarModal
         isOpen={isAvatarModalOpen}
