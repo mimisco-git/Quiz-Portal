@@ -270,32 +270,34 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
             <div className="px-8 pt-9 pb-8 sm:px-10 sm:pt-10 sm:pb-9">
 
               {/* ── Logo & Header ── */}
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center mb-5 relative">
+              <div className="text-center mb-7">
+
+                {/* Logo badge */}
+                <div className="inline-flex items-center justify-center mb-3 relative">
                   <div
-                    className="absolute inset-[-16px] rounded-full pointer-events-none"
+                    className="absolute inset-[-24px] rounded-full pointer-events-none"
                     style={{
-                      background: "radial-gradient(circle, rgba(30,58,110,0.18) 0%, transparent 72%)",
+                      background: "radial-gradient(circle, rgba(30,58,110,0.13) 0%, transparent 68%)",
                       animation: "pulse-glow 3.2s ease-in-out infinite",
                     }}
                   />
-                  <div className="relative drop-shadow-sm">
-                    <img
-                      src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"}
-                      alt="QuizOS"
-                      className="h-[108px] w-auto select-none rounded-xl"
-                    />
-                  </div>
+                  <img
+                    src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"}
+                    alt="QuizOS"
+                    className="relative h-[118px] w-auto select-none rounded-[22px] shadow-[0_4px_24px_rgba(30,58,110,0.22)] dark:shadow-[0_4px_32px_rgba(0,0,0,0.55)]"
+                  />
                 </div>
 
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono uppercase tracking-[0.28em] font-bold mt-1">
-                  Assess. Learn. Excel.
+                {/* Motto */}
+                <p className="text-[12.5px] font-semibold tracking-[0.24em] uppercase text-slate-400 dark:text-slate-500 mt-2">
+                  Assess&nbsp;&nbsp;·&nbsp;&nbsp;Learn&nbsp;&nbsp;·&nbsp;&nbsp;Excel
                 </p>
 
-                <div className="my-5 h-px bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700/70 to-transparent" />
+                <div className="mt-5 mb-4 h-px bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700/60 to-transparent" />
 
-                <p className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-[300px] mx-auto">
-                  FUTO's secure academic portal for timed examinations, live lectures &amp; instant results.
+                {/* Description */}
+                <p className="text-[15px] font-normal text-slate-500 dark:text-slate-400 leading-[1.65] max-w-[285px] mx-auto">
+                  FUTO's secure academic portal — timed examinations, live lectures &amp; instant results.
                 </p>
               </div>
 
