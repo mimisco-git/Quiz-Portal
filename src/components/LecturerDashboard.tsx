@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut } from "lucide-react";
+import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, Star } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import AvatarModal from "./AvatarModal";
@@ -19,7 +19,7 @@ interface LecturerDashboardProps {
 }
 
 export default function LecturerDashboard({ token, user, theme, onToggleTheme, onLogout }: LecturerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture">("gradebook");
+  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture" | "exams">("gradebook");
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [attempts, setAttempts] = useState<StudentAttempt[]>([]);
@@ -58,6 +58,19 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   const [editingAttemptId, setEditingAttemptId] = useState<string | null>(null);
   const [editingScore, setEditingScore] = useState("");
+
+  // Exam state
+  const [exams, setExams] = useState<any[]>([]);
+  const [examTitle, setExamTitle] = useState("");
+  const [examCourseId, setExamCourseId] = useState("");
+  const [examFile, setExamFile] = useState<File | null>(null);
+  const [examQText, setExamQText] = useState("");
+  const [selectedExam, setSelectedExam] = useState<any | null>(null);
+  const [examSubmissions, setExamSubmissions] = useState<any[]>([]);
+  const [answerKeyFile, setAnswerKeyFile] = useState<File | null>(null);
+  const [answerKeyText, setAnswerKeyText] = useState("");
+  const [isGrading, setIsGrading] = useState(false);
+  const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null);
 
   const [filterCourseId, setFilterCourseId] = useState("");
   const [filterQuizId, setFilterQuizId] = useState("");
@@ -103,6 +116,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   }, [liveChats]);
 
+  useEffect(() => {
+    if (activeTab === "exams") fetchExams();
+  }, [activeTab]);
+
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(null), 4000);
@@ -124,6 +141,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           setNoteCourseId(data[0].id);
           setQuizCourseId(data[0].id);
           setLiveCourseId(data[0].id);
+          setExamCourseId(data[0].id);
           checkActiveLectureOnLoad(data);
         }
       }
@@ -131,6 +149,24 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       console.error("Error fetching courses:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchExams = async () => {
+    try {
+      const res = await fetch("/api/exams", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setExams(await res.json());
+    } catch (err) {
+      console.error("Error fetching exams:", err);
+    }
+  };
+
+  const fetchExamSubmissions = async (examId: string) => {
+    try {
+      const res = await fetch(`/api/exams/${examId}/submissions`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setExamSubmissions(await res.json());
+    } catch (err) {
+      console.error("Error fetching submissions:", err);
     }
   };
 
@@ -369,6 +405,76 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     showSuccess("Exam student list downloaded successfully in Excel/CSV format!");
   };
 
+  const handleCreateExam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!examTitle.trim() || !examCourseId) { showError("Title and course are required"); return; }
+    if (!examFile && !examQText.trim()) { showError("Upload a .docx/.txt file or paste the questions text"); return; }
+    try {
+      const fd = new FormData();
+      fd.append("title", examTitle);
+      fd.append("courseId", examCourseId);
+      if (examFile) fd.append("file", examFile);
+      else fd.append("questionsText", examQText);
+      const res = await fetch("/api/exams", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      if (res.ok) {
+        showSuccess("Exam created successfully!");
+        setExamTitle(""); setExamFile(null); setExamQText("");
+        fetchExams();
+      } else {
+        const d = await res.json(); showError(d.error || "Failed to create exam");
+      }
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const handleUploadAnswerKey = async (examId: string) => {
+    if (!answerKeyFile && !answerKeyText.trim()) { showError("Upload a file or paste the answer key text"); return; }
+    try {
+      const fd = new FormData();
+      if (answerKeyFile) fd.append("file", answerKeyFile);
+      else fd.append("answerKeyText", answerKeyText);
+      const res = await fetch(`/api/exams/${examId}/answer-key`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      if (res.ok) {
+        showSuccess("Answer key uploaded!");
+        setAnswerKeyFile(null); setAnswerKeyText("");
+        const updated = await res.json();
+        setSelectedExam(updated);
+        fetchExams();
+      } else {
+        const d = await res.json(); showError(d.error || "Failed to upload answer key");
+      }
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const handleGradeAll = async (examId: string) => {
+    setIsGrading(true);
+    try {
+      const res = await fetch(`/api/exams/${examId}/grade`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const d = await res.json();
+      if (res.ok) {
+        showSuccess(`Graded ${d.graded} submission${d.graded !== 1 ? "s" : ""} with AI!`);
+        fetchExamSubmissions(examId);
+      } else {
+        showError(d.error || "Grading failed");
+      }
+    } catch (err: any) { showError(err.message); }
+    finally { setIsGrading(false); }
+  };
+
+  const handleToggleExam = async (examId: string) => {
+    try {
+      const res = await fetch(`/api/exams/${examId}/toggle`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { fetchExams(); if (selectedExam?.id === examId) setSelectedExam(await res.json()); }
+    } catch (err: any) { showError(err.message); }
+  };
+
+  const handleDeleteExam = async (examId: string) => {
+    if (!confirm("Delete this exam and all submissions?")) return;
+    try {
+      const res = await fetch(`/api/exams/${examId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { showSuccess("Exam deleted."); setSelectedExam(null); fetchExams(); }
+    } catch (err: any) { showError(err.message); }
+  };
+
   const handleCreateDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDeptName.trim()) return;
@@ -600,7 +706,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
               {navBtn("gradebook",    "Registry Gradebook",    <ClipboardList className="h-4 w-4" />)}
               {navBtn("live-lecture", "Live Virtual Lecture",  <Radio className={`h-4 w-4 ${broadcastingSession ? "text-red-500 animate-pulse" : "text-slate-400"}`} />, true)}
               {navBtn("notes",        "Publish Study Notes",   <PlusCircle className="h-4 w-4" />)}
-              {navBtn("quizzes",      "Deploy Term Exam",      <Award className="h-4 w-4" />)}
+              {navBtn("quizzes",      "Deploy MCQ Quiz",       <Award className="h-4 w-4" />)}
+              {navBtn("exams",        "Written Exams (AI)",    <FileText className="h-4 w-4" />)}
               {navBtn("courses",      "Course Modules",        <BookOpen className="h-4 w-4" />)}
               {navBtn("departments",  "Departments",           <Users className="h-4 w-4" />)}
             </nav>
@@ -1162,6 +1269,199 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {activeTab === "exams" && (
+            <div className="space-y-5">
+              {/* Create Exam */}
+              {!selectedExam ? (
+                <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
+                  <div>
+                    <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Written Exams — AI Grading</h2>
+                    <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Upload a document with exam questions. Students type their answers. Upload the answer key and the AI grades automatically.</p>
+                  </div>
+
+                  <form onSubmit={handleCreateExam} className="space-y-4 bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4">
+                    <p className={lbl.replace("mb-2","mb-3") + " text-emerald-600 dark:text-emerald-400"}>Create New Exam</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className={lbl}>Exam Title</label>
+                        <input type="text" required value={examTitle} onChange={e => setExamTitle(e.target.value)} placeholder="e.g. CSC301 Mid-Semester Examination" className="form-input" />
+                      </div>
+                      <div>
+                        <label className={lbl}>Course</label>
+                        <select value={examCourseId} onChange={e => setExamCourseId(e.target.value)} className="form-input">
+                          {courses.map(c => <option key={c.id} value={c.id}>{c.code} — {c.title}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={lbl}>Upload Questions Document (.docx or .txt)</label>
+                      <label className="flex items-center gap-3 p-3 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:border-emerald-400 transition-colors">
+                        <Upload className="h-5 w-5 text-slate-400 shrink-0" />
+                        <span className="text-[12.5px] text-slate-500 dark:text-slate-400">
+                          {examFile ? examFile.name : "Click to choose file"}
+                        </span>
+                        <input type="file" accept=".docx,.doc,.txt" className="hidden" onChange={e => { setExamFile(e.target.files?.[0] ?? null); setExamQText(""); }} />
+                      </label>
+                    </div>
+
+                    <div className="relative flex items-center gap-3">
+                      <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">or paste text</span>
+                      <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                    </div>
+
+                    <div>
+                      <label className={lbl}>Questions Text</label>
+                      <textarea rows={6} value={examQText} onChange={e => { setExamQText(e.target.value); setExamFile(null); }} placeholder="Paste your exam questions here..." className="form-input resize-none" />
+                    </div>
+
+                    <button type="submit" className="btn-gradient w-full">Create Exam</button>
+                  </form>
+
+                  {/* Exam list */}
+                  <div className="space-y-3">
+                    <p className={lbl}>All Exams ({exams.length})</p>
+                    {exams.length === 0 ? (
+                      <div className="py-10 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
+                        <FileText className="h-7 w-7 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
+                        <p className="text-[12px] text-slate-400 dark:text-slate-500">No exams created yet.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {exams.map(exam => (
+                          <button key={exam.id} onClick={() => { setSelectedExam(exam); fetchExamSubmissions(exam.id); }}
+                            className="w-full text-left p-4 border border-slate-200/70 dark:border-white/[0.06] rounded-xl bg-white dark:bg-white/[0.02] hover:border-emerald-300 dark:hover:border-emerald-800 hover:shadow-[0_4px_16px_rgba(4,120,87,0.10)] transition-all duration-200 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-200">{exam.title}</p>
+                              <p className="text-[11px] text-slate-400 mt-0.5">{exam.course?.code} · {exam._count?.submissions ?? 0} submission{exam._count?.submissions !== 1 ? "s" : ""} · {exam.answerKeyText ? "Answer key uploaded" : "No answer key yet"}</p>
+                            </div>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${exam.isOpen ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30" : "bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700"}`}>
+                              {exam.isOpen ? "Open" : "Closed"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Exam detail / management view */
+                <div className="space-y-4">
+                  <button onClick={() => { setSelectedExam(null); setExamSubmissions([]); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
+                    ← Back to Exams
+                  </button>
+
+                  <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <h2 className="text-[15px] font-bold text-slate-900 dark:text-white">{selectedExam.title}</h2>
+                        <p className="text-[12px] text-slate-400 mt-0.5">{selectedExam.course?.code} · {examSubmissions.length} submissions</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => handleToggleExam(selectedExam.id)}
+                          className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-colors border-slate-200 dark:border-white/10 hover:border-emerald-300 text-slate-600 dark:text-slate-300">
+                          {selectedExam.isOpen ? "Close Exam" : "Reopen Exam"}
+                        </button>
+                        <button onClick={() => handleDeleteExam(selectedExam.id)}
+                          className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/40 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Questions preview */}
+                    <div>
+                      <p className={lbl}>Exam Questions</p>
+                      <pre className="text-[12px] text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{selectedExam.questionsText}</pre>
+                    </div>
+
+                    {/* Answer key upload */}
+                    <div className="space-y-3 border-t border-slate-100 dark:border-white/[0.05] pt-4">
+                      <p className={lbl}>{selectedExam.answerKeyText ? "Answer Key ✓ — Replace" : "Upload Answer Key"}</p>
+                      {selectedExam.answerKeyText && (
+                        <pre className="text-[12px] text-slate-600 dark:text-slate-400 bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/20 rounded-xl p-4 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">{selectedExam.answerKeyText}</pre>
+                      )}
+                      <label className="flex items-center gap-3 p-3 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:border-emerald-400 transition-colors">
+                        <Upload className="h-4 w-4 text-slate-400 shrink-0" />
+                        <span className="text-[12px] text-slate-500 dark:text-slate-400">{answerKeyFile ? answerKeyFile.name : "Upload answer key (.docx or .txt)"}</span>
+                        <input type="file" accept=".docx,.doc,.txt" className="hidden" onChange={e => { setAnswerKeyFile(e.target.files?.[0] ?? null); setAnswerKeyText(""); }} />
+                      </label>
+                      <textarea rows={4} value={answerKeyText} onChange={e => { setAnswerKeyText(e.target.value); setAnswerKeyFile(null); }} placeholder="Or paste answer key text..." className="form-input resize-none" />
+                      <button onClick={() => handleUploadAnswerKey(selectedExam.id)} className="btn-gradient w-full">
+                        {selectedExam.answerKeyText ? "Replace Answer Key" : "Upload Answer Key"}
+                      </button>
+                    </div>
+
+                    {/* Grade button */}
+                    {selectedExam.answerKeyText && examSubmissions.length > 0 && (
+                      <div className="border-t border-slate-100 dark:border-white/[0.05] pt-4">
+                        <button onClick={() => handleGradeAll(selectedExam.id)} disabled={isGrading}
+                          className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
+                          {isGrading ? <><Loader2 className="h-4 w-4 animate-spin" />Grading with AI…</> : <><Star className="h-4 w-4" />Grade All Submissions with AI</>}
+                        </button>
+                        <p className="text-[11px] text-slate-400 text-center mt-2">NVIDIA AI will evaluate each student's answers against your answer key</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Submissions list */}
+                  <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-4">
+                    <p className="text-[14px] font-bold text-slate-900 dark:text-white">Student Submissions ({examSubmissions.length})</p>
+                    {examSubmissions.length === 0 ? (
+                      <div className="py-10 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
+                        <p className="text-[12px] text-slate-400">No submissions yet.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {examSubmissions.map(sub => (
+                          <div key={sub.id} className="border border-slate-200/70 dark:border-white/[0.06] rounded-xl overflow-hidden">
+                            <button onClick={() => setExpandedSubmission(expandedSubmission === sub.id ? null : sub.id)}
+                              className="w-full flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+                              <div className="flex items-center gap-3 text-left">
+                                <div className="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
+                                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">{sub.student?.fullName?.[0] ?? "?"}</span>
+                                </div>
+                                <div>
+                                  <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-200">{sub.student?.fullName}</p>
+                                  <p className="text-[11px] text-slate-400">{sub.student?.regNumber} · {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                {sub.isGraded ? (
+                                  <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${sub.score >= 50 ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" : "bg-red-100 dark:bg-red-950/40 text-red-500"}`}>
+                                    {sub.score?.toFixed(1)}%
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] font-semibold text-amber-500 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1 rounded-full border border-amber-100 dark:border-amber-900/30">Pending</span>
+                                )}
+                                {expandedSubmission === sub.id ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                              </div>
+                            </button>
+                            {expandedSubmission === sub.id && (
+                              <div className="border-t border-slate-100 dark:border-white/[0.05] p-4 space-y-3 bg-slate-50/50 dark:bg-white/[0.01]">
+                                <div>
+                                  <p className={lbl}>Student's Answers</p>
+                                  <pre className="text-[12px] text-slate-600 dark:text-slate-400 bg-white dark:bg-black/20 border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-3 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{sub.answersText}</pre>
+                                </div>
+                                {sub.isGraded && sub.feedback && (
+                                  <div>
+                                    <p className={lbl}>AI Feedback</p>
+                                    <p className="text-[12.5px] text-slate-700 dark:text-slate-300 leading-relaxed bg-white dark:bg-black/20 border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-3">{sub.feedback}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

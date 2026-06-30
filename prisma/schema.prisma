@@ -26,6 +26,7 @@ model Student {
   securityQuestion String           @default("What is your favorite academic course?")
   securityAnswer   String           @default("Computer Science")
   attempts         StudentAttempt[]
+  examSubmissions  ExamSubmission[]
 }
 
 model Department {
@@ -43,6 +44,32 @@ model Course {
   notes        LectureNote[]
   quizzes      Quiz[]
   liveSessions LectureSession[]
+  exams        Exam[]
+}
+
+model Exam {
+  id            String          @id @default(uuid())
+  title         String
+  courseId      String
+  course        Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questionsText String          // Extracted text from uploaded questions doc
+  answerKeyText String?         // Extracted text from uploaded answer key doc
+  isOpen        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  submissions   ExamSubmission[]
+}
+
+model ExamSubmission {
+  id          String   @id @default(uuid())
+  examId      String
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answersText String   // Student's typed answers
+  score       Float?   // AI-graded 0–100
+  feedback    String?  // AI feedback text
+  isGraded    Boolean  @default(false)
+  submittedAt DateTime @default(now())
 }
 
 model LectureNote {

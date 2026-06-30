@@ -3,6 +3,9 @@ import path from "path";
 import fs from "fs";
 // vite is imported dynamically inside startServer() so it's excluded from the Vercel Lambda bundle
 import jwt from "jsonwebtoken";
+import multer from "multer";
+import mammoth from "mammoth";
+import OpenAI from "openai";
 import { prisma } from "./src/lib/db.js";
 import { seedDatabase } from "./src/lib/seed.js";
 
@@ -1057,6 +1060,257 @@ app.patch("/api/attempts/:id/score", authenticateToken, async (req: any, res) =>
   } catch (error: any) {
     console.error("Error adjusting student score:", error);
     return res.status(500).json({ error: "Error adjusting student score." });
+  }
+});
+
+// -------------------------------------------------------------
+// EXAM API — doc upload, student submission, AI grading
+// -------------------------------------------------------------
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+function getNvidiaClient() {
+  return new OpenAI({
+    apiKey: process.env.NVIDIA_API_KEY ?? "",
+    baseURL: "https://integrate.api.nvidia.com/v1",
+  });
+}
+
+async function extractTextFromFile(file: Express.Multer.File): Promise<string> {
+  if (file.mimetype === "text/plain") {
+    return file.buffer.toString("utf-8");
+  }
+  // .docx and .doc → mammoth
+  const result = await mammoth.extractRawText({ buffer: file.buffer });
+  return result.value.trim();
+}
+
+async function gradeSubmission(
+  questionsText: string,
+  answerKeyText: string,
+  studentAnswers: string,
+  studentName: string
+): Promise<{ score: number; feedback: string }> {
+  const nvidia = getNvidiaClient();
+
+  const prompt = `You are a fair and thorough academic exam grader.
+
+EXAM QUESTIONS:
+${questionsText}
+
+MODEL ANSWER KEY:
+${answerKeyText}
+
+STUDENT NAME: ${studentName}
+STUDENT'S ANSWERS:
+${studentAnswers}
+
+Grade this student's answers against the model answer key. Evaluate semantic similarity, not just exact wording.
+
+SCORING CRITERIA:
+- 90–100: Correct or essentially correct (minor wording differences allowed)
+- 70–89: Shows clear understanding, mostly correct or logically equivalent
+- 50–69: Genuine attempt, answer is relevant and shows partial understanding
+- 0–49: No meaningful attempt, completely wrong, irrelevant, or left blank
+
+IMPORTANT: If a student's answer shows genuine effort and captures at least 50% of the correct meaning, they pass. Award partial credit generously for effort and relevant content. Only fail a student if they clearly did not try or gave a completely irrelevant answer.
+
+Respond with ONLY a valid JSON object, no other text:
+{"score": <0-100>, "feedback": "<2-4 sentences of specific, constructive feedback mentioning what they got right and what needs improvement>"}`;
+
+  const response = await nvidia.chat.completions.create({
+    model: "meta/llama-3.1-70b-instruct",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.2,
+    max_tokens: 512,
+  });
+
+  const raw = response.choices[0]?.message?.content ?? '{"score":0,"feedback":"Grading failed."}';
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  const parsed = JSON.parse(jsonMatch?.[0] ?? raw);
+  return { score: Math.max(0, Math.min(100, Number(parsed.score))), feedback: String(parsed.feedback) };
+}
+
+// Create exam (lecturer uploads questions doc)
+app.post("/api/exams", authenticateToken, upload.single("file"), async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { title, courseId } = req.body;
+  if (!title || !courseId) return res.status(400).json({ error: "Title and courseId are required" });
+  if (!req.file && !req.body.questionsText) return res.status(400).json({ error: "Questions file or text is required" });
+
+  try {
+    const questionsText = req.file ? await extractTextFromFile(req.file) : req.body.questionsText;
+    const exam = await prisma.exam.create({ data: { title, courseId, questionsText } });
+    return res.status(201).json(exam);
+  } catch (err) {
+    console.error("Error creating exam:", err);
+    return res.status(500).json({ error: "Failed to create exam" });
+  }
+});
+
+// List exams for a course
+app.get("/api/exams", authenticateToken, async (req: any, res) => {
+  const { courseId } = req.query;
+  try {
+    const exams = await prisma.exam.findMany({
+      where: courseId ? { courseId: String(courseId) } : undefined,
+      include: { course: { select: { code: true, title: true } }, _count: { select: { submissions: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.json(exams);
+  } catch (err) {
+    console.error("Error fetching exams:", err);
+    return res.status(500).json({ error: "Failed to fetch exams" });
+  }
+});
+
+// Get single exam (questions visible to all enrolled; answer key only to lecturer)
+app.get("/api/exams/:id", authenticateToken, async (req: any, res) => {
+  try {
+    const exam = await prisma.exam.findUnique({
+      where: { id: req.params.id },
+      include: { course: { select: { code: true, title: true, lecturerId: true } } },
+    });
+    if (!exam) return res.status(404).json({ error: "Exam not found" });
+    // Hide answer key from students
+    if (req.user.role === "student") {
+      const { answerKeyText: _omit, ...safe } = exam as any;
+      return res.json(safe);
+    }
+    return res.json(exam);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch exam" });
+  }
+});
+
+// Upload answer key (lecturer only)
+app.post("/api/exams/:id/answer-key", authenticateToken, upload.single("file"), async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const answerKeyText = req.file ? await extractTextFromFile(req.file) : req.body.answerKeyText;
+    if (!answerKeyText) return res.status(400).json({ error: "Answer key file or text required" });
+    const exam = await prisma.exam.update({ where: { id: req.params.id }, data: { answerKeyText } });
+    return res.json(exam);
+  } catch (err) {
+    console.error("Error uploading answer key:", err);
+    return res.status(500).json({ error: "Failed to upload answer key" });
+  }
+});
+
+// Close / reopen exam
+app.post("/api/exams/:id/toggle", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const exam = await prisma.exam.findUnique({ where: { id: req.params.id } });
+    if (!exam) return res.status(404).json({ error: "Exam not found" });
+    const updated = await prisma.exam.update({ where: { id: req.params.id }, data: { isOpen: !exam.isOpen } });
+    return res.json(updated);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to toggle exam" });
+  }
+});
+
+// Student submits answers
+app.post("/api/exams/:id/submit", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
+  const { answersText } = req.body;
+  if (!answersText?.trim()) return res.status(400).json({ error: "Answers cannot be empty" });
+  try {
+    const exam = await prisma.exam.findUnique({ where: { id: req.params.id } });
+    if (!exam) return res.status(404).json({ error: "Exam not found" });
+    if (!exam.isOpen) return res.status(400).json({ error: "This exam is closed for submissions" });
+
+    const existing = await prisma.examSubmission.findFirst({
+      where: { examId: req.params.id, studentId: req.user.id },
+    });
+    if (existing) return res.status(400).json({ error: "You have already submitted this exam" });
+
+    const submission = await prisma.examSubmission.create({
+      data: { examId: req.params.id, studentId: req.user.id, answersText },
+    });
+    return res.status(201).json(submission);
+  } catch (err) {
+    console.error("Error submitting exam:", err);
+    return res.status(500).json({ error: "Failed to submit exam" });
+  }
+});
+
+// Lecturer: view all submissions for an exam
+app.get("/api/exams/:id/submissions", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const submissions = await prisma.examSubmission.findMany({
+      where: { examId: req.params.id },
+      include: { student: { select: { fullName: true, regNumber: true, department: true } } },
+      orderBy: { submittedAt: "asc" },
+    });
+    return res.json(submissions);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch submissions" });
+  }
+});
+
+// Student: view own submission result
+app.get("/api/exams/:id/my-submission", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
+  try {
+    const submission = await prisma.examSubmission.findFirst({
+      where: { examId: req.params.id, studentId: req.user.id },
+    });
+    return res.json(submission ?? null);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch submission" });
+  }
+});
+
+// Lecturer: grade all ungraded submissions with AI
+app.post("/api/exams/:id/grade", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const exam = await prisma.exam.findUnique({
+      where: { id: req.params.id },
+      include: { submissions: { include: { student: { select: { fullName: true } } } } },
+    });
+    if (!exam) return res.status(404).json({ error: "Exam not found" });
+    if (!exam.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
+    if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
+
+    const ungraded = exam.submissions.filter((s) => !s.isGraded);
+    if (ungraded.length === 0) return res.json({ graded: 0, message: "All submissions already graded" });
+
+    const results = [];
+    for (const submission of ungraded) {
+      try {
+        const { score, feedback } = await gradeSubmission(
+          exam.questionsText,
+          exam.answerKeyText,
+          submission.answersText,
+          (submission as any).student.fullName
+        );
+        await prisma.examSubmission.update({
+          where: { id: submission.id },
+          data: { score, feedback, isGraded: true },
+        });
+        results.push({ studentId: submission.studentId, score });
+      } catch (err) {
+        console.error(`Failed to grade submission ${submission.id}:`, err);
+        results.push({ studentId: submission.studentId, error: "Grading failed" });
+      }
+    }
+    return res.json({ graded: results.filter((r) => !r.error).length, results });
+  } catch (err) {
+    console.error("Error grading exam:", err);
+    return res.status(500).json({ error: "Failed to grade exam" });
+  }
+});
+
+// Delete exam
+app.delete("/api/exams/:id", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    await prisma.exam.delete({ where: { id: req.params.id } });
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to delete exam" });
   }
 });
 

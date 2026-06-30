@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2 } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import MarkdownView from "./MarkdownView";
 import UserAvatar from "./UserAvatar";
@@ -22,7 +22,7 @@ interface StudentDashboardProps {
 }
 
 export default function StudentDashboard({ token, user, theme, onToggleTheme, onLogout }: StudentDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom">("notes");
+  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams">("notes");
   const [currentYear, setCurrentYear] = useState(user.year);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -39,6 +39,14 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [chatMessage, setChatMessage] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Exam state
+  const [exams, setExams] = useState<any[]>([]);
+  const [activeExam, setActiveExam] = useState<any | null>(null);
+  const [mySubmission, setMySubmission] = useState<any | null>(null);
+  const [examAnswers, setExamAnswers] = useState("");
+  const [isSubmittingExam, setIsSubmittingExam] = useState(false);
+  const [examError, setExamError] = useState<string | null>(null);
 
   const fetchActiveLiveSession = async () => {
     if (!selectedCourse) return;
@@ -59,6 +67,49 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       console.error("Error fetching live lecture session:", e);
     }
   };
+
+  const fetchExams = async () => {
+    try {
+      const res = await fetch("/api/exams", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setExams(await res.json());
+    } catch (e) { console.error("Error fetching exams:", e); }
+  };
+
+  const fetchMySubmission = async (examId: string) => {
+    try {
+      const res = await fetch(`/api/exams/${examId}/my-submission`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setMySubmission(await res.json());
+    } catch (e) { console.error("Error fetching my submission:", e); }
+  };
+
+  const handleExamSubmit = async () => {
+    if (!examAnswers.trim()) { setExamError("Please write your answers before submitting."); return; }
+    if (!activeExam) return;
+    setIsSubmittingExam(true);
+    setExamError(null);
+    try {
+      const res = await fetch(`/api/exams/${activeExam.id}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ answersText: examAnswers }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setMySubmission(d);
+        setExamAnswers("");
+      } else {
+        setExamError(d.error || "Submission failed");
+      }
+    } catch (e: any) {
+      setExamError(e.message);
+    } finally {
+      setIsSubmittingExam(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "exams") fetchExams();
+  }, [activeTab]);
 
   useEffect(() => {
     let interval: any;
@@ -943,16 +994,17 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           {/* Tab bar */}
           <div className="flex gap-1 bg-slate-100/80 dark:bg-white/[0.04] rounded-xl p-1 border border-slate-200/60 dark:border-white/[0.05]">
             {[
-              { id: "notes",          icon: FileText, label: "Lecture Materials", live: false },
-              { id: "quizzes",        icon: Award,    label: "Quizzes",            live: false },
-              { id: "live-classroom", icon: Radio,    label: "Virtual Classroom",  live: true },
+              { id: "notes",          icon: FileText, label: "Materials",    live: false },
+              { id: "quizzes",        icon: Award,    label: "Quizzes",      live: false },
+              { id: "exams",          icon: Upload,   label: "Exams",        live: false },
+              { id: "live-classroom", icon: Radio,    label: "Live Class",   live: true },
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id as any;
               return (
                 <button
                   key={tab.id}
-                  id={`${tab.id === "notes" ? "notes" : tab.id === "quizzes" ? "quizzes" : "live"}-tab`}
+                  id={`${tab.id}-tab`}
                   onClick={() => setActiveTab(tab.id as any)}
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-semibold rounded-[10px] transition-all duration-200 cursor-pointer ${
                     isActive
@@ -1273,6 +1325,109 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 )}
               </div>
             )}
+
+          {activeTab === "exams" && (
+            <div className="space-y-4">
+              {!activeExam ? (
+                <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
+                  <div>
+                    <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Written Examinations</h2>
+                    <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Read each question carefully and type your answers. The AI will grade your submission.</p>
+                  </div>
+                  {exams.length === 0 ? (
+                    <div className="py-12 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
+                      <Upload className="h-7 w-7 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
+                      <p className="text-[12px] text-slate-400">No exams available yet.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {exams.map(exam => (
+                        <button key={exam.id} onClick={async () => { setActiveExam(exam); setMySubmission(null); await fetchMySubmission(exam.id); }}
+                          className="w-full text-left p-4 border border-slate-200/70 dark:border-white/[0.06] rounded-xl bg-white dark:bg-white/[0.02] hover:border-emerald-300 dark:hover:border-emerald-800 hover:shadow-[0_4px_16px_rgba(4,120,87,0.10)] transition-all duration-200 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-200">{exam.title}</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{exam.course?.code} — {exam.course?.title}</p>
+                          </div>
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${exam.isOpen ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30" : "bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700"}`}>
+                            {exam.isOpen ? "Open" : "Closed"}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : mySubmission ? (
+                /* Result view */
+                <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
+                  <button onClick={() => { setActiveExam(null); setMySubmission(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">← Back to Exams</button>
+                  <h2 className="text-[15px] font-bold text-slate-900 dark:text-white">{activeExam.title} — Result</h2>
+
+                  {mySubmission.isGraded ? (
+                    <div className="space-y-4">
+                      <div className={`rounded-2xl p-6 text-center border ${mySubmission.score >= 50 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30" : "bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30"}`}>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1">Your Score</p>
+                        <p className={`text-5xl font-black ${mySubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{mySubmission.score?.toFixed(1)}%</p>
+                        <p className={`text-[13px] font-semibold mt-2 ${mySubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{mySubmission.score >= 50 ? "Passed" : "Failed"}</p>
+                      </div>
+                      {mySubmission.feedback && (
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">AI Feedback</p>
+                          <p className="text-[13px] text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4">{mySubmission.feedback}</p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">Your Submitted Answers</p>
+                        <pre className="text-[12px] text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{mySubmission.answersText}</pre>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-10 text-center">
+                      <Loader2 className="h-8 w-8 text-emerald-400 animate-spin mx-auto mb-3" />
+                      <p className="text-[13px] font-semibold text-slate-600 dark:text-slate-400">Submitted — awaiting AI grading</p>
+                      <p className="text-[12px] text-slate-400 mt-1">Your lecturer will trigger grading once all students have submitted.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Answer submission view */
+                <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
+                  <button onClick={() => { setActiveExam(null); setExamAnswers(""); setExamError(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">← Back to Exams</button>
+
+                  <div>
+                    <h2 className="text-[15px] font-bold text-slate-900 dark:text-white">{activeExam.title}</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{activeExam.course?.code} · {activeExam.isOpen ? "Open for submission" : "Closed"}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">Exam Questions</p>
+                    <pre className="text-[13px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto">{activeExam.questionsText}</pre>
+                  </div>
+
+                  {activeExam.isOpen ? (
+                    <div className="space-y-3">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Your Answers</p>
+                      <textarea
+                        rows={12}
+                        value={examAnswers}
+                        onChange={e => setExamAnswers(e.target.value)}
+                        placeholder={"Type your answers here. For example:\n\n1. [Your answer to question 1]\n\n2. [Your answer to question 2]\n\netc."}
+                        className="form-input resize-none leading-relaxed"
+                      />
+                      {examError && <p className="text-[12px] text-red-500 font-medium">{examError}</p>}
+                      <button onClick={handleExamSubmit} disabled={isSubmittingExam} className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
+                        {isSubmittingExam ? <><Loader2 className="h-4 w-4 animate-spin" />Submitting…</> : "Submit Answers"}
+                      </button>
+                      <p className="text-[11px] text-slate-400 text-center">Once submitted you cannot change your answers. The AI will grade your submission after the exam closes.</p>
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
+                      <p className="text-[13px] font-semibold text-slate-500">This exam is closed for submissions.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           </div>
         </section>
