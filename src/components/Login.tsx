@@ -280,18 +280,22 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                     }}
                   />
                   <div className="relative drop-shadow-sm">
-                    <img src="/logo.png" alt="QuizOS" className="h-[96px] w-auto select-none" />
+                    <img
+                      src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"}
+                      alt="QuizOS"
+                      className="h-[108px] w-auto select-none rounded-xl"
+                    />
                   </div>
                 </div>
 
-                <p className="text-[9px] text-slate-400 dark:text-slate-600 font-mono uppercase tracking-[0.22em] font-bold mt-1">
-                  Federal University of Technology, Owerri
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono uppercase tracking-[0.28em] font-bold mt-1">
+                  Assess. Learn. Excel.
                 </p>
 
                 <div className="my-5 h-px bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700/70 to-transparent" />
 
-                <p className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Secure examinations &amp; interactive learning
+                <p className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed max-w-[300px] mx-auto">
+                  FUTO's secure academic portal for timed examinations, live lectures &amp; instant results.
                 </p>
               </div>
 
@@ -711,7 +715,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
 
           {/* Below-card tagline */}
           <p className="text-center mt-4 text-[10px] text-slate-400/70 dark:text-slate-700 select-none">
-            QuizOS © 2026 · FUTO Secure Academic Platform
+            QuizOS © 2026 · Assess. Learn. Excel.
           </p>
 
         </motion.div>
