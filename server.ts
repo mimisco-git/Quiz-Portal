@@ -1144,15 +1144,7 @@ async function startServer() {
   });
 }
 
-if (process.env.VERCEL) {
-  // Vercel serverless: serve built frontend + seed DB, then export app
-  const distPath = path.join(process.cwd(), "dist");
-  app.use(express.static(distPath));
-  app.get("*", (_req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
-  });
-  seedDatabase().catch(console.error);
-} else {
+if (!process.env.VERCEL) {
   startServer();
 }
 
