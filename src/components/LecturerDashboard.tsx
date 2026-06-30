@@ -715,10 +715,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f5f5f7] dark:bg-[#161618] font-sans">
+    <div className="flex h-screen overflow-hidden bg-[#f0f0f5] dark:bg-[#141416] font-sans">
 
       {/* ── LEFT SIDEBAR ── */}
-      <aside className="w-[56px] sm:w-[232px] flex-shrink-0 flex flex-col h-full bg-[#e8e8ed] dark:bg-[#111113] border-r border-black/[0.07] dark:border-white/[0.06]">
+      <aside className="w-[56px] sm:w-[232px] flex-shrink-0 flex flex-col h-full apple-sidebar">
 
         {/* Traffic lights */}
         <div className="flex items-center gap-[6px] px-4 pt-5 pb-3 flex-shrink-0">
@@ -802,7 +802,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* Top toolbar */}
-        <header className="flex-shrink-0 flex items-center justify-between px-5 h-[44px] border-b border-black/[0.07] dark:border-white/[0.06] bg-[#f5f5f7]/90 dark:bg-[#161618]/90 backdrop-blur-md">
+        <header className="flex-shrink-0 flex items-center justify-between px-6 h-[44px] border-b border-black/[0.06] dark:border-white/[0.05] bg-[#f0f0f5]/85 dark:bg-[#141416]/85 backdrop-blur-xl"
+          style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.70)" }}>
           <h1 className="text-[13.5px] font-semibold text-[#1d1d1f] dark:text-white/88 tracking-[-0.01em]">
             {sectionTitle[activeTab] ?? "Dashboard"}
           </h1>
@@ -844,10 +845,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 1. GRADEBOOK ── */}
           {activeTab === "gradebook" && (
-            <div id="gradebook-panel" className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
-                <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Student Assessment Gradebook</h2>
-                <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Evaluate, mark, and adjust examination attempt logs.</p>
+            <div id="gradebook-panel" className="apple-card">
+              <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                <h2 className="apple-title">Student Assessment Gradebook</h2>
+                <p className="apple-subtitle">Evaluate, mark, and adjust examination attempt logs.</p>
               </div>
               <div className="p-5 space-y-4">
 
@@ -1001,13 +1002,13 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 2. LIVE LECTURE ── */}
           {activeTab === "live-lecture" && (
-            <div id="live-lecture-panel" className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+            <div id="live-lecture-panel" className="apple-card">
+              <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                 <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90 flex items-center gap-2">
                   <Radio className="h-4 w-4 text-red-500 animate-pulse" />
                   Live Broadcasting Station
                 </h2>
-                <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Audio/video, slides, polls, attendance: all in one live session.</p>
+                <p className="apple-subtitle">Audio/video, slides, polls, attendance: all in one live session.</p>
               </div>
               <div className="p-5 space-y-4">
 
@@ -1303,10 +1304,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 3. PUBLISH NOTES ── */}
           {activeTab === "notes" && (
-            <div id="notes-panel" className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
-                <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Publish Course Study Notes</h2>
-                <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Upload comprehensive module details for students to study.</p>
+            <div id="notes-panel" className="apple-card">
+              <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                <h2 className="apple-title">Publish Course Study Notes</h2>
+                <p className="apple-subtitle">Upload comprehensive module details for students to study.</p>
               </div>
               <div className="p-5">
                 <form onSubmit={handlePublishNote} className="space-y-4">
@@ -1337,10 +1338,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 4. DEPLOY QUIZ ── */}
           {activeTab === "quizzes" && (
-            <div id="quizzes-panel" className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
-                <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Deploy Secure Quiz & Examination</h2>
-                <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Configure timed question sets for instant testing and score logging.</p>
+            <div id="quizzes-panel" className="apple-card">
+              <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                <h2 className="apple-title">Deploy Secure Quiz & Examination</h2>
+                <p className="apple-subtitle">Configure timed question sets for instant testing and score logging.</p>
               </div>
               <div className="p-5">
                 <form onSubmit={handleDeployQuizSubmit} className="space-y-6">
@@ -1417,10 +1418,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 5. COURSE REGISTRY ── */}
           {activeTab === "courses" && (
-            <div id="courses-panel" className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
-                <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Course Registry</h2>
-                <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Register new academic course modules.</p>
+            <div id="courses-panel" className="apple-card">
+              <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                <h2 className="apple-title">Course Registry</h2>
+                <p className="apple-subtitle">Register new academic course modules.</p>
               </div>
               <div className="p-5 space-y-5">
                 <form onSubmit={handleCreateCourse} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4">
@@ -1473,10 +1474,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 6. DEPARTMENTS ── */}
           {activeTab === "departments" && (
-            <div id="departments-panel" className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
-                <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Academic Departments</h2>
-                <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Establish and manage school departments.</p>
+            <div id="departments-panel" className="apple-card">
+              <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                <h2 className="apple-title">Academic Departments</h2>
+                <p className="apple-subtitle">Establish and manage school departments.</p>
               </div>
               <div className="p-5 space-y-5">
                 <form onSubmit={handleCreateDepartment} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4">
@@ -1532,10 +1533,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {activeTab === "exams" && (
             <div className="space-y-5">
               {!selectedExam ? (
-                <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
-                    <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Written Exams: AI Grading</h2>
-                    <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Upload a document with exam questions. Students type their answers. Upload the answer key and the AI grades automatically.</p>
+                <div className="apple-card">
+                  <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                    <h2 className="apple-title">Written Exams: AI Grading</h2>
+                    <p className="apple-subtitle">Upload a document with exam questions. Students type their answers. Upload the answer key and the AI grades automatically.</p>
                   </div>
                   <div className="p-5 space-y-5">
                     <form onSubmit={handleCreateExam} className="space-y-4 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4">
@@ -1606,10 +1607,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                     <ArrowLeft className="h-3.5 w-3.5" /> Back to Exams
                   </button>
 
-                  <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
+                  <div className="apple-card">
                     <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-start justify-between gap-3 flex-wrap">
                       <div>
-                        <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">{selectedExam.title}</h2>
+                        <h2 className="apple-title">{selectedExam.title}</h2>
                         <p className="text-[12px] text-[#6e6e73] dark:text-white/40 mt-0.5">{selectedExam.course?.code} · {examSubmissions.length} submissions</p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1655,9 +1656,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                     </div>
                   </div>
 
-                  <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
-                      <h3 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Student Submissions ({examSubmissions.length})</h3>
+                  <div className="apple-card">
+                    <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                      <h3 className="apple-title">Student Submissions ({examSubmissions.length})</h3>
                     </div>
                     <div className="p-5">
                       {examSubmissions.length === 0 ? (

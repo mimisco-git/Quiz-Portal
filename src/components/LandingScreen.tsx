@@ -218,25 +218,33 @@ export default function LandingScreen({
   return (
     <div className="fixed inset-0 overflow-hidden font-sans antialiased">
 
-      {/* ══ LAYER 0 — always-present wallpaper (hidden during boot) ══ */}
+      {/* ══ LAYER 0 — wallpaper with 10-layer Apple radial gradients ══ */}
       <motion.div
         className="absolute inset-0"
         initial={{ opacity: alreadyBooted ? 1 : 0 }}
         animate={{ opacity: phase === "login" ? 1 : 0 }}
         transition={{ duration: 1.1, ease: [0.25, 0, 0.25, 1] }}
-        style={{ background: "linear-gradient(160deg, #030d07 0%, #050f0a 45%, #020b08 100%)" }}
+        style={{ background: "#050a07" }}
       >
-        {/* grain */}
-        <div className="absolute inset-0 pointer-events-none opacity-[0.032]" style={{
+        {/* 10 radial gradient colour pools — mixed, blurred, layered */}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 70% 60% at 12% 18%, rgba(4,120,87,0.28) 0%, transparent 65%)" }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 55% 50% at 88% 82%, rgba(29,78,216,0.16) 0%, transparent 65%)" }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 40% 35% at 50% 50%, rgba(4,120,87,0.11) 0%, transparent 60%)" }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 50% 40% at 75% 20%, rgba(16,185,129,0.08) 0%, transparent 60%)" }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 50% at 25% 75%, rgba(6,95,70,0.18) 0%, transparent 65%)" }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 35% 30% at 90% 10%, rgba(52,211,153,0.06) 0%, transparent 55%)" }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 45% 40% at 5% 90%, rgba(4,120,87,0.10) 0%, transparent 60%)" }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 30% 25% at 60% 85%, rgba(37,99,235,0.07) 0%, transparent 55%)" }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 80% 30% at 50% 0%, rgba(0,0,0,0.40) 0%, transparent 100%)" }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 100% 50% at 50% 100%, rgba(0,0,0,0.50) 0%, transparent 80%)" }} />
+        {/* 1% noise overlay */}
+        <div className="absolute inset-0 pointer-events-none" style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-          backgroundSize: "256px 256px",
+          backgroundSize: "220px 220px",
+          opacity: 0.048,
         }} />
-        {/* colour pools */}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 55% at 18% 22%, rgba(4,120,87,0.22) 0%, transparent 70%)" }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 50% 45% at 80% 78%, rgba(37,99,235,0.14) 0%, transparent 70%)" }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 45% 40% at 50% 50%, rgba(4,120,87,0.09) 0%, transparent 65%)" }} />
-        {/* vignette */}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 120% 120% at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%)" }} />
+        {/* Edge vignette */}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 130% 130% at 50% 48%, transparent 50%, rgba(0,0,0,0.60) 100%)" }} />
       </motion.div>
 
       {/* ══ LAYER 1 — boot screen ══ */}
@@ -333,8 +341,10 @@ export default function LandingScreen({
                   >
                     {/* Logo — large, bold */}
                     <div className="flex flex-col items-center gap-4">
-                      <div className="relative">
-                        <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: "0 0 60px 8px rgba(4,120,87,0.30), 0 0 120px 20px rgba(4,120,87,0.12)", borderRadius: 26 }} />
+                      <div className="relative flex items-center justify-center">
+                        {/* Soft ambient glow — larger, less saturated, more realistic */}
+                        <div className="absolute pointer-events-none" style={{ width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(10,148,99,0.22) 0%, rgba(4,120,87,0.10) 45%, transparent 72%)", transform: "translateY(10px)", filter: "blur(12px)" }} />
+                        <div className="absolute pointer-events-none" style={{ width: 180, height: 180, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(18,184,122,0.14) 0%, transparent 70%)", filter: "blur(6px)" }} />
                         <img
                           src="/logo-dark.png"
                           alt="QuizOS"
@@ -343,7 +353,7 @@ export default function LandingScreen({
                           style={{
                             height: 130,
                             width: "auto",
-                            filter: "drop-shadow(0 4px 32px rgba(4,120,87,0.45)) drop-shadow(0 1px 6px rgba(0,0,0,0.6)) brightness(1.08) contrast(1.04)",
+                            filter: "drop-shadow(0 2px 20px rgba(4,120,87,0.30)) drop-shadow(0 1px 4px rgba(0,0,0,0.55)) brightness(1.06) contrast(1.02)",
                           }}
                         />
                       </div>
@@ -366,21 +376,25 @@ export default function LandingScreen({
                             className="group flex flex-col items-center gap-4 cursor-pointer outline-none"
                           >
                             <div
-                              className="relative h-[96px] w-[96px] rounded-full flex items-center justify-center"
+                              className="relative h-[108px] w-[108px] rounded-full flex items-center justify-center"
                               style={{
                                 background: u.gradient,
-                                boxShadow: `0 8px 32px rgba(0,0,0,0.55), 0 0 0 0px ${u.ring}, inset 0 1px 0 rgba(255,255,255,0.18)`,
-                                transition: "box-shadow 0.25s ease",
+                                boxShadow: `0 4px 8px rgba(0,0,0,0.30), 0 12px 40px rgba(0,0,0,0.55), 0 32px 72px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.12) inset`,
+                                transition: "box-shadow 0.28s cubic-bezier(0.34,1.56,0.64,1)",
                               }}
                               onMouseEnter={e => {
-                                (e.currentTarget as HTMLDivElement).style.boxShadow = `0 12px 40px rgba(0,0,0,0.60), 0 0 0 3px ${u.ring}, inset 0 1px 0 rgba(255,255,255,0.22)`;
+                                (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 8px rgba(0,0,0,0.30), 0 16px 56px rgba(0,0,0,0.62), 0 40px 88px rgba(0,0,0,0.34), 0 0 0 2.5px ${u.ring} inset, 0 0 0 1px rgba(255,255,255,0.14) inset`;
                               }}
                               onMouseLeave={e => {
-                                (e.currentTarget as HTMLDivElement).style.boxShadow = `0 8px 32px rgba(0,0,0,0.55), 0 0 0 0px ${u.ring}, inset 0 1px 0 rgba(255,255,255,0.18)`;
+                                (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 8px rgba(0,0,0,0.30), 0 12px 40px rgba(0,0,0,0.55), 0 32px 72px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.12) inset`;
                               }}
                             >
-                              <div className="absolute inset-0 rounded-full pointer-events-none" style={{ background: "linear-gradient(145deg, rgba(255,255,255,0.18) 0%, transparent 55%)" }} />
-                              <Icon className="h-11 w-11 text-white relative z-10" strokeWidth={1.5} />
+                              {/* Liquid glass reflection */}
+                              <div className="absolute inset-0 rounded-full pointer-events-none overflow-hidden">
+                                <div style={{ position: "absolute", top: "-10%", left: "10%", right: "10%", height: "55%", background: "linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.06) 60%, transparent 100%)", borderRadius: "50% 50% 60% 60% / 60% 60% 40% 40%", filter: "blur(1px)" }} />
+                                <div style={{ position: "absolute", bottom: "8%", left: "20%", right: "20%", height: "25%", background: "linear-gradient(0deg, rgba(255,255,255,0.08) 0%, transparent 100%)", borderRadius: "50%" }} />
+                              </div>
+                              <Icon className="h-12 w-12 text-white relative z-10 drop-shadow-sm" strokeWidth={1.4} />
                             </div>
                             <div className="text-center">
                               <p className="text-white text-[15px] font-medium leading-tight select-none">{u.label}</p>
@@ -413,14 +427,14 @@ export default function LandingScreen({
                         className="flex flex-col items-center gap-3"
                       >
                         <div
-                          className="h-[86px] w-[86px] rounded-full flex items-center justify-center relative"
+                          className="h-[90px] w-[90px] rounded-full flex items-center justify-center relative overflow-hidden"
                           style={{
                             background: activeUser.gradient,
-                            boxShadow: `0 8px 32px rgba(0,0,0,0.60), 0 0 0 3px ${activeUser.ring}, inset 0 1px 0 rgba(255,255,255,0.20)`,
+                            boxShadow: `0 4px 8px rgba(0,0,0,0.30), 0 12px 40px rgba(0,0,0,0.55), 0 0 0 2.5px ${activeUser.ring} inset, 0 0 0 1px rgba(255,255,255,0.12) inset`,
                           }}
                         >
-                          <div className="absolute inset-0 rounded-full pointer-events-none" style={{ background: "linear-gradient(145deg, rgba(255,255,255,0.18) 0%, transparent 55%)" }} />
-                          {React.createElement(activeUser.icon, { className: "h-10 w-10 text-white relative z-10", strokeWidth: 1.5 })}
+                          <div style={{ position: "absolute", top: "-10%", left: "10%", right: "10%", height: "55%", background: "linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.06) 60%, transparent 100%)", borderRadius: "50% 50% 60% 60% / 60% 60% 40% 40%", filter: "blur(1px)" }} />
+                          {React.createElement(activeUser.icon, { className: "h-10 w-10 text-white relative z-10 drop-shadow-sm", strokeWidth: 1.4 })}
                         </div>
                         <div className="text-center">
                           <p className="text-white text-[18px] font-semibold leading-tight tracking-[-0.01em]">{activeUser.label}</p>

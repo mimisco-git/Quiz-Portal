@@ -881,10 +881,10 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   /* ─── MAIN DASHBOARD ─── */
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f5f5f7] dark:bg-[#161618] font-sans">
+    <div className="flex h-screen overflow-hidden bg-[#f0f0f5] dark:bg-[#141416] font-sans">
 
       {/* ── LEFT SIDEBAR ── */}
-      <aside className="w-[56px] sm:w-[232px] flex-shrink-0 flex flex-col h-full bg-[#e8e8ed] dark:bg-[#111113] border-r border-black/[0.07] dark:border-white/[0.06]">
+      <aside className="w-[56px] sm:w-[232px] flex-shrink-0 flex flex-col h-full apple-sidebar">
 
         {/* Traffic lights */}
         <div className="flex items-center gap-[6px] px-4 pt-5 pb-3 flex-shrink-0">
@@ -974,7 +974,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           {loading ? (
             <div className="hidden sm:block space-y-1 animate-pulse" id="courses-skeleton">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-8 bg-black/[0.05] dark:bg-white/[0.05] rounded-[10px]" />
+                <div key={i} className="h-8 apple-skeleton" />
               ))}
             </div>
           ) : (
@@ -1046,7 +1046,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* Top toolbar */}
-        <header className="flex-shrink-0 flex items-center justify-between px-5 h-[44px] border-b border-black/[0.07] dark:border-white/[0.06] bg-[#f5f5f7]/90 dark:bg-[#161618]/90 backdrop-blur-md">
+        <header className="flex-shrink-0 flex items-center justify-between px-6 h-[44px] border-b border-black/[0.06] dark:border-white/[0.05] bg-[#f0f0f5]/85 dark:bg-[#141416]/85 backdrop-blur-xl"
+          style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.70)" }}>
           <h1 className="text-[13.5px] font-semibold text-[#1d1d1f] dark:text-white/88 tracking-[-0.01em]">
             {activeTab === "notes" ? "Lecture Materials"
               : activeTab === "quizzes" ? "Academic Quizzes"
@@ -1068,11 +1069,11 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           {activeTab === "notes" && (
             <div id="notes-view-container">
               {!selectedNote ? (
-                <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
+                <div className="apple-card">
                   <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
-                      <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Lecture Materials</h2>
-                      <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Browse and study uploaded lecture notes.</p>
+                      <h2 className="apple-title">Lecture Materials</h2>
+                      <p className="apple-subtitle">Browse and study uploaded lecture notes.</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Filter className="h-3.5 w-3.5 text-[#6e6e73] dark:text-white/40 flex-shrink-0" />
@@ -1142,13 +1143,13 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   </div>
                 </div>
               ) : (
-                <motion.div id="note-reader" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
+                <motion.div id="note-reader" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="apple-card">
                   <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-start justify-between gap-4">
                     <div>
                       <button onClick={() => setSelectedNote(null)} className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-600 mb-1.5 inline-flex items-center gap-1 cursor-pointer">
                         <ArrowLeft className="h-3 w-3" /> Back to Materials
                       </button>
-                      <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">{selectedNote.title}</h2>
+                      <h2 className="apple-title">{selectedNote.title}</h2>
                     </div>
                     <span className="text-[11px] font-mono text-[#6e6e73] dark:text-white/35 flex items-center gap-1 flex-shrink-0 mt-6">
                       <Calendar className="h-3 w-3" />
@@ -1168,10 +1169,10 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           {/* ── QUIZZES TAB ── */}
           {activeTab === "quizzes" && (
             <div id="quizzes-view-container">
-              <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
-                  <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Academic Quizzes</h2>
-                  <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Secure timed assessments for your enrolled courses.</p>
+              <div className="apple-card">
+                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                  <h2 className="apple-title">Academic Quizzes</h2>
+                  <p className="apple-subtitle">Secure timed assessments for your enrolled courses.</p>
                 </div>
                 <div className="p-5 space-y-4">
                   {submitError && !activeQuiz && (
@@ -1246,14 +1247,14 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           {/* ── LIVE CLASSROOM TAB ── */}
           {activeTab === "live-classroom" && (
             <div id="live-classroom-view-container">
-              <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
+              <div className="apple-card">
                 <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90 flex items-center gap-2">
                       <Radio className="h-4 w-4 text-red-500 animate-pulse" />
                       Virtual Classroom
                     </h2>
-                    <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">
+                    <p className="apple-subtitle">
                       {selectedCourse ? `${selectedCourse.code} · ${selectedCourse.title}` : "Select a Course"}
                     </p>
                   </div>
@@ -1360,7 +1361,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                               </div>
                             ) : (
                               <div className="bg-amber-50/60 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/30 rounded-[12px] p-5 space-y-4">
-                                <p className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">{activePoll.question}</p>
+                                <p className="apple-title">{activePoll.question}</p>
                                 <div className="space-y-2">
                                   {(JSON.parse(activePoll.optionsJson) as string[]).map(opt => (
                                     <button key={opt} onClick={() => handlePollRespond(activePoll.id, opt)}
@@ -1419,10 +1420,10 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           {activeTab === "exams" && (
             <div className="space-y-4">
               {!activeExam ? (
-                <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
-                    <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Written Examinations</h2>
-                    <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Read each question carefully and type your answers. The AI will grade your submission.</p>
+                <div className="apple-card">
+                  <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                    <h2 className="apple-title">Written Examinations</h2>
+                    <p className="apple-subtitle">Read each question carefully and type your answers. The AI will grade your submission.</p>
                   </div>
                   <div className="p-5">
                     {exams.length === 0 ? (
@@ -1449,10 +1450,10 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   </div>
                 </div>
               ) : mySubmission ? (
-                <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+                <div className="apple-card">
+                  <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                     <button onClick={() => { setActiveExam(null); setMySubmission(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 mb-1.5 cursor-pointer"><ArrowLeft className="h-3.5 w-3.5" /> Back to Exams</button>
-                    <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">{activeExam.title}: Result</h2>
+                    <h2 className="apple-title">{activeExam.title}: Result</h2>
                   </div>
                   <div className="p-5 space-y-5">
                     {mySubmission.isGraded ? (
@@ -1483,10 +1484,10 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   </div>
                 </div>
               ) : (
-                <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+                <div className="apple-card">
+                  <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                     <button onClick={() => { setActiveExam(null); setExamAnswers(""); setExamError(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 mb-1.5 cursor-pointer"><ArrowLeft className="h-3.5 w-3.5" /> Back to Exams</button>
-                    <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">{activeExam.title}</h2>
+                    <h2 className="apple-title">{activeExam.title}</h2>
                     <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">{activeExam.course?.code} · {activeExam.isOpen ? "Open for submission" : "Closed"}</p>
                   </div>
                   <div className="p-5 space-y-5">
