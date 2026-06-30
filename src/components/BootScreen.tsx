@@ -82,7 +82,7 @@ export default function BootScreen({ onDone }: Props) {
           />
 
           {/* ── centred content cluster ── */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-[52px]">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-[52px] sm:gap-[72px]">
 
             {/* Logo */}
             <motion.div
@@ -91,14 +91,14 @@ export default function BootScreen({ onDone }: Props) {
               transition={{ duration: 1.1, ease: [0.25, 0, 0.25, 1] }}
               style={{
                 filter:
-                  "drop-shadow(0 0 32px rgba(255,255,255,0.10)) drop-shadow(0 0 8px rgba(255,255,255,0.06))",
+                  "drop-shadow(0 0 48px rgba(255,255,255,0.13)) drop-shadow(0 0 12px rgba(255,255,255,0.08))",
               }}
             >
               <img
                 src="/logo-dark.png"
                 alt="QuizOS"
                 draggable={false}
-                style={{ height: 88, width: "auto", userSelect: "none" }}
+                className="h-[96px] sm:h-[148px] w-auto select-none"
               />
             </motion.div>
 
@@ -110,12 +110,9 @@ export default function BootScreen({ onDone }: Props) {
             >
               {/* Track */}
               <div
+                className="w-[220px] sm:w-[360px] h-[3px] sm:h-[4px] rounded-full overflow-hidden"
                 style={{
-                  width: 220,
-                  height: 3,
-                  borderRadius: 999,
                   background: "rgba(255,255,255,0.10)",
-                  overflow: "hidden",
                   boxShadow: "0 0 0 0.5px rgba(255,255,255,0.04)",
                 }}
               >
@@ -126,7 +123,7 @@ export default function BootScreen({ onDone }: Props) {
                     width: `${progress}%`,
                     borderRadius: 999,
                     background: "rgba(255,255,255,0.86)",
-                    boxShadow: "0 0 8px rgba(255,255,255,0.35)",
+                    boxShadow: "0 0 10px rgba(255,255,255,0.40)",
                     transition: "width 60ms linear",
                   }}
                 />
