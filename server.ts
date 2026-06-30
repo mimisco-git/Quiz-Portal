@@ -1532,30 +1532,21 @@ app.delete("/api/exams/:id", authenticateToken, async (req: any, res) => {
 // -------------------------------------------------------------
 // USER AVATAR / PROFILE PHOTO API
 // -------------------------------------------------------------
-const AVATARS_FILE = path.join(process.cwd(), "prisma", "avatars.json");
+// AVATAR — stored in DB (Turso), not filesystem (read-only on Vercel)
+// -------------------------------------------------------------
 
 // Save Avatar Base64
 app.post("/api/user/avatar", authenticateToken, async (req: any, res) => {
   const { avatar } = req.body;
-  if (!avatar) {
-    return res.status(400).json({ error: "Avatar base64 data is required." });
-  }
+  if (!avatar) return res.status(400).json({ error: "Avatar base64 data is required." });
 
   try {
-    let avatars: Record<string, string> = {};
-    if (fs.existsSync(AVATARS_FILE)) {
-      try {
-        avatars = JSON.parse(fs.readFileSync(AVATARS_FILE, "utf-8"));
-      } catch (e) {
-        console.error("Error reading avatars file, initializing new:", e);
-      }
+    const { role, id } = req.user;
+    if (role === "lecturer") {
+      await prisma.lecturer.update({ where: { id }, data: { avatarData: avatar } });
+    } else {
+      await prisma.student.update({ where: { id }, data: { avatarData: avatar } });
     }
-    
-    // Key by role_id to be absolutely safe
-    const key = `${req.user.role}_${req.user.id}`;
-    avatars[key] = avatar;
-    
-    fs.writeFileSync(AVATARS_FILE, JSON.stringify(avatars, null, 2), "utf-8");
     return res.json({ success: true, avatar });
   } catch (err: any) {
     console.error("Error saving avatar:", err);
@@ -1567,17 +1558,14 @@ app.post("/api/user/avatar", authenticateToken, async (req: any, res) => {
 app.get("/api/user/avatar/:role/:id", async (req, res) => {
   const { role, id } = req.params;
   try {
-    let avatars: Record<string, string> = {};
-    if (fs.existsSync(AVATARS_FILE)) {
-      try {
-        avatars = JSON.parse(fs.readFileSync(AVATARS_FILE, "utf-8"));
-      } catch (e) {
-        console.error("Error reading avatars file:", e);
-      }
+    let avatar = "";
+    if (role === "lecturer") {
+      const row = await prisma.lecturer.findUnique({ where: { id }, select: { avatarData: true } });
+      avatar = row?.avatarData ?? "";
+    } else {
+      const row = await prisma.student.findUnique({ where: { id }, select: { avatarData: true } });
+      avatar = row?.avatarData ?? "";
     }
-    
-    const key = `${role}_${id}`;
-    const avatar = avatars[key] || "";
     return res.json({ avatar });
   } catch (err) {
     console.error("Error fetching avatar:", err);

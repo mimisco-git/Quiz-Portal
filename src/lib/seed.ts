@@ -1,6 +1,22 @@
 import { prisma } from "./db.js";
 
+async function migrateColumns() {
+  const stmts = [
+    'ALTER TABLE "Lecturer" ADD COLUMN "avatarData" TEXT',
+    'ALTER TABLE "Student"  ADD COLUMN "avatarData" TEXT',
+  ];
+  for (const sql of stmts) {
+    try {
+      await prisma.$executeRawUnsafe(sql);
+    } catch {
+      // Column already exists — ignore
+    }
+  }
+}
+
 export async function seedDatabase() {
+  await migrateColumns();
+
   try {
     // Check if there's already any student or lecturer
     const studentCount = await prisma.student.count();

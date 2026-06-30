@@ -9,11 +9,12 @@ generator client {
 }
 
 model Lecturer {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  courses   Course[]
+  id         String   @id @default(uuid())
+  name       String
+  email      String   @unique
+  password   String
+  avatarData String?
+  courses    Course[]
 }
 
 model Student {
@@ -25,6 +26,7 @@ model Student {
   year             String           @default("Year 1")
   securityQuestion String           @default("What is your favorite academic course?")
   securityAnswer   String           @default("Computer Science")
+  avatarData       String?
   attempts         StudentAttempt[]
   examSubmissions  ExamSubmission[]
 }
