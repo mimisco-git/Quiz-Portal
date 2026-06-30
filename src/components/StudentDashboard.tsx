@@ -909,7 +909,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#010e07]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.04)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 flex-shrink-0">
-            <img src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"} alt="QuizOS" className="h-12 w-auto select-none rounded-md" />
+            <img src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"} alt="QuizOS" className="h-14 w-auto select-none rounded-md" />
             <span className="hidden sm:block text-[13px] text-slate-400 dark:text-slate-500 font-mono">Student</span>
           </div>
 

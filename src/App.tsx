@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import Login from "./components/Login";
 import StudentDashboard from "./components/StudentDashboard";
 import LecturerDashboard from "./components/LecturerDashboard";
+import BootScreen from "./components/BootScreen";
 import { User } from "./types";
 import { motion, AnimatePresence } from "motion/react";
 import { ShieldAlert, Clock, LogOut } from "lucide-react";
@@ -10,6 +11,8 @@ export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // Show boot screen once per browser session; skip if user is already logged in
+  const [showBoot, setShowBoot] = useState(() => !sessionStorage.getItem("quizos_booted"));
 
   // Global Theme State
   const [theme, setTheme] = useState<"light" | "dark">(
@@ -211,8 +214,27 @@ export default function App() {
     );
   }
 
+  const handleBootDone = () => {
+    sessionStorage.setItem("quizos_booted", "1");
+    setShowBoot(false);
+  };
+
   return (
     <div className="font-sans antialiased text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-950 min-h-screen selection:bg-emerald-500/20 selection:text-emerald-900 relative transition-colors duration-300">
+
+      {/* Boot screen — shown once per session, only when not already logged in */}
+      <AnimatePresence>
+        {showBoot && !token && !loading && (
+          <motion.div
+            key="boot"
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <BootScreen onDone={handleBootDone} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence mode="wait">
         {!token || !user ? (
           <motion.div
