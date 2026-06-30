@@ -1060,11 +1060,28 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               : activeTab === "exams" ? "Written Examinations"
               : "Virtual Classroom"}
           </h1>
-          {selectedCourse && (
-            <span className="hidden md:inline px-2.5 py-1 rounded-full bg-black/[0.05] dark:bg-white/[0.07] text-[11px] font-mono font-bold text-[#6e6e73] dark:text-white/45 uppercase tracking-wider">
-              {selectedCourse.code}
-            </span>
-          )}
+          <div className="flex items-center gap-1">
+            {selectedCourse && (
+              <span className="hidden md:inline px-2.5 py-1 rounded-full bg-black/[0.05] dark:bg-white/[0.07] text-[11px] font-mono font-bold text-[#6e6e73] dark:text-white/45 uppercase tracking-wider">
+                {selectedCourse.code}
+              </span>
+            )}
+            {/* Mobile-only: theme + logout */}
+            <button
+              onClick={onToggleTheme}
+              className="sm:hidden flex items-center justify-center w-9 h-9 rounded-[10px] text-[#6e6e73] dark:text-white/50 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition"
+              aria-label="Toggle theme"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" strokeWidth={1.6} /> : <Moon className="h-4 w-4" strokeWidth={1.6} />}
+            </button>
+            <button
+              onClick={onLogout}
+              className="sm:hidden flex items-center justify-center w-9 h-9 rounded-[10px] text-red-500 dark:text-red-400 hover:bg-red-500/[0.08] transition"
+              aria-label="Sign out"
+            >
+              <LogOut className="h-4 w-4" strokeWidth={1.6} />
+            </button>
+          </div>
         </header>
 
         {/* Scrollable content */}

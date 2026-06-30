@@ -813,12 +813,29 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           <h1 className="text-[13.5px] font-semibold text-[#1d1d1f] dark:text-white/88 tracking-[-0.01em]">
             {sectionTitle[activeTab] ?? "Dashboard"}
           </h1>
-          {broadcastingSession && (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10 dark:bg-red-500/15 text-[11px] font-semibold text-red-600 dark:text-red-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-              Live
-            </span>
-          )}
+          <div className="flex items-center gap-1">
+            {broadcastingSession && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10 dark:bg-red-500/15 text-[11px] font-semibold text-red-600 dark:text-red-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                Live
+              </span>
+            )}
+            {/* Mobile-only: theme + logout */}
+            <button
+              onClick={onToggleTheme}
+              className="sm:hidden flex items-center justify-center w-9 h-9 rounded-[10px] text-[#6e6e73] dark:text-white/50 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition"
+              aria-label="Toggle theme"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" strokeWidth={1.6} /> : <Moon className="h-4 w-4" strokeWidth={1.6} />}
+            </button>
+            <button
+              onClick={onLogout}
+              className="sm:hidden flex items-center justify-center w-9 h-9 rounded-[10px] text-red-500 dark:text-red-400 hover:bg-red-500/[0.08] transition"
+              aria-label="Sign out"
+            >
+              <LogOut className="h-4 w-4" strokeWidth={1.6} />
+            </button>
+          </div>
         </header>
 
         {/* Scrollable content */}
