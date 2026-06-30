@@ -72,6 +72,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [isGrading, setIsGrading] = useState(false);
   const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null);
 
+  // Live lecture sub-features
+  const [liveSubTab, setLiveSubTab] = useState<"jitsi" | "slides" | "poll" | "attendance" | "chat">("jitsi");
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState(["Option A", "Option B", "Option C", "Option D"]);
+  const [attachLiveFile, setAttachLiveFile] = useState<File | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [sessionSummary, setSessionSummary] = useState<string | null>(null);
+
   const [filterCourseId, setFilterCourseId] = useState("");
   const [filterQuizId, setFilterQuizId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -585,6 +593,59 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
+  const handleSlideChange = async (idx: number) => {
+    if (!broadcastingSession) return;
+    await fetch(`/api/lectures/${broadcastingSession.id}/slide`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ slide: idx }),
+    });
+    setBroadcastingSession((prev: any) => prev ? { ...prev, currentSlide: idx } : prev);
+  };
+
+  const handleLaunchPoll = async () => {
+    if (!broadcastingSession || !pollQuestion.trim()) { showError("Enter a poll question first"); return; }
+    const filtered = pollOptions.filter(o => o.trim());
+    if (filtered.length < 2) { showError("At least 2 options required"); return; }
+    const res = await fetch(`/api/lectures/${broadcastingSession.id}/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ question: pollQuestion, options: filtered }),
+    });
+    if (res.ok) { showSuccess("Poll launched to students!"); setPollQuestion(""); }
+    else { const d = await res.json(); showError(d.error || "Failed to launch poll"); }
+  };
+
+  const handleClosePoll = async () => {
+    if (!broadcastingSession) return;
+    await fetch(`/api/lectures/${broadcastingSession.id}/poll`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    showSuccess("Poll closed.");
+  };
+
+  const handleDismissHandRaise = async (raiseId: string) => {
+    if (!broadcastingSession) return;
+    await fetch(`/api/lectures/${broadcastingSession.id}/hand-raises/${raiseId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    setBroadcastingSession((prev: any) => prev ? { ...prev, handRaises: (prev.handRaises || []).filter((h: any) => h.id !== raiseId) } : prev);
+  };
+
+  const handleAttachFile = async () => {
+    if (!broadcastingSession || !attachLiveFile) return;
+    const fd = new FormData(); fd.append("file", attachLiveFile);
+    const res = await fetch(`/api/lectures/${broadcastingSession.id}/attachment`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    if (res.ok) { showSuccess(`"${attachLiveFile.name}" attached — students can now download it`); setAttachLiveFile(null); }
+    else showError("Failed to attach file");
+  };
+
+  const handleSummarize = async () => {
+    if (!broadcastingSession) return;
+    setIsSummarizing(true);
+    const res = await fetch(`/api/lectures/${broadcastingSession.id}/summarize`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    const d = await res.json();
+    if (res.ok) { setSessionSummary(d.summary); showSuccess("AI summary generated!"); }
+    else showError(d.error || "Failed to generate summary");
+    setIsSummarizing(false);
+  };
+
   const filteredAttempts = attempts.filter((att) => {
     if (filterCourseId && att.quiz?.courseId !== filterCourseId) return false;
     if (filterQuizId && att.quizId !== filterQuizId) return false;
@@ -904,139 +965,280 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   <Radio className="h-4 w-4 text-red-500 animate-pulse" />
                   Live Broadcasting Station
                 </h2>
-                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Post real-time lecture slides and coordinate live discussions.</p>
+                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Audio/video, slides, polls, attendance — all in one live session.</p>
               </div>
 
               {!broadcastingSession ? (
                 <form onSubmit={handleLaunchLiveLecture} className="space-y-4">
                   <div className="bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-4 text-[12.5px] text-emerald-800 dark:text-emerald-300 leading-relaxed">
-                    <strong>Instructions:</strong> Creating a live session establishes an active broadcast channel. Students can join, view your slides, and participate in real-time discussions.
+                    <strong>Tip:</strong> Separate slides with <code className="bg-emerald-100 dark:bg-emerald-900/40 px-1 rounded">---</code> on its own line. Use audio/video via Jitsi. Students join automatically.
                   </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="live-course" className={lbl}>Target Course Module</label>
-                      <select id="live-course" value={liveCourseId} onChange={(e) => setLiveCourseId(e.target.value)} className="form-input">
+                      <label className={lbl}>Target Course</label>
+                      <select value={liveCourseId} onChange={(e) => setLiveCourseId(e.target.value)} className="form-input">
                         {courses.map((c) => <option key={c.id} value={c.id}>{c.code} – {c.title}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label htmlFor="live-topic" className={lbl}>Lecture Topic</label>
-                      <input id="live-topic" type="text" required value={liveTopic} onChange={(e) => setLiveTopic(e.target.value)} placeholder="e.g. Lecture 4: Relational Algebra" className="form-input" />
+                      <label className={lbl}>Lecture Topic</label>
+                      <input type="text" required value={liveTopic} onChange={(e) => setLiveTopic(e.target.value)} placeholder="e.g. Lecture 4: Relational Algebra" className="form-input" />
                     </div>
                   </div>
-
                   <div>
-                    <label htmlFor="live-content" className={lbl}>Slides & Board Content (Markdown)</label>
-                    <textarea id="live-content" required rows={7} value={liveContent} onChange={(e) => setLiveContent(e.target.value)} placeholder={"# Heading\nWrite lecture content here with full Markdown support…"} className="form-input" />
+                    <label className={lbl}>Slides / Board Content (Markdown — separate slides with ---)</label>
+                    <textarea required rows={7} value={liveContent} onChange={(e) => setLiveContent(e.target.value)} placeholder={"# Slide 1\nYour first slide content here\n\n---\n\n# Slide 2\nSecond slide…"} className="form-input" />
                   </div>
-
-                  <button type="submit" className="btn-gradient">
-                    <Radio className="h-4 w-4" />
-                    Launch Broadcast
+                  <button type="submit" className="btn-gradient flex items-center gap-2">
+                    <Radio className="h-4 w-4" /> Launch Broadcast
                   </button>
                 </form>
-              ) : (
-                <div className="space-y-5">
-                  {/* Live banner */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-xl p-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="h-2 w-2 bg-red-600 rounded-full animate-ping" />
-                        <span className="text-[12px] font-mono font-bold text-red-700 dark:text-red-400 uppercase tracking-widest">Broadcasting Live</span>
-                      </div>
-                      <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-200">Topic: {broadcastingSession.topic}</p>
-                    </div>
-                    <button
-                      onClick={handleEndLiveLecture}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-red-700 dark:hover:bg-red-700 text-white rounded-xl text-[12px] font-semibold transition cursor-pointer border border-slate-950 dark:border-slate-700 flex-shrink-0"
-                    >
-                      End Broadcast
-                    </button>
-                  </div>
+              ) : (() => {
+                const slides = broadcastingSession.content.split(/^---$/m).map((s: string) => s.trim()).filter(Boolean);
+                const currentSlide = broadcastingSession.currentSlide ?? 0;
+                const safeSlide = Math.min(currentSlide, slides.length - 1);
+                const handRaises: any[] = broadcastingSession.handRaises ?? [];
+                const activePoll: any = (broadcastingSession.polls ?? [])[0] ?? null;
+                const attendance: any[] = broadcastingSession.attendance ?? [];
 
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                    {/* Update form */}
-                    <div className="lg:col-span-7 space-y-3">
-                      <div className="bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 space-y-3">
-                        <p className="text-[12px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Update Board Material</p>
+                return (
+                  <div className="space-y-4">
+                    {/* Live banner */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-xl p-3.5">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-2.5 w-2.5"><span className="animate-ping absolute h-2.5 w-2.5 rounded-full bg-red-400 opacity-75" /><span className="relative h-2.5 w-2.5 rounded-full bg-red-500" /></span>
                         <div>
-                          <label htmlFor="live-topic-active" className={lbl}>Topic</label>
-                          <input id="live-topic-active" type="text" required value={liveTopic} onChange={(e) => setLiveTopic(e.target.value)} className="form-input" />
+                          <span className="text-[11px] font-mono font-bold text-red-700 dark:text-red-400 uppercase tracking-widest block">Live</span>
+                          <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-200">{broadcastingSession.topic}</p>
                         </div>
-                        <div>
-                          <label htmlFor="live-content-active" className={lbl}>Board Content (Markdown)</label>
-                          <textarea id="live-content-active" required rows={8} value={liveContent} onChange={(e) => setLiveContent(e.target.value)} className="form-input" />
-                        </div>
-                        <button type="button" onClick={handleUpdateLiveLecture} className="btn-gradient">
-                          <Save className="h-4 w-4" />
-                          Sync to Students
+                        {handRaises.length > 0 && (
+                          <span className="ml-2 flex items-center gap-1 bg-amber-100 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/30 text-amber-700 dark:text-amber-400 text-[11px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                            ✋ {handRaises.length}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button onClick={handleSummarize} disabled={isSummarizing}
+                          className="px-3 py-1.5 text-[11px] font-semibold border border-slate-200 dark:border-white/10 rounded-lg hover:border-emerald-300 text-slate-600 dark:text-slate-300 transition-colors disabled:opacity-50">
+                          {isSummarizing ? "Summarizing…" : "AI Summary"}
+                        </button>
+                        <button onClick={handleEndLiveLecture}
+                          className="px-4 py-1.5 bg-slate-900 dark:bg-slate-800 hover:bg-red-700 dark:hover:bg-red-700 text-white rounded-xl text-[12px] font-semibold transition flex-shrink-0">
+                          End Broadcast
                         </button>
                       </div>
                     </div>
 
-                    {/* Chat panel */}
-                    <div className="lg:col-span-5 border border-slate-200/60 dark:border-white/[0.06] rounded-xl overflow-hidden flex flex-col h-[420px] bg-white dark:bg-white/[0.02]">
-                      <div className="px-3.5 py-2.5 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between bg-slate-50/80 dark:bg-white/[0.03]">
-                        <span className="text-[10.5px] font-semibold text-slate-700 dark:text-slate-300">Class Chat</span>
-                        <span className="text-[11px] font-mono bg-slate-100 dark:bg-white/[0.06] text-slate-500 px-1.5 py-0.5 rounded-md font-bold">{liveChats.length}</span>
+                    {/* AI Summary panel */}
+                    {sessionSummary && (
+                      <div className="bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-4">
+                        <p className={lbl + " text-emerald-700 dark:text-emerald-400"}>AI Session Summary</p>
+                        <p className="text-[12.5px] text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">{sessionSummary}</p>
                       </div>
-                      <div className="flex-1 p-3 overflow-y-auto space-y-3">
-                        {liveChats.length === 0 ? (
-                          <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-600 text-[11px] font-medium text-center">
-                            Waiting for student responses…
+                    )}
+
+                    {/* Sub-tabs */}
+                    <div className="flex gap-1 bg-slate-100/80 dark:bg-white/[0.04] rounded-xl p-1 border border-slate-200/60 dark:border-white/[0.05] overflow-x-auto">
+                      {([
+                        { id: "jitsi",      label: "🎙 Audio/Video" },
+                        { id: "slides",     label: `📑 Slides ${slides.length > 1 ? `(${safeSlide + 1}/${slides.length})` : ""}` },
+                        { id: "poll",       label: `📊 Poll${activePoll ? " ●" : ""}` },
+                        { id: "attendance", label: `👥 Attendance (${attendance.length})` },
+                        { id: "chat",       label: `💬 Chat (${liveChats.length})` },
+                      ] as const).map(tab => (
+                        <button key={tab.id} onClick={() => setLiveSubTab(tab.id as any)}
+                          className={`flex-shrink-0 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveSubTab === tab.id ? "bg-white dark:bg-white/[0.10] text-slate-800 dark:text-white shadow-sm border border-slate-200/60 dark:border-white/[0.08]" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}>
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Jitsi Audio/Video */}
+                    {liveSubTab === "jitsi" && (
+                      <div className="space-y-4">
+                        <div className="rounded-2xl overflow-hidden border border-slate-200/60 dark:border-white/[0.06]" style={{ height: 420 }}>
+                          <iframe
+                            src={`https://meet.jit.si/${broadcastingSession.jitsiRoom ?? broadcastingSession.id}#userInfo.displayName=${encodeURIComponent(user.name)}&config.startWithVideoMuted=false&config.prejoinPageEnabled=false`}
+                            allow="camera; microphone; fullscreen; display-capture; autoplay"
+                            className="w-full h-full border-0"
+                            title="Jitsi Meet"
+                          />
+                        </div>
+                        {/* File attachment */}
+                        <div className="bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 space-y-3">
+                          <p className={lbl}>Share a File with Students</p>
+                          <div className="flex items-center gap-3">
+                            <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-slate-300 dark:border-slate-600 rounded-xl cursor-pointer hover:border-emerald-400 transition-colors text-[12px] text-slate-500 dark:text-slate-400 flex-1">
+                              <Upload className="h-4 w-4 shrink-0" />
+                              {attachLiveFile ? attachLiveFile.name : "Choose file to share (PDF, DOCX, etc.)"}
+                              <input type="file" className="hidden" onChange={e => setAttachLiveFile(e.target.files?.[0] ?? null)} />
+                            </label>
+                            <button onClick={handleAttachFile} disabled={!attachLiveFile}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-semibold rounded-xl transition disabled:opacity-40">
+                              Share
+                            </button>
+                          </div>
+                          {broadcastingSession.attachmentName && (
+                            <p className="text-[12px] text-emerald-600 dark:text-emerald-400">✓ Shared: {broadcastingSession.attachmentName}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Slides */}
+                    {liveSubTab === "slides" && (
+                      <div className="space-y-4">
+                        {slides.length > 1 && (
+                          <div className="bg-slate-900 dark:bg-black/40 rounded-2xl overflow-hidden">
+                            <div className="px-4 py-2.5 flex items-center justify-between border-b border-white/[0.08]">
+                              <span className="text-[11px] font-mono text-slate-400 font-bold uppercase tracking-widest">Slide {safeSlide + 1} of {slides.length}</span>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => handleSlideChange(Math.max(0, safeSlide - 1))} disabled={safeSlide === 0}
+                                  className="px-3 py-1 text-[11px] font-semibold bg-white/[0.08] hover:bg-white/[0.14] text-white rounded-lg disabled:opacity-30 transition">← Prev</button>
+                                <button onClick={() => handleSlideChange(Math.min(slides.length - 1, safeSlide + 1))} disabled={safeSlide === slides.length - 1}
+                                  className="px-3 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg disabled:opacity-30 transition">Next →</button>
+                              </div>
+                            </div>
+                            <pre className="p-5 text-[13px] text-slate-100 whitespace-pre-wrap leading-relaxed min-h-[120px] font-sans">{slides[safeSlide]}</pre>
+                          </div>
+                        )}
+                        <div className="bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 space-y-3">
+                          <p className={lbl}>Update Content</p>
+                          <input type="text" value={liveTopic} onChange={e => setLiveTopic(e.target.value)} placeholder="Topic" className="form-input" />
+                          <textarea rows={8} value={liveContent} onChange={e => setLiveContent(e.target.value)} className="form-input" />
+                          <button onClick={handleUpdateLiveLecture} className="btn-gradient flex items-center gap-2">
+                            <Save className="h-4 w-4" /> Sync to Students
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Poll */}
+                    {liveSubTab === "poll" && (
+                      <div className="space-y-4">
+                        {activePoll ? (
+                          <div className="space-y-4">
+                            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-xl p-4">
+                              <div className="flex items-start justify-between gap-3 mb-3">
+                                <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-200">{activePoll.question}</p>
+                                <button onClick={handleClosePoll} className="text-[11px] font-semibold text-red-500 border border-red-200 dark:border-red-900/40 px-2.5 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 transition">Close Poll</button>
+                              </div>
+                              {(() => {
+                                const opts: string[] = JSON.parse(activePoll.optionsJson);
+                                const responses: any[] = activePoll.responses ?? [];
+                                const total = responses.length;
+                                return (
+                                  <div className="space-y-2">
+                                    {opts.map(opt => {
+                                      const count = responses.filter((r: any) => r.answer === opt).length;
+                                      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                                      return (
+                                        <div key={opt}>
+                                          <div className="flex justify-between text-[12px] mb-1">
+                                            <span className="font-medium text-slate-700 dark:text-slate-300">{opt}</span>
+                                            <span className="text-slate-500 font-mono">{count} ({pct}%)</span>
+                                          </div>
+                                          <div className="h-2 rounded-full bg-slate-200 dark:bg-white/[0.08] overflow-hidden">
+                                            <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    <p className="text-[11px] text-slate-400 mt-2">{total} response{total !== 1 ? "s" : ""}</p>
+                                  </div>
+                                );
+                              })()}
+                            </div>
                           </div>
                         ) : (
-                          liveChats.map((chat) => {
-                            const isMe = chat.senderRole === "lecturer" || chat.senderId === user.id || !chat.studentId;
-                            const isStaff = chat.senderRole === "lecturer" || !chat.studentId;
-                            const displayName = chat.senderName || chat.studentName || chat.lecturerName || (isMe ? "You" : "Student");
-                            const senderId = chat.senderId || chat.studentId || chat.lecturerId || "";
+                          <div className="bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 space-y-3">
+                            <p className={lbl}>Launch a Quick Poll</p>
+                            <input type="text" value={pollQuestion} onChange={e => setPollQuestion(e.target.value)} placeholder="Ask the class a question…" className="form-input" />
+                            <div className="space-y-2">
+                              {pollOptions.map((opt, i) => (
+                                <input key={i} type="text" value={opt} onChange={e => { const o = [...pollOptions]; o[i] = e.target.value; setPollOptions(o); }} placeholder={`Option ${i + 1}`} className="form-input" />
+                              ))}
+                            </div>
+                            <button onClick={handleLaunchPoll} className="btn-gradient flex items-center gap-2 w-full justify-center">
+                              📊 Launch Poll
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Attendance */}
+                    {liveSubTab === "attendance" && (
+                      <div className="space-y-3">
+                        <p className={lbl}>Students Present ({attendance.length})</p>
+                        {attendance.length === 0 ? (
+                          <div className="py-10 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
+                            <p className="text-[12px] text-slate-400">No students have joined yet.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {handRaises.length > 0 && (
+                              <div className="mb-3">
+                                <p className={lbl + " text-amber-600 dark:text-amber-400"}>✋ Raised Hands ({handRaises.length})</p>
+                                <div className="space-y-1.5">
+                                  {handRaises.map((h: any) => (
+                                    <div key={h.id} className="flex items-center justify-between p-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-xl">
+                                      <span className="text-[12.5px] font-semibold text-slate-800 dark:text-slate-200">{h.studentName}</span>
+                                      <button onClick={() => handleDismissHandRaise(h.id)} className="text-[11px] font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition">Dismiss</button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {attendance.map((a: any) => (
+                              <div key={a.studentId} className="flex items-center justify-between p-3 border border-slate-200/60 dark:border-white/[0.06] rounded-xl">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
+                                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">{a.studentName?.[0] ?? "?"}</span>
+                                  </div>
+                                  <span className="text-[12.5px] font-semibold text-slate-800 dark:text-slate-200">{a.studentName}</span>
+                                </div>
+                                <span className="text-[11px] text-slate-400 font-mono">{new Date(a.joinedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Chat */}
+                    {liveSubTab === "chat" && (
+                      <div className="border border-slate-200/60 dark:border-white/[0.06] rounded-xl overflow-hidden flex flex-col h-[420px] bg-white dark:bg-white/[0.02]">
+                        <div className="flex-1 p-3 overflow-y-auto space-y-3">
+                          {liveChats.length === 0 ? (
+                            <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-600 text-[11px] font-medium">Waiting for responses…</div>
+                          ) : liveChats.map((chat) => {
+                            const isMe = chat.senderRole === "lecturer";
                             return (
                               <div key={chat.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                                <UserAvatar userId={senderId} role={isStaff ? "lecturer" : "student"} size={26} initials={displayName} className="shrink-0" />
+                                <UserAvatar userId={chat.senderId} role={isMe ? "lecturer" : "student"} size={26} initials={chat.senderName} className="shrink-0" />
                                 <div className={`max-w-[75%] flex flex-col gap-0.5 ${isMe ? "items-end" : "items-start"}`}>
-                                  <span className={`text-[11px] font-bold font-mono uppercase tracking-wide ${isMe ? "text-amber-600 dark:text-amber-500" : "text-slate-400 dark:text-slate-500"}`}>
-                                    {displayName}
-                                  </span>
-                                  <div className={`px-3 py-2 rounded-2xl leading-relaxed break-words text-[12px] ${
-                                    isMe
-                                      ? "bg-amber-100 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/30 text-slate-800 dark:text-slate-200 rounded-br-md"
-                                      : "bg-slate-100 dark:bg-white/[0.06] text-slate-800 dark:text-slate-200 rounded-bl-md"
-                                  }`}>
-                                    {chat.message}
-                                  </div>
-                                  <span className="text-[8.5px] text-slate-400 dark:text-slate-600 font-mono">
-                                    {new Date(chat.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                  </span>
+                                  <span className={`text-[11px] font-bold font-mono uppercase tracking-wide ${isMe ? "text-amber-600 dark:text-amber-500" : "text-slate-400 dark:text-slate-500"}`}>{chat.senderName}</span>
+                                  <div className={`px-3 py-2 rounded-2xl text-[12px] break-words ${isMe ? "bg-amber-100 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/30 rounded-br-md" : "bg-slate-100 dark:bg-white/[0.06] rounded-bl-md"} text-slate-800 dark:text-slate-200`}>{chat.message}</div>
+                                  <span className="text-[8.5px] text-slate-400 font-mono">{new Date(chat.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                                 </div>
                               </div>
                             );
-                          })
-                        )}
-                        <div ref={chatEndRef} />
+                          })}
+                          <div ref={chatEndRef} />
+                        </div>
+                        <form onSubmit={handleSendLecturerChat} className="p-2.5 border-t border-slate-100 dark:border-white/[0.06] flex gap-2 bg-white dark:bg-[#011a0d]">
+                          <input type="text" required value={lecturerChatMessage} onChange={e => setLecturerChatMessage(e.target.value)} placeholder="Reply to class…"
+                            className="flex-1 px-3 py-2.5 bg-white dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.08] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 outline-none focus:border-emerald-400 focus:shadow-[0_0_0_3px_rgba(5,150,105,0.12)] transition-[border-color,box-shadow] duration-200" />
+                          <button type="submit" disabled={isSendingChat} className="flex items-center justify-center w-9 h-9 rounded-xl bg-amber-700 hover:bg-amber-800 disabled:opacity-50 transition flex-shrink-0">
+                            <Send className="h-3.5 w-3.5 text-white" />
+                          </button>
+                        </form>
                       </div>
-                      <form onSubmit={handleSendLecturerChat} className="p-2.5 border-t border-slate-100 dark:border-white/[0.06] flex gap-2 bg-white dark:bg-[#011a0d]">
-                        <input
-                          type="text"
-                          required
-                          value={lecturerChatMessage}
-                          onChange={(e) => setLecturerChatMessage(e.target.value)}
-                          placeholder="Reply to class…"
-                          className="flex-1 px-3 py-2.5 bg-white dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.08] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 outline-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] focus:border-emerald-400 dark:focus:border-emerald-600 focus:shadow-[0_0_0_3px_rgba(5,150,105,0.12),inset_0_1px_2px_rgba(0,0,0,0.01)] transition-[border-color,box-shadow] duration-200"
-                        />
-                        <button
-                          type="submit"
-                          disabled={isSendingChat}
-                          className="flex items-center justify-center w-9 h-9 rounded-xl bg-amber-700 hover:bg-amber-800 disabled:opacity-50 transition-colors cursor-pointer flex-shrink-0"
-                        >
-                          <Send className="h-3.5 w-3.5 text-white" />
-                        </button>
-                      </form>
-                    </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 

@@ -12,6 +12,7 @@ import { seedDatabase } from "./src/lib/seed.js";
 const app = express();
 const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "super-secure-quiz-secret-key-12345";
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -931,6 +932,7 @@ app.post("/api/lectures", authenticateToken, async (req: any, res) => {
         topic: topic.trim(),
         content,
         isActive: true,
+        jitsiRoom: `quizos-${Date.now().toString(36)}`,
       },
     });
 
@@ -947,8 +949,13 @@ app.get("/api/lectures/active/:courseId", authenticateToken, async (req: any, re
     const session = await prisma.lectureSession.findFirst({
       where: { courseId, isActive: true },
       include: {
-        chats: {
-          orderBy: { createdAt: "asc" },
+        chats: { orderBy: { createdAt: "asc" } },
+        attendance: { select: { studentId: true, studentName: true, joinedAt: true } },
+        handRaises: { where: { isResolved: false }, orderBy: { raisedAt: "asc" } },
+        polls: {
+          where: { isActive: true },
+          take: 1,
+          include: { responses: { select: { studentId: true, answer: true, studentName: true } } },
         },
       },
     });
@@ -1037,6 +1044,173 @@ app.patch("/api/lectures/:id/content", authenticateToken, async (req: any, res) 
   }
 });
 
+// Record student attendance (upsert — safe to call on every poll)
+app.post("/api/lectures/:id/join", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.json({ ok: true });
+  try {
+    await prisma.lectureAttendance.upsert({
+      where: { sessionId_studentId: { sessionId: req.params.id, studentId: req.user.id } },
+      update: {},
+      create: { sessionId: req.params.id, studentId: req.user.id, studentName: req.user.fullName ?? req.user.name ?? "Student" },
+    });
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.json({ ok: true }); // non-critical
+  }
+});
+
+// Get attendance list (lecturer)
+app.get("/api/lectures/:id/attendance", authenticateToken, async (req: any, res) => {
+  try {
+    const list = await prisma.lectureAttendance.findMany({
+      where: { sessionId: req.params.id },
+      orderBy: { joinedAt: "asc" },
+    });
+    return res.json(list);
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to fetch attendance" });
+  }
+});
+
+// Student raises / lowers hand
+app.post("/api/lectures/:id/hand-raise", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
+  try {
+    const existing = await prisma.handRaise.findFirst({
+      where: { sessionId: req.params.id, studentId: req.user.id, isResolved: false },
+    });
+    if (existing) {
+      await prisma.handRaise.update({ where: { id: existing.id }, data: { isResolved: true } });
+      return res.json({ raised: false });
+    }
+    await prisma.handRaise.create({
+      data: { sessionId: req.params.id, studentId: req.user.id, studentName: req.user.fullName ?? req.user.name ?? "Student" },
+    });
+    return res.json({ raised: true });
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to toggle hand raise" });
+  }
+});
+
+// Lecturer dismisses a hand raise
+app.delete("/api/lectures/:id/hand-raises/:raiseId", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    await prisma.handRaise.update({ where: { id: req.params.raiseId }, data: { isResolved: true } });
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to dismiss hand raise" });
+  }
+});
+
+// Lecturer creates a poll
+app.post("/api/lectures/:id/poll", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { question, options } = req.body;
+  if (!question || !Array.isArray(options) || options.length < 2) {
+    return res.status(400).json({ error: "Question and at least 2 options required" });
+  }
+  try {
+    // Close any existing active poll first
+    await prisma.lecturePoll.updateMany({ where: { sessionId: req.params.id, isActive: true }, data: { isActive: false } });
+    const poll = await prisma.lecturePoll.create({
+      data: { sessionId: req.params.id, question, optionsJson: JSON.stringify(options) },
+    });
+    return res.status(201).json(poll);
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to create poll" });
+  }
+});
+
+// Close active poll
+app.delete("/api/lectures/:id/poll", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    await prisma.lecturePoll.updateMany({ where: { sessionId: req.params.id, isActive: true }, data: { isActive: false } });
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to close poll" });
+  }
+});
+
+// Student responds to poll
+app.post("/api/lectures/:id/poll/:pollId/respond", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
+  const { answer } = req.body;
+  if (!answer) return res.status(400).json({ error: "Answer required" });
+  try {
+    await prisma.pollResponse.upsert({
+      where: { pollId_studentId: { pollId: req.params.pollId, studentId: req.user.id } },
+      update: { answer, respondedAt: new Date() },
+      create: { pollId: req.params.pollId, studentId: req.user.id, studentName: req.user.fullName ?? req.user.name ?? "Student", answer },
+    });
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to record poll response" });
+  }
+});
+
+// Advance slide (lecturer)
+app.post("/api/lectures/:id/slide", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { slide } = req.body;
+  if (slide === undefined) return res.status(400).json({ error: "Slide index required" });
+  try {
+    const updated = await prisma.lectureSession.update({ where: { id: req.params.id }, data: { currentSlide: Number(slide) } });
+    return res.json(updated);
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to update slide" });
+  }
+});
+
+// Upload file attachment
+app.post("/api/lectures/:id/attachment", authenticateToken, upload.single("file"), async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  if (!req.file) return res.status(400).json({ error: "File required" });
+  try {
+    const b64 = req.file.buffer.toString("base64");
+    const dataUrl = `data:${req.file.mimetype};base64,${b64}`;
+    await prisma.lectureSession.update({
+      where: { id: req.params.id },
+      data: { attachmentName: req.file.originalname, attachmentData: dataUrl },
+    });
+    return res.json({ ok: true, name: req.file.originalname });
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to upload attachment" });
+  }
+});
+
+// AI summary of ended session
+app.post("/api/lectures/:id/summarize", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
+  try {
+    const session = await prisma.lectureSession.findUnique({
+      where: { id: req.params.id },
+      include: { chats: { orderBy: { createdAt: "asc" } } },
+    });
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    const chatLog = session.chats.map((c: any) => `[${c.senderRole}] ${c.senderName}: ${c.message}`).join("\n");
+    const nvidia = getNvidiaClient();
+    const resp = await nvidia.chat.completions.create({
+      model: "meta/llama-3.1-70b-instruct",
+      messages: [{
+        role: "user",
+        content: `You are an academic assistant. Summarize the following live lecture session concisely in 3–5 bullet points covering the main topics taught and key discussion points from the chat.\n\nLECTURE TOPIC: ${session.topic}\n\nCONTENT:\n${session.content}\n\nCHAT LOG:\n${chatLog || "(no chat messages)"}\n\nProvide a clean, readable summary.`,
+      }],
+      temperature: 0.3,
+      max_tokens: 600,
+    });
+    const summary = resp.choices[0]?.message?.content ?? "Summary unavailable.";
+    await prisma.lectureSession.update({ where: { id: req.params.id }, data: { aiSummary: summary } });
+    return res.json({ summary });
+  } catch (e: any) {
+    console.error("Summarize error:", e);
+    return res.status(500).json({ error: "Failed to generate summary" });
+  }
+});
+
 // -------------------------------------------------------------
 // MANUAL SCORE ADJUSTMENT & MARKING API
 // -------------------------------------------------------------
@@ -1066,7 +1240,6 @@ app.patch("/api/attempts/:id/score", authenticateToken, async (req: any, res) =>
 // -------------------------------------------------------------
 // EXAM API — doc upload, student submission, AI grading
 // -------------------------------------------------------------
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 function getNvidiaClient() {
   return new OpenAI({

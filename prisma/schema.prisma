@@ -114,14 +114,66 @@ model StudentAttempt {
 }
 
 model LectureSession {
-  id        String        @id @default(uuid())
-  topic     String
-  content   String        // Text or markdown material for active lecturing
-  isActive  Boolean       @default(true)
-  createdAt DateTime      @default(now())
-  courseId  String
-  course    Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  chats     LectureChat[]
+  id             String               @id @default(uuid())
+  topic          String
+  content        String
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  courseId       String
+  course         Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  jitsiRoom      String?
+  currentSlide   Int                  @default(0)
+  aiSummary      String?
+  attachmentName String?
+  attachmentData String?
+  chats          LectureChat[]
+  attendance     LectureAttendance[]
+  handRaises     HandRaise[]
+  polls          LecturePoll[]
+}
+
+model LectureAttendance {
+  id        String         @id @default(uuid())
+  sessionId String
+  session   LectureSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId String
+  studentName String
+  joinedAt  DateTime       @default(now())
+
+  @@unique([sessionId, studentId])
+}
+
+model HandRaise {
+  id          String         @id @default(uuid())
+  sessionId   String
+  session     LectureSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId   String
+  studentName String
+  raisedAt    DateTime       @default(now())
+  isResolved  Boolean        @default(false)
+}
+
+model LecturePoll {
+  id          String         @id @default(uuid())
+  sessionId   String
+  session     LectureSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question    String
+  optionsJson String
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  responses   PollResponse[]
+}
+
+model PollResponse {
+  id          String      @id @default(uuid())
+  pollId      String
+  poll        LecturePoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  studentId   String
+  studentName String
+  answer      String
+  respondedAt DateTime    @default(now())
+
+  @@unique([pollId, studentId])
 }
 
 model LectureChat {

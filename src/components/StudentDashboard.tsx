@@ -40,6 +40,11 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [isSendingChat, setIsSendingChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
+  // Live classroom sub-features
+  const [liveStudentTab, setLiveStudentTab] = useState<"jitsi" | "slides" | "poll" | "chat">("jitsi");
+  const [handRaised, setHandRaised] = useState(false);
+  const [myPollAnswer, setMyPollAnswer] = useState<string | null>(null);
+
   // Exam state
   const [exams, setExams] = useState<any[]>([]);
   const [activeExam, setActiveExam] = useState<any | null>(null);
@@ -57,15 +62,36 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       if (res.ok) {
         const data = await res.json();
         setActiveLiveSession(data);
-        if (data && data.chats) {
-          setLiveChats(data.chats);
-        } else {
-          setLiveChats([]);
+        if (data && data.chats) setLiveChats(data.chats);
+        else setLiveChats([]);
+        // Record attendance silently
+        if (data?.id) {
+          fetch(`/api/lectures/${data.id}/join`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
         }
       }
     } catch (e) {
       console.error("Error fetching live lecture session:", e);
     }
+  };
+
+  const handleToggleHandRaise = async () => {
+    if (!activeLiveSession) return;
+    const res = await fetch(`/api/lectures/${activeLiveSession.id}/hand-raise`, {
+      method: "POST", headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setHandRaised(d.raised);
+    }
+  };
+
+  const handlePollRespond = async (pollId: string, answer: string) => {
+    if (!activeLiveSession) return;
+    setMyPollAnswer(answer);
+    await fetch(`/api/lectures/${activeLiveSession.id}/poll/${pollId}/respond`, {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ answer }),
+    });
   };
 
   const fetchExams = async () => {
@@ -1211,118 +1237,161 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   <div>
                     <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display flex items-center gap-2">
                       <Radio className="h-4 w-4 text-red-500 animate-pulse" />
-                      Live Educational Broadcast
+                      Virtual Classroom
                     </h2>
                     <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                       {selectedCourse ? `${selectedCourse.code} · ${selectedCourse.title}` : "Select a Course"}
                     </p>
                   </div>
-                  {activeLiveSession ? (
-                    <span className="flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 text-[12px] font-bold uppercase tracking-wider border border-red-100 dark:border-red-900/30 rounded-full">
-                      <span className="h-1.5 w-1.5 bg-red-600 rounded-full animate-ping" />
-                      Live
-                    </span>
-                  ) : (
-                    <span className="px-3 py-1 bg-slate-100 dark:bg-white/[0.04] text-slate-400 dark:text-slate-500 text-[12px] font-bold uppercase tracking-wider border border-slate-200 dark:border-white/[0.06] rounded-full">
-                      Offline
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {activeLiveSession && (
+                      <button onClick={handleToggleHandRaise}
+                        className={`px-3 py-1.5 text-[12px] font-semibold rounded-xl border transition-colors ${handRaised ? "bg-amber-100 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400" : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-amber-300"}`}>
+                        {handRaised ? "✋ Hand Raised" : "✋ Raise Hand"}
+                      </button>
+                    )}
+                    {activeLiveSession ? (
+                      <span className="flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 text-[12px] font-bold uppercase tracking-wider border border-red-100 dark:border-red-900/30 rounded-full">
+                        <span className="h-1.5 w-1.5 bg-red-600 rounded-full animate-ping" />Live
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 bg-slate-100 dark:bg-white/[0.04] text-slate-400 text-[12px] font-bold uppercase tracking-wider border border-slate-200 dark:border-white/[0.06] rounded-full">Offline</span>
+                    )}
+                  </div>
                 </div>
 
                 {!activeLiveSession ? (
                   <div className="py-16 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
                     <Radio className="h-8 w-8 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
                     <h4 className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">No Active Live Lecture</h4>
-                    <p className="text-[12px] text-slate-400 dark:text-slate-500 max-w-sm mx-auto mt-1.5 leading-relaxed">
-                      When a live lecture starts, slides and chat will appear here automatically.
-                    </p>
+                    <p className="text-[12px] text-slate-400 dark:text-slate-500 max-w-sm mx-auto mt-1.5 leading-relaxed">When a live lecture starts, everything will appear here automatically.</p>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                    {/* Slide panel */}
-                    <div className="lg:col-span-7">
-                      <div className="bg-slate-950 rounded-xl border border-slate-800/60 p-5 min-h-[280px] flex flex-col">
-                        <div className="flex items-center justify-between border-b border-slate-800/60 pb-2.5 mb-4">
-                          <span className="text-[11px] font-mono text-slate-500 uppercase tracking-widest font-bold">Live Slide</span>
-                          <span className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-500 font-bold">
-                            <span className="h-1.5 w-1.5 bg-green-500 rounded-full" />
-                            Synced
-                          </span>
-                        </div>
-                        <h3 className="text-[13px] font-bold text-white mb-3">{activeLiveSession.topic}</h3>
-                        <div className="text-[12px] text-slate-300 flex-1 leading-relaxed">
-                          <MarkdownView content={activeLiveSession.content} />
-                        </div>
-                        <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] font-mono text-slate-600">
-                          <span>{selectedCourse?.code || "Live"}</span>
-                          <span>Started {new Date(activeLiveSession.createdAt).toLocaleTimeString()}</span>
-                        </div>
-                      </div>
-                    </div>
+                ) : (() => {
+                  const slides = activeLiveSession.content.split(/^---$/m).map((s: string) => s.trim()).filter(Boolean);
+                  const currentSlide = activeLiveSession.currentSlide ?? 0;
+                  const slide = slides[Math.min(currentSlide, slides.length - 1)] ?? activeLiveSession.content;
+                  const activePoll: any = (activeLiveSession.polls ?? [])[0] ?? null;
 
-                    {/* Chat panel */}
-                    <div className="lg:col-span-5 border border-slate-200/60 dark:border-white/[0.06] rounded-xl overflow-hidden flex flex-col h-[380px] bg-white dark:bg-white/[0.02]">
-                      <div className="px-3.5 py-2.5 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between bg-slate-50/80 dark:bg-white/[0.03]">
-                        <span className="text-[10.5px] font-semibold text-slate-700 dark:text-slate-300">Live Study Chat</span>
-                        <span className="text-[11px] font-mono bg-slate-100 dark:bg-white/[0.06] text-slate-500 px-1.5 py-0.5 rounded-md font-bold">{liveChats.length}</span>
-                      </div>
-                      <div className="flex-1 p-3 overflow-y-auto space-y-3">
-                        {liveChats.length === 0 ? (
-                          <div className="h-full flex items-center justify-center text-center text-slate-400 dark:text-slate-600 text-[11px] font-medium">
-                            Start the discussion!
+                  return (
+                    <div className="space-y-3">
+                      {/* File download banner */}
+                      {activeLiveSession.attachmentName && activeLiveSession.attachmentData && (
+                        <div className="flex items-center justify-between gap-3 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <span className="text-[12.5px] font-semibold text-slate-800 dark:text-slate-200">Shared File: {activeLiveSession.attachmentName}</span>
                           </div>
-                        ) : (
-                          liveChats.map((chat) => {
-                            const isMe = chat.studentId === user.id || chat.senderId === user.id;
-                            const isStaff = chat.senderRole === "lecturer" || !!chat.lecturerName;
-                            const displayName = chat.senderName || chat.studentName || chat.lecturerName || (isMe ? "You" : "Student");
-                            const senderId = chat.senderId || chat.studentId || chat.lecturerId || "";
-                            return (
-                              <div key={chat.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                                <UserAvatar userId={senderId} role={isStaff ? "lecturer" : "student"} size={26} initials={displayName} className="shrink-0" />
-                                <div className={`max-w-[75%] flex flex-col gap-0.5 ${isMe ? "items-end" : "items-start"}`}>
-                                  <span className={`text-[11px] font-bold font-mono uppercase tracking-wide ${isStaff ? "text-amber-600 dark:text-amber-500" : "text-slate-400 dark:text-slate-500"}`}>
-                                    {displayName}{isStaff && " · Staff"}
-                                  </span>
-                                  <div className={`px-3 py-2 rounded-2xl leading-relaxed break-words text-[12px] ${
-                                    isMe
-                                      ? "bg-emerald-700 text-white rounded-br-md"
-                                      : isStaff
-                                        ? "bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/30 text-slate-800 dark:text-slate-200 rounded-bl-md"
-                                        : "bg-slate-100 dark:bg-white/[0.06] text-slate-800 dark:text-slate-200 rounded-bl-md"
-                                  }`}>
-                                    {chat.message}
-                                  </div>
-                                  <span className="text-[8.5px] text-slate-400 dark:text-slate-600 font-mono">
-                                    {new Date(chat.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                        <div ref={chatEndRef} />
+                          <a href={activeLiveSession.attachmentData} download={activeLiveSession.attachmentName}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold rounded-lg transition">Download</a>
+                        </div>
+                      )}
+
+                      {/* Sub-tabs */}
+                      <div className="flex gap-1 bg-slate-100/80 dark:bg-white/[0.04] rounded-xl p-1 border border-slate-200/60 dark:border-white/[0.05] overflow-x-auto">
+                        {([
+                          { id: "jitsi", label: "🎙 Audio/Video" },
+                          { id: "slides", label: `📑 Slides${slides.length > 1 ? ` (${Math.min(currentSlide, slides.length - 1) + 1}/${slides.length})` : ""}` },
+                          { id: "poll", label: `📊 Poll${activePoll ? " ●" : ""}` },
+                          { id: "chat", label: `💬 Chat (${liveChats.length})` },
+                        ] as const).map(tab => (
+                          <button key={tab.id} onClick={() => setLiveStudentTab(tab.id as any)}
+                            className={`flex-shrink-0 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveStudentTab === tab.id ? "bg-white dark:bg-white/[0.10] text-slate-800 dark:text-white shadow-sm border border-slate-200/60 dark:border-white/[0.08]" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}>
+                            {tab.label}
+                          </button>
+                        ))}
                       </div>
-                      <form onSubmit={handleSendChatMessage} className="p-2.5 border-t border-slate-100 dark:border-white/[0.06] flex gap-2 bg-white dark:bg-[#011a0d]">
-                        <input
-                          type="text"
-                          required
-                          value={chatMessage}
-                          onChange={(e) => setChatMessage(e.target.value)}
-                          placeholder="Type a message..."
-                          className="flex-1 px-3 py-2.5 bg-white dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.08] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 outline-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] focus:border-emerald-400 dark:focus:border-emerald-600 focus:shadow-[0_0_0_3px_rgba(5,150,105,0.12),inset_0_1px_2px_rgba(0,0,0,0.01)] transition-[border-color,box-shadow] duration-200"
-                        />
-                        <button
-                          type="submit"
-                          disabled={isSendingChat}
-                          className="flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 transition-colors cursor-pointer flex-shrink-0"
-                        >
-                          <Send className="h-3.5 w-3.5 text-white" />
-                        </button>
-                      </form>
+
+                      {/* Jitsi */}
+                      {liveStudentTab === "jitsi" && (
+                        <div className="rounded-2xl overflow-hidden border border-slate-200/60 dark:border-white/[0.06]" style={{ height: 420 }}>
+                          <iframe
+                            src={`https://meet.jit.si/${activeLiveSession.jitsiRoom ?? activeLiveSession.id}#userInfo.displayName=${encodeURIComponent(user.fullName)}&config.prejoinPageEnabled=false`}
+                            allow="camera; microphone; fullscreen; display-capture; autoplay"
+                            className="w-full h-full border-0"
+                            title="Jitsi Meet"
+                          />
+                        </div>
+                      )}
+
+                      {/* Slides */}
+                      {liveStudentTab === "slides" && (
+                        <div className="bg-slate-950 rounded-xl border border-slate-800/60 p-5 min-h-[280px] flex flex-col">
+                          <div className="flex items-center justify-between border-b border-slate-800/60 pb-2.5 mb-4">
+                            <span className="text-[11px] font-mono text-slate-500 uppercase tracking-widest font-bold">{activeLiveSession.topic}</span>
+                            <div className="flex items-center gap-2">
+                              {slides.length > 1 && <span className="text-[11px] font-mono text-slate-500">{Math.min(currentSlide, slides.length - 1) + 1}/{slides.length}</span>}
+                              <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-500 font-bold"><span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />Synced</span>
+                            </div>
+                          </div>
+                          <div className="text-[13px] text-slate-200 flex-1 leading-relaxed">
+                            <MarkdownView content={slide} />
+                          </div>
+                          <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] font-mono text-slate-600">
+                            <span>{selectedCourse?.code}</span>
+                            <span>Started {new Date(activeLiveSession.createdAt).toLocaleTimeString()}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Poll */}
+                      {liveStudentTab === "poll" && (
+                        <div>
+                          {!activePoll ? (
+                            <div className="py-10 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
+                              <p className="text-[12px] text-slate-400">No active poll right now. Check back soon.</p>
+                            </div>
+                          ) : (
+                            <div className="bg-amber-50/60 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/30 rounded-xl p-5 space-y-4">
+                              <p className="text-[14px] font-semibold text-slate-800 dark:text-slate-200">{activePoll.question}</p>
+                              <div className="space-y-2">
+                                {(JSON.parse(activePoll.optionsJson) as string[]).map(opt => (
+                                  <button key={opt} onClick={() => handlePollRespond(activePoll.id, opt)}
+                                    className={`w-full text-left px-4 py-3 rounded-xl border text-[13px] font-semibold transition-all ${myPollAnswer === opt ? "bg-emerald-600 border-emerald-600 text-white" : "border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"}`}>
+                                    {opt}
+                                    {myPollAnswer === opt && " ✓"}
+                                  </button>
+                                ))}
+                              </div>
+                              {myPollAnswer && <p className="text-[12px] text-emerald-600 dark:text-emerald-400 text-center">Response recorded: <strong>{myPollAnswer}</strong></p>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Chat */}
+                      {liveStudentTab === "chat" && (
+                        <div className="border border-slate-200/60 dark:border-white/[0.06] rounded-xl overflow-hidden flex flex-col h-[380px] bg-white dark:bg-white/[0.02]">
+                          <div className="flex-1 p-3 overflow-y-auto space-y-3">
+                            {liveChats.length === 0 ? (
+                              <div className="h-full flex items-center justify-center text-center text-slate-400 dark:text-slate-600 text-[11px] font-medium">Start the discussion!</div>
+                            ) : liveChats.map((chat) => {
+                              const isMe = chat.senderId === user.id;
+                              const isStaff = chat.senderRole === "lecturer";
+                              return (
+                                <div key={chat.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                                  <UserAvatar userId={chat.senderId} role={isStaff ? "lecturer" : "student"} size={26} initials={chat.senderName} className="shrink-0" />
+                                  <div className={`max-w-[75%] flex flex-col gap-0.5 ${isMe ? "items-end" : "items-start"}`}>
+                                    <span className={`text-[11px] font-bold font-mono uppercase tracking-wide ${isStaff ? "text-amber-600 dark:text-amber-500" : "text-slate-400 dark:text-slate-500"}`}>{chat.senderName}{isStaff && " · Staff"}</span>
+                                    <div className={`px-3 py-2 rounded-2xl text-[12px] break-words ${isMe ? "bg-emerald-700 text-white rounded-br-md" : isStaff ? "bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/30 text-slate-800 dark:text-slate-200 rounded-bl-md" : "bg-slate-100 dark:bg-white/[0.06] text-slate-800 dark:text-slate-200 rounded-bl-md"}`}>{chat.message}</div>
+                                    <span className="text-[8.5px] text-slate-400 font-mono">{new Date(chat.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <div ref={chatEndRef} />
+                          </div>
+                          <form onSubmit={handleSendChatMessage} className="p-2.5 border-t border-slate-100 dark:border-white/[0.06] flex gap-2 bg-white dark:bg-[#011a0d]">
+                            <input type="text" required value={chatMessage} onChange={e => setChatMessage(e.target.value)} placeholder="Type a message..."
+                              className="flex-1 px-3 py-2.5 bg-white dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.08] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 outline-none focus:border-emerald-400 focus:shadow-[0_0_0_3px_rgba(5,150,105,0.12)] transition-[border-color,box-shadow] duration-200" />
+                            <button type="submit" disabled={isSendingChat} className="flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 transition flex-shrink-0">
+                              <Send className="h-3.5 w-3.5 text-white" />
+                            </button>
+                          </form>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 
