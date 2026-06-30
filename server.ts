@@ -12,7 +12,10 @@ import { seedDatabase } from "./src/lib/seed.js";
 
 const app = express();
 const PORT = 3000;
-const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === "production" ? (() => { throw new Error("JWT_SECRET env var must be set in production"); })() : "dev-only-secret-not-for-prod");
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production") {
+  console.warn("[WARN] JWT_SECRET env var is not set — using fallback. Set it in Vercel → Settings → Environment Variables for proper security.");
+}
+const JWT_SECRET = process.env.JWT_SECRET || "futo-quizos-fallback-secret-2026-set-jwt-secret-env-var";
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 app.use(express.json());

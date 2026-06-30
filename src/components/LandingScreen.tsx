@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   GraduationCap, BookOpen, ShieldAlert, ArrowRight,
   ClipboardCheck, ArrowLeft, KeyRound, HelpCircle,
-  CheckCircle, Check, Sun, Moon,
+  CheckCircle, Sun, Moon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -87,7 +87,6 @@ export default function LandingScreen({
   const [error, setError]     = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [copiedText, setCopiedText] = useState<string | null>(null);
   const [clock, setClock] = useState(new Date());
 
   useEffect(() => {
@@ -166,26 +165,6 @@ export default function LandingScreen({
       setSuccess("Year updated! Logging in…");
       setTimeout(() => onLoginSuccess(data.token, data.user), 1000);
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
-  };
-
-  const handleQuickFill = (type: "student" | "lecturer" | "new-student") => {
-    setError(null);
-    if (type === "student") {
-      setSelectedUser("student"); setActiveTab("student"); setMode("login");
-      setStudentRegNumber("FUTO/2026/10423"); setStudentYear("Year 3");
-      setCopiedText("John Doe");
-    } else if (type === "lecturer") {
-      setSelectedUser("lecturer"); setActiveTab("lecturer"); setMode("login");
-      setLecturerEmail("xavier@futo.edu.ng"); setLecturerPassword("admin123");
-      setCopiedText("Dr. Xavier");
-    } else {
-      setSelectedUser("student"); setActiveTab("student"); setMode("register");
-      setRegFullName("Nwachukwu Chinedu"); setRegEmail("chinedu@futo.edu.ng");
-      setRegRegNumber("FUTO/2026/80421"); setRegDepartment("Computer Science");
-      setRegYear("Year 1"); setSecurityAnswer("FUTO Staff School");
-      setCopiedText("New Student Form");
-    }
-    setTimeout(() => setCopiedText(null), 2000);
   };
 
   const handleSelectUser = (type: "student" | "lecturer") => {
@@ -412,22 +391,6 @@ export default function LandingScreen({
                       })}
                     </div>
 
-                    {/* Dev presets */}
-                    <div className="flex flex-col items-center gap-3">
-                      <p className="text-white/18 text-[9px] font-mono tracking-[0.22em] uppercase select-none">Dev Presets</p>
-                      <div className="flex items-center gap-2">
-                        {(["student", "new-student", "lecturer"] as const).map(p => (
-                          <button
-                            key={p}
-                            onClick={() => handleQuickFill(p)}
-                            className="px-3 py-1.5 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/40 hover:text-white/70 hover:bg-white/[0.10] text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1"
-                          >
-                            {p === "student" ? "Student" : p === "new-student" ? "New Reg." : "Lecturer"}
-                            {copiedText && <Check className="h-2.5 w-2.5 text-emerald-400 ml-0.5" />}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
                   </motion.div>
                 )}
 
