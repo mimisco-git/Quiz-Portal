@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   GraduationCap, BookOpen, ShieldAlert, ArrowRight,
   ClipboardCheck, ArrowLeft, KeyRound, HelpCircle,
-  CheckCircle, Sun, Moon,
+  CheckCircle, Check, Sun, Moon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import FUTOLogo from "./FUTOLogo";
@@ -729,7 +729,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                         exit={{ opacity: 0, scale: 0.8, x: 6 }}
                         className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold"
                       >
-                        ✓ {copiedText}
+                        <Check className="h-3 w-3 inline-block mr-0.5" />{copiedText}
                       </motion.span>
                     )}
                   </AnimatePresence>

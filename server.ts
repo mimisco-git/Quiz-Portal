@@ -12,7 +12,7 @@ import { seedDatabase } from "./src/lib/seed.js";
 
 const app = express();
 const PORT = 3000;
-const JWT_SECRET = process.env.JWT_SECRET || "super-secure-quiz-secret-key-12345";
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === "production" ? (() => { throw new Error("JWT_SECRET env var must be set in production"); })() : "dev-only-secret-not-for-prod");
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 app.use(express.json());

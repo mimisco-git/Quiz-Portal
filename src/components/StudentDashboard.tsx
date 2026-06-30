@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import MarkdownView from "./MarkdownView";
 import UserAvatar from "./UserAvatar";
@@ -1163,7 +1163,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   <div className="flex items-center gap-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-800 dark:text-red-300 rounded-xl p-3.5 text-[12.5px]">
                     <ShieldAlert className="h-4 w-4 shrink-0 text-red-500" />
                     <span className="font-semibold">{submitError}</span>
-                    <button onClick={() => setSubmitError(null)} className="ml-auto text-red-400 hover:text-red-600 text-[11px] font-bold cursor-pointer">✕</button>
+                    <button onClick={() => setSubmitError(null)} className="ml-auto text-red-400 hover:text-red-600 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
                   </div>
                 )}
 
@@ -1458,7 +1458,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               ) : (
                 /* Answer submission view */
                 <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
-                  <button onClick={() => { setActiveExam(null); setExamAnswers(""); setExamError(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">← Back to Exams</button>
+                  <button onClick={() => { setActiveExam(null); setExamAnswers(""); setExamError(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"><ArrowLeft className="h-3.5 w-3.5" /> Back to Exams</button>
 
                   <div>
                     <h2 className="text-[15px] font-bold text-slate-900 dark:text-white">{activeExam.title}</h2>
