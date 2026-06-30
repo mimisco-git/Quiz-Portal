@@ -98,7 +98,7 @@ export default function BootScreen({ onDone }: Props) {
                 src="/logo-dark.png"
                 alt="QuizOS"
                 draggable={false}
-                className="h-[96px] sm:h-[148px] w-auto select-none"
+                className="h-[96px] sm:h-[200px] w-auto select-none"
               />
             </motion.div>
 
