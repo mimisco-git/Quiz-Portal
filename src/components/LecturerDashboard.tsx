@@ -720,18 +720,20 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       {/* ── LEFT SIDEBAR ── */}
       <aside className="w-[56px] sm:w-[232px] flex-shrink-0 flex flex-col h-full bg-[#e8e8ed] dark:bg-[#111113] border-r border-black/[0.07] dark:border-white/[0.06]">
 
-        {/* Traffic lights + logo */}
-        <div className="flex items-center justify-between px-4 pt-5 pb-4 flex-shrink-0">
-          <div className="flex items-center gap-[6px]">
-            <span className="h-[13px] w-[13px] rounded-full bg-[#ff5f57] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)] flex-shrink-0" />
-            <span className="h-[13px] w-[13px] rounded-full bg-[#ffbd2e] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)] flex-shrink-0 hidden sm:inline-block" />
-            <span className="h-[13px] w-[13px] rounded-full bg-[#28c840] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)] flex-shrink-0 hidden sm:inline-block" />
-          </div>
+        {/* Traffic lights */}
+        <div className="flex items-center gap-[6px] px-4 pt-5 pb-3 flex-shrink-0">
+          <span className="h-[13px] w-[13px] rounded-full bg-[#ff5f57] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)] flex-shrink-0" />
+          <span className="h-[13px] w-[13px] rounded-full bg-[#ffbd2e] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)] flex-shrink-0 hidden sm:inline-block" />
+          <span className="h-[13px] w-[13px] rounded-full bg-[#28c840] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)] flex-shrink-0 hidden sm:inline-block" />
+        </div>
+
+        {/* Logo */}
+        <div className="hidden sm:flex items-center justify-center px-4 pb-4 flex-shrink-0">
           <img
             src="/logo-dark.png"
             alt="QuizOS"
-            className="hidden sm:block h-[34px] w-auto opacity-80 dark:opacity-50"
-            style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.12))" }}
+            className="h-[56px] w-auto"
+            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.18)) brightness(0.96)" }}
           />
         </div>
 
