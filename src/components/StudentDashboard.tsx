@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2 } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import MarkdownView from "./MarkdownView";
 import UserAvatar from "./UserAvatar";
@@ -594,7 +594,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   {examResult.score.toFixed(1)}%
                 </span>
                 <span className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 mt-3">
-                  {examResult.score >= 50 ? "✅ Academic Pass" : "❌ Re-assessment required"}
+                  {examResult.score >= 50 ? "Academic Pass" : "Re-assessment required"}
                 </span>
               </div>
 
@@ -909,11 +909,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#010e07]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.04)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 flex-shrink-0">
-            <img src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"} alt="QuizOS" className="h-9 w-auto select-none rounded-md" />
-            <div className="hidden sm:block">
-              <span className="text-[13px] font-bold text-slate-900 dark:text-white font-display tracking-tight">QuizOS</span>
-              <span className="text-[12px] text-slate-400 dark:text-slate-500 font-mono ml-1.5">Student Portal</span>
-            </div>
+            <img src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"} alt="QuizOS" className="h-12 w-auto select-none rounded-md" />
+            <span className="hidden sm:block text-[13px] text-slate-400 dark:text-slate-500 font-mono">Student</span>
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -1062,8 +1059,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   <div className="space-y-5">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div>
-                        <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Lecture Materials</h2>
-                        <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Browse and study uploaded lecture notes.</p>
+                        <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Lecture Materials</h2>
+                        <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Browse and study uploaded lecture notes.</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Filter className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
@@ -1075,7 +1072,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           style={{ width: "auto" }}
                         >
                           <option value="">All Courses</option>
-                          {courses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.title}</option>)}
+                          {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
                         </select>
                       </div>
                     </div>
@@ -1137,9 +1134,9 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                     <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/[0.06] pb-4">
                       <div>
                         <button onClick={() => setSelectedNote(null)} className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 mb-1.5 inline-flex items-center gap-1 cursor-pointer">
-                          ← Back to Materials
+                          <ArrowLeft className="h-3 w-3" /> Back to Materials
                         </button>
-                        <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">{selectedNote.title}</h2>
+                        <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">{selectedNote.title}</h2>
                       </div>
                       <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 flex items-center gap-1 flex-shrink-0 ml-4">
                         <Calendar className="h-3 w-3" />
@@ -1158,8 +1155,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             {activeTab === "quizzes" && (
               <div id="quizzes-view-container" className="space-y-4">
                 <div>
-                  <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Academic Quizzes</h2>
-                  <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Secure timed assessments for your enrolled courses.</p>
+                  <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Academic Quizzes</h2>
+                  <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Secure timed assessments for your enrolled courses.</p>
                 </div>
 
                 {submitError && !activeQuiz && (
@@ -1246,8 +1243,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   <div className="flex items-center gap-2">
                     {activeLiveSession && (
                       <button onClick={handleToggleHandRaise}
-                        className={`px-3 py-1.5 text-[12px] font-semibold rounded-xl border transition-colors ${handRaised ? "bg-amber-100 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400" : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-amber-300"}`}>
-                        {handRaised ? "✋ Hand Raised" : "✋ Raise Hand"}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-xl border transition-colors ${handRaised ? "bg-amber-100 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400" : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-amber-300"}`}>
+                        <ThumbsUp className="h-3.5 w-3.5" /> {handRaised ? "Hand Raised" : "Raise Hand"}
                       </button>
                     )}
                     {activeLiveSession ? (
@@ -1289,13 +1286,14 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       {/* Sub-tabs */}
                       <div className="flex gap-1 bg-slate-100/80 dark:bg-white/[0.04] rounded-xl p-1 border border-slate-200/60 dark:border-white/[0.05] overflow-x-auto">
                         {([
-                          { id: "jitsi", label: "🎙 Audio/Video" },
-                          { id: "slides", label: `📑 Slides${slides.length > 1 ? ` (${Math.min(currentSlide, slides.length - 1) + 1}/${slides.length})` : ""}` },
-                          { id: "poll", label: `📊 Poll${activePoll ? " ●" : ""}` },
-                          { id: "chat", label: `💬 Chat (${liveChats.length})` },
-                        ] as const).map(tab => (
-                          <button key={tab.id} onClick={() => setLiveStudentTab(tab.id as any)}
-                            className={`flex-shrink-0 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveStudentTab === tab.id ? "bg-white dark:bg-white/[0.10] text-slate-800 dark:text-white shadow-sm border border-slate-200/60 dark:border-white/[0.08]" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}>
+                          { id: "jitsi",  icon: Mic,           label: "Audio/Video" },
+                          { id: "slides", icon: Layers,        label: `Slides${slides.length > 1 ? ` (${Math.min(currentSlide, slides.length - 1) + 1}/${slides.length})` : ""}` },
+                          { id: "poll",   icon: BarChart2,     label: `Poll${activePoll ? " •" : ""}` },
+                          { id: "chat",   icon: MessageSquare, label: `Chat (${liveChats.length})` },
+                        ] as { id: "jitsi" | "slides" | "poll" | "chat"; icon: React.ElementType; label: string }[]).map(tab => (
+                          <button key={tab.id} onClick={() => setLiveStudentTab(tab.id)}
+                            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveStudentTab === tab.id ? "bg-white dark:bg-white/[0.10] text-slate-800 dark:text-white shadow-sm border border-slate-200/60 dark:border-white/[0.08]" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}>
+                            <tab.icon className="h-3.5 w-3.5 flex-shrink-0" />
                             {tab.label}
                           </button>
                         ))}
@@ -1348,7 +1346,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                                   <button key={opt} onClick={() => handlePollRespond(activePoll.id, opt)}
                                     className={`w-full text-left px-4 py-3 rounded-xl border text-[13px] font-semibold transition-all ${myPollAnswer === opt ? "bg-emerald-600 border-emerald-600 text-white" : "border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"}`}>
                                     {opt}
-                                    {myPollAnswer === opt && " ✓"}
+                                    {myPollAnswer === opt && <CheckCircle className="h-3.5 w-3.5 ml-1.5 inline-block" />}
                                   </button>
                                 ))}
                               </div>
@@ -1400,8 +1398,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               {!activeExam ? (
                 <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
                   <div>
-                    <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Written Examinations</h2>
-                    <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Read each question carefully and type your answers. The AI will grade your submission.</p>
+                    <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Written Examinations</h2>
+                    <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Read each question carefully and type your answers. The AI will grade your submission.</p>
                   </div>
                   {exams.length === 0 ? (
                     <div className="py-12 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
@@ -1415,7 +1413,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           className="w-full text-left p-4 border border-slate-200/70 dark:border-white/[0.06] rounded-xl bg-white dark:bg-white/[0.02] hover:border-emerald-300 dark:hover:border-emerald-800 hover:shadow-[0_4px_16px_rgba(4,120,87,0.10)] transition-all duration-200 flex items-center justify-between gap-3">
                           <div>
                             <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-200">{exam.title}</p>
-                            <p className="text-[11px] text-slate-400 mt-0.5">{exam.course?.code} — {exam.course?.title}</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{exam.course?.code} / {exam.course?.title}</p>
                           </div>
                           <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${exam.isOpen ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30" : "bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700"}`}>
                             {exam.isOpen ? "Open" : "Closed"}
@@ -1428,8 +1426,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               ) : mySubmission ? (
                 /* Result view */
                 <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
-                  <button onClick={() => { setActiveExam(null); setMySubmission(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">← Back to Exams</button>
-                  <h2 className="text-[15px] font-bold text-slate-900 dark:text-white">{activeExam.title} — Result</h2>
+                  <button onClick={() => { setActiveExam(null); setMySubmission(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"><ArrowLeft className="h-3.5 w-3.5" /> Back to Exams</button>
+                  <h2 className="text-[16px] font-bold text-slate-900 dark:text-white">{activeExam.title}: Result</h2>
 
                   {mySubmission.isGraded ? (
                     <div className="space-y-4">
@@ -1452,7 +1450,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   ) : (
                     <div className="py-10 text-center">
                       <Loader2 className="h-8 w-8 text-emerald-400 animate-spin mx-auto mb-3" />
-                      <p className="text-[13px] font-semibold text-slate-600 dark:text-slate-400">Submitted — awaiting AI grading</p>
+                      <p className="text-[13px] font-semibold text-slate-600 dark:text-slate-400">Submitted: awaiting AI grading</p>
                       <p className="text-[12px] text-slate-400 mt-1">Your lecturer will trigger grading once all students have submitted.</p>
                     </div>
                   )}

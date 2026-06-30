@@ -5,6 +5,7 @@ import fs from "fs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import mammoth from "mammoth";
+import JSZip from "jszip";
 import OpenAI from "openai";
 import { prisma } from "./src/lib/db.js";
 import { seedDatabase } from "./src/lib/seed.js";
@@ -1177,6 +1178,47 @@ app.post("/api/lectures/:id/attachment", authenticateToken, upload.single("file"
     return res.json({ ok: true, name: req.file.originalname });
   } catch (e) {
     return res.status(500).json({ error: "Failed to upload attachment" });
+  }
+});
+
+// Upload PPTX and convert slides to content
+async function extractPptxSlides(buffer: Buffer): Promise<string[]> {
+  const zip = await JSZip.loadAsync(buffer);
+  const slideFiles = Object.keys(zip.files)
+    .filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => {
+      const na = parseInt(a.match(/slide(\d+)/)?.[1] ?? "0");
+      const nb = parseInt(b.match(/slide(\d+)/)?.[1] ?? "0");
+      return na - nb;
+    });
+  const slides: string[] = [];
+  for (const slideFile of slideFiles) {
+    const xml = await zip.files[slideFile].async("string");
+    const texts: string[] = [];
+    for (const m of xml.matchAll(/<a:t[^>]*>(.*?)<\/a:t>/gs)) {
+      const t = m[1].replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
+      if (t) texts.push(t);
+    }
+    if (texts.length > 0) slides.push(texts.join("\n"));
+  }
+  return slides;
+}
+
+app.post("/api/lectures/:id/pptx", authenticateToken, upload.single("file"), async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  if (!req.file) return res.status(400).json({ error: "File required" });
+  try {
+    const slides = await extractPptxSlides(req.file.buffer);
+    if (slides.length === 0) return res.status(400).json({ error: "No slide content found in file" });
+    const content = slides.join("\n\n---\n\n");
+    const updated = await prisma.lectureSession.update({
+      where: { id: req.params.id },
+      data: { content, currentSlide: 0 },
+    });
+    return res.json({ ok: true, slideCount: slides.length, session: updated });
+  } catch (e: any) {
+    console.error("PPTX parse error:", e);
+    return res.status(500).json({ error: "Failed to parse PPTX file" });
   }
 });
 

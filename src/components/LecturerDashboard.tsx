@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, Star } from "lucide-react";
+import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import AvatarModal from "./AvatarModal";
@@ -77,6 +77,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["Option A", "Option B", "Option C", "Option D"]);
   const [attachLiveFile, setAttachLiveFile] = useState<File | null>(null);
+  const [pptxFile, setPptxFile] = useState<File | null>(null);
+  const [isUploadingPptx, setIsUploadingPptx] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [sessionSummary, setSessionSummary] = useState<string | null>(null);
 
@@ -632,8 +634,25 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     if (!broadcastingSession || !attachLiveFile) return;
     const fd = new FormData(); fd.append("file", attachLiveFile);
     const res = await fetch(`/api/lectures/${broadcastingSession.id}/attachment`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
-    if (res.ok) { showSuccess(`"${attachLiveFile.name}" attached — students can now download it`); setAttachLiveFile(null); }
+    if (res.ok) { showSuccess(`"${attachLiveFile.name}" attached. Students can now download it.`); setAttachLiveFile(null); }
     else showError("Failed to attach file");
+  };
+
+  const handleUploadPptx = async () => {
+    if (!broadcastingSession || !pptxFile) return;
+    setIsUploadingPptx(true);
+    const fd = new FormData(); fd.append("file", pptxFile);
+    const res = await fetch(`/api/lectures/${broadcastingSession.id}/pptx`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+    if (res.ok) {
+      const data = await res.json();
+      setBroadcastingSession((prev: any) => prev ? { ...prev, content: data.content, currentSlide: 0 } : prev);
+      showSuccess(`PowerPoint loaded: ${data.slideCount} slides ready`);
+      setPptxFile(null);
+    } else {
+      const d = await res.json().catch(() => ({}));
+      showError(d.error || "Failed to parse PPTX");
+    }
+    setIsUploadingPptx(false);
   };
 
   const handleSummarize = async () => {
@@ -688,7 +707,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   /* ─── label helper ─── */
-  const lbl = "block text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400 mb-2";
+  const lbl = "block text-[12px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400 mb-2";
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
@@ -707,11 +726,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#010e07]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.04)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 flex-shrink-0">
-            <img src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"} alt="QuizOS" className="h-9 w-auto select-none rounded-md" />
-            <div className="hidden sm:block">
-              <span className="text-[13px] font-bold text-slate-900 dark:text-white font-display tracking-tight">QuizOS</span>
-              <span className="text-[12px] text-slate-400 dark:text-slate-500 font-mono ml-1.5">Lecturer</span>
-            </div>
+            <img src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"} alt="QuizOS" className="h-12 w-auto select-none rounded-md" />
+            <span className="hidden sm:block text-[13px] text-slate-400 dark:text-slate-500 font-mono">Lecturer</span>
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -806,8 +822,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {activeTab === "gradebook" && (
             <div id="gradebook-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
               <div>
-                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Student Assessment Gradebook</h2>
-                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Evaluate, mark, and adjust examination attempt logs.</p>
+                <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Student Assessment Gradebook</h2>
+                <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Evaluate, mark, and adjust examination attempt logs.</p>
               </div>
 
               {/* Filters */}
@@ -833,7 +849,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       className="form-input"
                     >
                       <option value="">All Courses</option>
-                      {courses.map((c) => <option key={c.id} value={c.id}>{c.code} – {c.title}</option>)}
+                      {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
                     </select>
                   </div>
                   <div>
@@ -908,7 +924,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                             )}
                           </td>
                           <td className="px-4 py-3 text-[11px] font-mono font-bold text-slate-900 dark:text-slate-100 text-center">
-                            {att.score !== null ? `${att.score?.toFixed(1)}%` : "—"}
+                            {att.score !== null ? `${att.score?.toFixed(1)}%` : "N/A"}
                           </td>
                           <td className="px-4 py-3 text-center">
                             {editingAttemptId === att.id ? (
@@ -965,7 +981,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   <Radio className="h-4 w-4 text-red-500 animate-pulse" />
                   Live Broadcasting Station
                 </h2>
-                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Audio/video, slides, polls, attendance — all in one live session.</p>
+                <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Audio/video, slides, polls, attendance: all in one live session.</p>
               </div>
 
               {!broadcastingSession ? (
@@ -977,7 +993,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                     <div>
                       <label className={lbl}>Target Course</label>
                       <select value={liveCourseId} onChange={(e) => setLiveCourseId(e.target.value)} className="form-input">
-                        {courses.map((c) => <option key={c.id} value={c.id}>{c.code} – {c.title}</option>)}
+                        {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
                       </select>
                     </div>
                     <div>
@@ -986,7 +1002,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                     </div>
                   </div>
                   <div>
-                    <label className={lbl}>Slides / Board Content (Markdown — separate slides with ---)</label>
+                    <label className={lbl}>Slides / Board Content (Markdown: separate slides with ---)</label>
                     <textarea required rows={7} value={liveContent} onChange={(e) => setLiveContent(e.target.value)} placeholder={"# Slide 1\nYour first slide content here\n\n---\n\n# Slide 2\nSecond slide…"} className="form-input" />
                   </div>
                   <button type="submit" className="btn-gradient flex items-center gap-2">
@@ -1013,7 +1029,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         </div>
                         {handRaises.length > 0 && (
                           <span className="ml-2 flex items-center gap-1 bg-amber-100 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/30 text-amber-700 dark:text-amber-400 text-[11px] font-bold px-2 py-0.5 rounded-full animate-pulse">
-                            ✋ {handRaises.length}
+                            <ThumbsUp className="h-3 w-3" /> {handRaises.length}
                           </span>
                         )}
                       </div>
@@ -1040,14 +1056,15 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                     {/* Sub-tabs */}
                     <div className="flex gap-1 bg-slate-100/80 dark:bg-white/[0.04] rounded-xl p-1 border border-slate-200/60 dark:border-white/[0.05] overflow-x-auto">
                       {([
-                        { id: "jitsi",      label: "🎙 Audio/Video" },
-                        { id: "slides",     label: `📑 Slides ${slides.length > 1 ? `(${safeSlide + 1}/${slides.length})` : ""}` },
-                        { id: "poll",       label: `📊 Poll${activePoll ? " ●" : ""}` },
-                        { id: "attendance", label: `👥 Attendance (${attendance.length})` },
-                        { id: "chat",       label: `💬 Chat (${liveChats.length})` },
-                      ] as const).map(tab => (
-                        <button key={tab.id} onClick={() => setLiveSubTab(tab.id as any)}
-                          className={`flex-shrink-0 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveSubTab === tab.id ? "bg-white dark:bg-white/[0.10] text-slate-800 dark:text-white shadow-sm border border-slate-200/60 dark:border-white/[0.08]" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}>
+                        { id: "jitsi",      icon: Mic,           label: "Audio/Video" },
+                        { id: "slides",     icon: Layers,        label: `Slides${slides.length > 1 ? ` (${safeSlide + 1}/${slides.length})` : ""}` },
+                        { id: "poll",       icon: BarChart2,     label: `Poll${activePoll ? " •" : ""}` },
+                        { id: "attendance", icon: Users,         label: `Attendance (${attendance.length})` },
+                        { id: "chat",       icon: MessageSquare, label: `Chat (${liveChats.length})` },
+                      ] as { id: "jitsi" | "slides" | "poll" | "attendance" | "chat"; icon: React.ElementType; label: string }[]).map(tab => (
+                        <button key={tab.id} onClick={() => setLiveSubTab(tab.id)}
+                          className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveSubTab === tab.id ? "bg-white dark:bg-white/[0.10] text-slate-800 dark:text-white shadow-sm border border-slate-200/60 dark:border-white/[0.08]" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}>
+                          <tab.icon className="h-3.5 w-3.5 flex-shrink-0" />
                           {tab.label}
                         </button>
                       ))}
@@ -1079,7 +1096,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                             </button>
                           </div>
                           {broadcastingSession.attachmentName && (
-                            <p className="text-[12px] text-emerald-600 dark:text-emerald-400">✓ Shared: {broadcastingSession.attachmentName}</p>
+                            <p className="text-[12px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle className="h-3.5 w-3.5 flex-shrink-0" /> Shared: {broadcastingSession.attachmentName}
+                            </p>
                           )}
                         </div>
                       </div>
@@ -1094,16 +1113,31 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                               <span className="text-[11px] font-mono text-slate-400 font-bold uppercase tracking-widest">Slide {safeSlide + 1} of {slides.length}</span>
                               <div className="flex items-center gap-2">
                                 <button onClick={() => handleSlideChange(Math.max(0, safeSlide - 1))} disabled={safeSlide === 0}
-                                  className="px-3 py-1 text-[11px] font-semibold bg-white/[0.08] hover:bg-white/[0.14] text-white rounded-lg disabled:opacity-30 transition">← Prev</button>
+                                  className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold bg-white/[0.08] hover:bg-white/[0.14] text-white rounded-lg disabled:opacity-30 transition"><ChevronLeft className="h-3.5 w-3.5" /> Prev</button>
                                 <button onClick={() => handleSlideChange(Math.min(slides.length - 1, safeSlide + 1))} disabled={safeSlide === slides.length - 1}
-                                  className="px-3 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg disabled:opacity-30 transition">Next →</button>
+                                  className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg disabled:opacity-30 transition">Next <ChevronRight className="h-3.5 w-3.5" /></button>
                               </div>
                             </div>
                             <pre className="p-5 text-[13px] text-slate-100 whitespace-pre-wrap leading-relaxed min-h-[120px] font-sans">{slides[safeSlide]}</pre>
                           </div>
                         )}
                         <div className="bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 space-y-3">
-                          <p className={lbl}>Update Content</p>
+                          <p className={lbl}>Upload PowerPoint (.pptx)</p>
+                          <div className="flex items-center gap-3">
+                            <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-slate-300 dark:border-slate-600 rounded-xl cursor-pointer hover:border-emerald-400 transition-colors text-[12px] text-slate-500 dark:text-slate-400 flex-1 min-w-0">
+                              <Layers className="h-4 w-4 shrink-0" />
+                              <span className="truncate">{pptxFile ? pptxFile.name : "Choose .pptx file"}</span>
+                              <input type="file" accept=".pptx" className="hidden" onChange={e => setPptxFile(e.target.files?.[0] ?? null)} />
+                            </label>
+                            <button onClick={handleUploadPptx} disabled={!pptxFile || isUploadingPptx}
+                              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-semibold rounded-xl transition disabled:opacity-40 flex-shrink-0">
+                              {isUploadingPptx ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Parsing…</> : "Load Slides"}
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-slate-400">Slides are extracted from the PPTX and displayed in order during the live class.</p>
+                        </div>
+                        <div className="bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 space-y-3">
+                          <p className={lbl}>Update Content Manually</p>
                           <input type="text" value={liveTopic} onChange={e => setLiveTopic(e.target.value)} placeholder="Topic" className="form-input" />
                           <textarea rows={8} value={liveContent} onChange={e => setLiveContent(e.target.value)} className="form-input" />
                           <button onClick={handleUpdateLiveLecture} className="btn-gradient flex items-center gap-2">
@@ -1160,7 +1194,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                               ))}
                             </div>
                             <button onClick={handleLaunchPoll} className="btn-gradient flex items-center gap-2 w-full justify-center">
-                              📊 Launch Poll
+                              <BarChart2 className="h-4 w-4" /> Launch Poll
                             </button>
                           </div>
                         )}
@@ -1179,7 +1213,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           <div className="space-y-2">
                             {handRaises.length > 0 && (
                               <div className="mb-3">
-                                <p className={lbl + " text-amber-600 dark:text-amber-400"}>✋ Raised Hands ({handRaises.length})</p>
+                                <p className={lbl + " flex items-center gap-1.5 text-amber-600 dark:text-amber-400"}><ThumbsUp className="h-3.5 w-3.5" /> Raised Hands ({handRaises.length})</p>
                                 <div className="space-y-1.5">
                                   {handRaises.map((h: any) => (
                                     <div key={h.id} className="flex items-center justify-between p-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-xl">
@@ -1246,8 +1280,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {activeTab === "notes" && (
             <div id="notes-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
               <div>
-                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Publish Course Study Notes</h2>
-                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Upload comprehensive module details for students to study.</p>
+                <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Publish Course Study Notes</h2>
+                <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Upload comprehensive module details for students to study.</p>
               </div>
 
               <form onSubmit={handlePublishNote} className="space-y-4">
@@ -1255,7 +1289,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   <div>
                     <label className={lbl}>Target Course Module</label>
                     <select value={noteCourseId} onChange={(e) => setNoteCourseId(e.target.value)} className="form-input">
-                      {courses.map((c) => <option key={c.id} value={c.id}>{c.code} – {c.title}</option>)}
+                      {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1281,8 +1315,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {activeTab === "quizzes" && (
             <div id="quizzes-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
               <div>
-                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Deploy Secure Quiz & Examination</h2>
-                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Configure timed question sets for instant testing and score logging.</p>
+                <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Deploy Secure Quiz & Examination</h2>
+                <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Configure timed question sets for instant testing and score logging.</p>
               </div>
 
               <form onSubmit={handleDeployQuizSubmit} className="space-y-6">
@@ -1291,7 +1325,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   <div>
                     <label className={lbl}>Course Module</label>
                     <select value={quizCourseId} onChange={(e) => setQuizCourseId(e.target.value)} className="form-input">
-                      {courses.map((c) => <option key={c.id} value={c.id}>{c.code} – {c.title}</option>)}
+                      {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1367,8 +1401,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {activeTab === "courses" && (
             <div id="courses-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
               <div>
-                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Course Registry</h2>
-                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Register new academic course modules.</p>
+                <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Course Registry</h2>
+                <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Register new academic course modules.</p>
               </div>
 
               <form onSubmit={handleCreateCourse} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4">
@@ -1422,8 +1456,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {activeTab === "departments" && (
             <div id="departments-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
               <div>
-                <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Academic Departments</h2>
-                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Establish and manage school departments.</p>
+                <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Academic Departments</h2>
+                <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Establish and manage school departments.</p>
               </div>
 
               <form onSubmit={handleCreateDepartment} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4">
@@ -1480,8 +1514,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
               {!selectedExam ? (
                 <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
                   <div>
-                    <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Written Exams — AI Grading</h2>
-                    <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Upload a document with exam questions. Students type their answers. Upload the answer key and the AI grades automatically.</p>
+                    <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Written Exams: AI Grading</h2>
+                    <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Upload a document with exam questions. Students type their answers. Upload the answer key and the AI grades automatically.</p>
                   </div>
 
                   <form onSubmit={handleCreateExam} className="space-y-4 bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4">
@@ -1494,7 +1528,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       <div>
                         <label className={lbl}>Course</label>
                         <select value={examCourseId} onChange={e => setExamCourseId(e.target.value)} className="form-input">
-                          {courses.map(c => <option key={c.id} value={c.id}>{c.code} — {c.title}</option>)}
+                          {courses.map(c => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
                         </select>
                       </div>
                     </div>
@@ -1554,7 +1588,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                 /* Exam detail / management view */
                 <div className="space-y-4">
                   <button onClick={() => { setSelectedExam(null); setExamSubmissions([]); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
-                    ← Back to Exams
+                    <ArrowLeft className="h-3.5 w-3.5" /> Back to Exams
                   </button>
 
                   <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
@@ -1583,7 +1617,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
                     {/* Answer key upload */}
                     <div className="space-y-3 border-t border-slate-100 dark:border-white/[0.05] pt-4">
-                      <p className={lbl}>{selectedExam.answerKeyText ? "Answer Key ✓ — Replace" : "Upload Answer Key"}</p>
+                      <p className={lbl + " flex items-center gap-1.5"}>{selectedExam.answerKeyText ? <><CheckCircle className="h-3.5 w-3.5 text-emerald-500" /> Answer Key (Replace)</> : "Upload Answer Key"}</p>
                       {selectedExam.answerKeyText && (
                         <pre className="text-[12px] text-slate-600 dark:text-slate-400 bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/20 rounded-xl p-4 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">{selectedExam.answerKeyText}</pre>
                       )}

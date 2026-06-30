@@ -337,7 +337,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
 
                 {/* Description */}
                 <p className="text-[15px] text-slate-500 dark:text-slate-400 leading-[1.72] max-w-[285px] mx-auto tracking-[-0.01em]">
-                  FUTO's secure academic portal — timed examinations, live lectures &amp; instant results.
+                  FUTO's secure academic portal: timed examinations, live lectures &amp; instant results.
                 </p>
               </div>
 
@@ -765,7 +765,7 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
 
           {/* Below-card tagline */}
           <p className="text-center mt-4 text-[10px] text-slate-400/70 dark:text-slate-700 select-none">
-            QuizOS © 2026 · Assess. Learn. Excel.
+            © 2026 · Assess. Learn. Excel.
           </p>
 
         </motion.div>
