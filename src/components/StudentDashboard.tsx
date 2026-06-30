@@ -5,7 +5,6 @@ import MarkdownView from "./MarkdownView";
 import UserAvatar from "./UserAvatar";
 import AvatarModal from "./AvatarModal";
 import { motion, AnimatePresence } from "motion/react";
-import FUTOLogo from "./FUTOLogo";
 
 interface StudentDashboardProps {
   token: string;
@@ -64,7 +63,6 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
         setActiveLiveSession(data);
         if (data && data.chats) setLiveChats(data.chats);
         else setLiveChats([]);
-        // Record attendance silently
         if (data?.id) {
           fetch(`/api/lectures/${data.id}/join`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
         }
@@ -319,7 +317,6 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       setSkippedCount(0);
       setShowSubmitConfirm(false);
       setAutoSaveStatus("idle");
-      // Restore any locally saved draft for this attempt
       try {
         const draft = localStorage.getItem(`exam_draft_${data.attempt.id}`);
         setSelectedAnswers(draft ? JSON.parse(draft) : {});
@@ -400,7 +397,6 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const handleAutoSubmitBackground = async (attemptId: string) => {
     let currentAnswers: Record<string, string> = {};
     setSelectedAnswers((prev) => { currentAnswers = prev; return prev; });
-    // Also try to recover any locally-saved draft
     try {
       const draft = localStorage.getItem(`exam_draft_${attemptId}`);
       if (draft) {
@@ -567,7 +563,6 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           className="max-w-2xl w-full"
         >
           <div className="glass-card rounded-3xl overflow-hidden">
-            {/* Banner */}
             <div
               className="relative overflow-hidden px-8 py-10 text-center"
               style={{ background: "linear-gradient(135deg, #064e3b, #047857)" }}
@@ -587,7 +582,6 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             </div>
 
             <div className="p-8 space-y-6">
-              {/* Score */}
               <div className="flex flex-col items-center justify-center py-7 bg-gradient-to-br from-emerald-50/80 to-green-50/50 dark:from-emerald-950/20 dark:to-green-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl">
                 <span className="text-[12px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Your Secure Grade</span>
                 <span className="text-6xl font-black text-slate-900 dark:text-white tracking-tight mt-1 font-display tabular-nums">
@@ -663,7 +657,6 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-        {/* Exam top bar */}
         <div className="sticky top-0 z-20 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/80 px-6 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-[12px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-900/40 px-2.5 py-1 rounded-lg uppercase tracking-widest font-bold">
@@ -698,7 +691,6 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           </div>
         </div>
 
-        {/* Questions */}
         <div className="flex-1 overflow-y-auto max-w-3xl w-full mx-auto px-4 sm:px-6 py-8">
           {submitError && (
             <div className="mb-6 bg-red-950/40 border border-red-800/50 text-red-300 rounded-xl p-4 flex gap-3 text-[12.5px]">
@@ -756,9 +748,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           </div>
         </div>
 
-        {/* Bottom bar */}
         <div className="bg-slate-900/95 backdrop-blur-xl border-t border-slate-800/80 px-6 py-4 space-y-3">
-          {/* Submit confirm prompt */}
           {showSubmitConfirm && !isSubmitting && (
             <div className="flex items-center justify-between gap-3 bg-amber-950/40 border border-amber-700/40 rounded-xl px-4 py-3">
               <p className="text-[12px] text-amber-300 font-semibold">Finalize and lock your answers? This cannot be undone.</p>
@@ -778,7 +768,6 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               </div>
             </div>
           )}
-          {/* Skipped-questions warning */}
           {submitError && skippedCount > 0 && (
             <div className="flex items-center justify-between gap-3 bg-red-950/40 border border-red-700/40 rounded-xl px-4 py-3">
               <div className="flex items-center gap-2">
@@ -815,7 +804,6 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           </div>
         </div>
 
-        {/* Exam expired modal */}
         <AnimatePresence>
           {showExamExpiredModal && (
             <motion.div
@@ -893,202 +881,217 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   /* ─── MAIN DASHBOARD ─── */
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
-      {/* Background depth layers */}
-      <div className="fixed inset-0 pointer-events-none dark:opacity-0"
-        style={{background: "radial-gradient(ellipse 70% 50% at 18% 12%, rgba(167,243,208,0.20) 0%, transparent 70%)"}} />
-      <div className="fixed inset-0 pointer-events-none opacity-0 dark:opacity-100"
-        style={{background: "radial-gradient(ellipse 70% 50% at 18% 12%, rgba(4,120,87,0.10) 0%, transparent 70%)"}} />
-      <div className="fixed inset-0 pointer-events-none opacity-[0.018] dark:opacity-[0.032]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-          backgroundSize: "256px 256px",
-        }} />
+    <div className="flex h-screen overflow-hidden bg-[#f5f5f7] dark:bg-[#161618] font-sans">
 
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#010e07]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.04)]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5 flex-shrink-0">
-            <img src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"} alt="QuizOS" className="h-14 w-auto select-none rounded-md" />
-            <span className="hidden sm:block text-[13px] text-slate-400 dark:text-slate-500 font-mono">Student</span>
-          </div>
+      {/* ── LEFT SIDEBAR ── */}
+      <aside className="w-[56px] sm:w-[232px] flex-shrink-0 flex flex-col h-full bg-[#e8e8ed] dark:bg-[#111113] border-r border-black/[0.07] dark:border-white/[0.06]">
 
-          <div className="flex items-center gap-2.5">
-            <div className="hidden md:block text-right mr-1">
-              <p className="text-[12px] font-bold text-slate-900 dark:text-white leading-tight">{user.fullName}</p>
-              <div className="flex items-center gap-1.5 justify-end mt-0.5">
-                <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 uppercase tracking-wider">{user.regNumber}</span>
-                <span className="text-slate-300 dark:text-slate-700">·</span>
-                <select
-                  value={currentYear}
-                  onChange={(e) => handlePromoteYear(e.target.value)}
-                  className="text-[11px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 px-1.5 py-0.5 border border-emerald-100 dark:border-emerald-900/40 rounded-md outline-none cursor-pointer"
-                  title="Change academic year"
-                >
-                  {["Year 1","Year 2","Year 3","Year 4","Year 5","Extra Year","Postgraduate"].map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+        {/* Traffic lights */}
+        <div className="flex items-center gap-2 px-4 pt-5 pb-3 flex-shrink-0">
+          <span className="h-3 w-3 rounded-full bg-[#ff5f57] flex-shrink-0" />
+          <span className="h-3 w-3 rounded-full bg-[#ffbd2e] flex-shrink-0 hidden sm:inline-block" />
+          <span className="h-3 w-3 rounded-full bg-[#28c840] flex-shrink-0 hidden sm:inline-block" />
+        </div>
 
-            <button
-              onClick={() => setIsAvatarModalOpen(true)}
-              className="group relative flex-shrink-0 cursor-pointer"
-              title="Update profile photo"
-            >
+        {/* Avatar */}
+        <div className="px-2 pb-3 flex-shrink-0">
+          <button
+            onClick={() => setIsAvatarModalOpen(true)}
+            className="group w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition cursor-pointer text-left"
+            title="Update profile photo"
+          >
+            <div className="relative flex-shrink-0">
               <UserAvatar
                 userId={user.id}
                 role="student"
-                size={34}
+                size={30}
                 initials={user.fullName}
                 refreshTrigger={avatarRefreshTrigger}
-                className="ring-2 ring-white dark:ring-slate-800 group-hover:ring-emerald-200 dark:group-hover:ring-emerald-800 transition-all rounded-full"
+                className="rounded-full ring-2 ring-white/80 dark:ring-white/10"
               />
               <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                <Camera className="h-3 w-3 text-white" />
+                <Camera className="h-2.5 w-2.5 text-white" />
               </div>
-            </button>
-
-            <button
-              id="theme-toggle-student-btn"
-              onClick={onToggleTheme}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-white/[0.07] text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/[0.12] transition-colors cursor-pointer"
-            >
-              {theme === "light" ? <Moon className="h-[15px] w-[15px]" /> : <Sun className="h-[15px] w-[15px]" />}
-            </button>
-
-            <button
-              id="student-logout-btn"
-              onClick={onLogout}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-white/[0.07] text-slate-600 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
-            >
-              <LogOut className="h-[15px] w-[15px]" />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main grid */}
-      <main className="flex-1 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5 p-4 sm:p-6">
-
-        {/* Sidebar */}
-        <aside className="lg:col-span-3">
-          <div className="bg-white dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-4 dash-card">
-            <p className="text-[12px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 px-1">Academic Courses</p>
-            <div className="space-y-1">
-              {loading ? (
-                <div className="space-y-2 animate-pulse" id="courses-skeleton">
-                  {[1,2,3].map((i) => (
-                    <div key={i} className="p-3 rounded-xl bg-slate-100 dark:bg-white/[0.04] space-y-1.5">
-                      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-md w-14" />
-                      <div className="h-2.5 bg-slate-200 dark:bg-slate-700 rounded-md w-full" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                courses.map((c) => {
-                  const isSelected = selectedCourse?.id === c.id;
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => { fetchCourseDetail(c.id); setSelectedNote(null); setNotesFilterCourseId(c.id); }}
-                      className={`w-full flex items-center justify-between p-3 rounded-xl text-left text-[12px] transition-all duration-150 cursor-pointer ${
-                        isSelected
-                          ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/30 shadow-[0_1px_4px_rgba(4,120,87,0.10),inset_0_1px_0_rgba(255,255,255,0.80)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.20),inset_0_1px_0_rgba(255,255,255,0.06)]"
-                          : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white border border-transparent"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <span className={`block font-mono text-[12px] font-bold uppercase tracking-wider ${isSelected ? "text-emerald-700 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500"}`}>{c.code}</span>
-                        <span className="block text-[11px] mt-0.5 leading-tight truncate">{c.title}</span>
-                      </div>
-                      <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ml-2 ${isSelected ? "text-emerald-600 translate-x-0.5" : "opacity-20"}`} />
-                    </button>
-                  );
-                })
-              )}
             </div>
-          </div>
-        </aside>
+            <div className="hidden sm:block min-w-0 flex-1">
+              <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 leading-tight truncate">{user.fullName}</p>
+              <p className="text-[11px] text-[#6e6e73] dark:text-white/40 font-mono truncate">{user.regNumber}</p>
+            </div>
+          </button>
+        </div>
 
-        {/* Content */}
-        <section className="lg:col-span-9 space-y-4">
-          {/* Tab bar */}
-          <div className="flex gap-1 bg-slate-100/80 dark:bg-white/[0.04] rounded-xl p-1 border border-slate-200/60 dark:border-white/[0.05]">
-            {[
-              { id: "notes",          icon: FileText, label: "Materials",    live: false },
-              { id: "quizzes",        icon: Award,    label: "Quizzes",      live: false },
-              { id: "exams",          icon: Upload,   label: "Exams",        live: false },
-              { id: "live-classroom", icon: Radio,    label: "Live Class",   live: true },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id as any;
-              return (
-                <button
-                  key={tab.id}
-                  id={`${tab.id}-tab`}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-semibold rounded-[10px] transition-all duration-200 cursor-pointer ${
-                    isActive
-                      ? "bg-white dark:bg-white/[0.10] text-slate-800 dark:text-white border border-slate-200/60 dark:border-white/[0.08] shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.90)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.22),0_4px_12px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.07)]"
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                  }`}
-                >
-                  {tab.live ? (
-                    <span className="relative flex h-2 w-2 flex-shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+        {/* Nav + courses (scrollable) */}
+        <nav className="flex-1 px-2 space-y-0.5 overflow-y-auto min-h-0">
+
+          {/* Main nav tabs */}
+          {[
+            { id: "notes",          icon: FileText, label: "Materials",  live: false },
+            { id: "quizzes",        icon: Award,    label: "Quizzes",    live: false },
+            { id: "exams",          icon: Upload,   label: "Exams",      live: false },
+            { id: "live-classroom", icon: Radio,    label: "Live Class", live: true  },
+          ].map((item) => {
+            const isActive = activeTab === (item.id as typeof activeTab);
+            return (
+              <button
+                key={item.id}
+                id={`${item.id}-tab`}
+                onClick={() => setActiveTab(item.id as typeof activeTab)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[13px] font-medium transition-all ${
+                  isActive
+                    ? "bg-emerald-500/[0.15] dark:bg-emerald-500/[0.12] text-emerald-700 dark:text-emerald-400"
+                    : "text-[#3a3a3c] dark:text-white/60 hover:bg-black/[0.05] dark:hover:bg-white/[0.06] hover:text-[#1d1d1f] dark:hover:text-white/85"
+                }`}
+              >
+                {item.live && !isActive ? (
+                  <span className="relative flex h-4 w-4 flex-shrink-0 items-center justify-center">
+                    <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                  </span>
+                ) : (
+                  <item.icon className={`h-4 w-4 flex-shrink-0 ${isActive ? "text-emerald-500" : ""}`} strokeWidth={1.6} />
+                )}
+                <span className="hidden sm:inline">{item.label}</span>
+              </button>
+            );
+          })}
+
+          {/* Courses header */}
+          <div className="hidden sm:block pt-3 pb-1">
+            <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30">Courses</p>
+          </div>
+
+          {/* Courses list */}
+          {loading ? (
+            <div className="hidden sm:block space-y-1 animate-pulse" id="courses-skeleton">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-8 bg-black/[0.05] dark:bg-white/[0.05] rounded-[10px]" />
+              ))}
+            </div>
+          ) : (
+            <div className="hidden sm:block space-y-0.5">
+              {courses.map((c) => {
+                const isSelected = selectedCourse?.id === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => { fetchCourseDetail(c.id); setSelectedNote(null); setNotesFilterCourseId(c.id); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-[10px] text-left transition-all ${
+                      isSelected
+                        ? "bg-emerald-500/[0.12] dark:bg-emerald-500/[0.10] text-emerald-700 dark:text-emerald-400"
+                        : "text-[#3a3a3c] dark:text-white/50 hover:bg-black/[0.04] dark:hover:bg-white/[0.05] hover:text-[#1d1d1f] dark:hover:text-white/75"
+                    }`}
+                  >
+                    <span className={`font-mono text-[10.5px] font-bold uppercase tracking-wide flex-shrink-0 w-[52px] truncate ${isSelected ? "text-emerald-600 dark:text-emerald-400" : "text-[#6e6e73] dark:text-white/35"}`}>
+                      {c.code}
                     </span>
-                  ) : (
-                    <Icon className="h-3.5 w-3.5 flex-shrink-0" />
-                  )}
-                  <span className="hidden sm:inline">{tab.label}</span>
-                </button>
-              );
-            })}
+                    <span className="text-[11px] font-medium truncate flex-1 leading-tight">{c.title}</span>
+                    {isSelected && <ChevronRight className="h-3 w-3 flex-shrink-0 text-emerald-500" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Academic year selector */}
+          <div className="hidden sm:block px-1 pt-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30 mb-1.5 px-2">Academic Year</p>
+            <select
+              value={currentYear}
+              onChange={(e) => handlePromoteYear(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-[8px] text-[11.5px] bg-black/[0.04] dark:bg-white/[0.07] border border-black/[0.09] dark:border-white/[0.10] text-[#1d1d1f] dark:text-white/90 outline-none focus:border-emerald-500/60 transition cursor-pointer"
+              title="Change academic year"
+            >
+              {["Year 1", "Year 2", "Year 3", "Year 4", "Year 5", "Extra Year", "Postgraduate"].map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
           </div>
+        </nav>
 
-          {/* Content panel */}
-          <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card">
+        {/* Bottom: theme + logout */}
+        <div className="flex-shrink-0 px-2 pb-4 pt-3 space-y-0.5 border-t border-black/[0.06] dark:border-white/[0.06]">
+          <button
+            id="theme-toggle-student-btn"
+            onClick={onToggleTheme}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[13px] font-medium text-[#3a3a3c] dark:text-white/55 hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition"
+          >
+            {theme === "dark"
+              ? <Sun className="h-4 w-4 flex-shrink-0" strokeWidth={1.6} />
+              : <Moon className="h-4 w-4 flex-shrink-0" strokeWidth={1.6} />
+            }
+            <span className="hidden sm:inline">{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+          </button>
+          <button
+            id="student-logout-btn"
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[13px] font-medium text-red-500 dark:text-red-400 hover:bg-red-500/[0.08] transition"
+          >
+            <LogOut className="h-4 w-4 flex-shrink-0" strokeWidth={1.6} />
+            <span className="hidden sm:inline">Sign Out</span>
+          </button>
+        </div>
+      </aside>
 
-            {/* NOTES VIEW */}
-            {activeTab === "notes" && (
-              <div id="notes-view-container" className="space-y-5">
-                {!selectedNote ? (
-                  <div className="space-y-5">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div>
-                        <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Lecture Materials</h2>
-                        <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Browse and study uploaded lecture notes.</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Filter className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                        <select
-                          id="notes-course-filter"
-                          value={notesFilterCourseId}
-                          onChange={(e) => setNotesFilterCourseId(e.target.value)}
-                          className="form-input"
-                          style={{ width: "auto" }}
-                        >
-                          <option value="">All Courses</option>
-                          {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
-                        </select>
-                      </div>
+      {/* ── MAIN PANEL ── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        {/* Top toolbar */}
+        <header className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-black/[0.07] dark:border-white/[0.06] bg-[#f5f5f7]/80 dark:bg-[#161618]/80 backdrop-blur-sm">
+          <h1 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white/90">
+            {activeTab === "notes" ? "Lecture Materials"
+              : activeTab === "quizzes" ? "Academic Quizzes"
+              : activeTab === "exams" ? "Written Examinations"
+              : "Virtual Classroom"}
+          </h1>
+          <div className="flex items-center gap-3">
+            {selectedCourse && (
+              <span className="hidden md:inline text-[12px] font-mono font-bold text-[#6e6e73] dark:text-white/40 uppercase tracking-wider">
+                {selectedCourse.code}
+              </span>
+            )}
+            <img src="/logo-dark.png" className="h-7 w-auto opacity-80 dark:opacity-60" alt="QuizOS" />
+          </div>
+        </header>
+
+        {/* Scrollable content */}
+        <main className="flex-1 overflow-y-auto p-5">
+
+          {/* ── NOTES TAB ── */}
+          {activeTab === "notes" && (
+            <div id="notes-view-container">
+              {!selectedNote ? (
+                <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Lecture Materials</h2>
+                      <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Browse and study uploaded lecture notes.</p>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-3.5 w-3.5 text-[#6e6e73] dark:text-white/40 flex-shrink-0" />
+                      <select
+                        id="notes-course-filter"
+                        value={notesFilterCourseId}
+                        onChange={(e) => setNotesFilterCourseId(e.target.value)}
+                        className="form-input"
+                        style={{ width: "auto" }}
+                      >
+                        <option value="">All Courses</option>
+                        {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
+                      </select>
+                    </div>
+                  </div>
 
+                  <div className="p-5">
                     {loading ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse" id="notes-skeleton">
-                        {[1,2,3,4].map((i) => (
-                          <div key={i} className="p-5 border border-slate-200/60 dark:border-white/[0.05] rounded-xl space-y-3">
+                        {[1, 2, 3, 4].map((i) => (
+                          <div key={i} className="p-5 border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] space-y-3">
                             <div className="flex justify-between">
-                              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-lg w-14" />
-                              <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-lg w-20" />
+                              <div className="h-4 bg-black/[0.06] dark:bg-white/[0.06] rounded-lg w-14" />
+                              <div className="h-3 bg-black/[0.06] dark:bg-white/[0.06] rounded-lg w-20" />
                             </div>
-                            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-lg w-3/4" />
-                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-lg w-1/2" />
-                            <div className="h-px bg-slate-100 dark:bg-slate-800" />
-                            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-lg w-24" />
+                            <div className="h-4 bg-black/[0.06] dark:bg-white/[0.06] rounded-lg w-3/4" />
+                            <div className="h-3 bg-black/[0.06] dark:bg-white/[0.06] rounded-lg w-1/2" />
                           </div>
                         ))}
                       </div>
@@ -1097,23 +1100,23 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                         {allNotes.filter(n => !notesFilterCourseId || n.courseId === notesFilterCourseId).map((note) => {
                           const noteCourse = courses.find((c) => c.id === note.courseId) || note.course;
                           return (
-                            <div key={note.id} className="group p-5 border border-slate-200/60 dark:border-white/[0.06] hover:border-emerald-200 dark:hover:border-emerald-800/40 rounded-xl transition-all duration-300 ease-out flex flex-col justify-between bg-white dark:bg-white/[0.02] shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(4,120,87,0.10),0_1px_4px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_4px_16px_rgba(0,0,0,0.22)]">
+                            <div key={note.id} className="group p-5 border border-black/[0.07] dark:border-white/[0.07] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 rounded-[12px] transition-all duration-200 flex flex-col justify-between bg-black/[0.01] dark:bg-white/[0.02] hover:shadow-md">
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="px-2 py-0.5 text-[11px] font-mono font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-400 rounded-md">
+                                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
                                     {noteCourse?.code || "COURSE"}
                                   </span>
-                                  <span className="flex items-center gap-1 text-[11px] font-mono text-slate-400 dark:text-slate-500">
+                                  <span className="flex items-center gap-1 text-[11px] font-mono text-[#6e6e73] dark:text-white/35">
                                     <Calendar className="h-3 w-3" />
                                     {new Date(note.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                   </span>
                                 </div>
-                                <h4 className="text-[13px] font-semibold text-slate-900 dark:text-white leading-snug">{note.title}</h4>
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">{noteCourse?.title || "Academic Resource"}</p>
+                                <h4 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 leading-snug">{note.title}</h4>
+                                <p className="text-[11px] text-[#6e6e73] dark:text-white/45 leading-relaxed line-clamp-2">{noteCourse?.title || "Academic Resource"}</p>
                               </div>
                               <button
                                 onClick={() => setSelectedNote(note)}
-                                className="mt-4 pt-3.5 border-t border-slate-100 dark:border-white/[0.06] flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 cursor-pointer w-full text-left transition-colors"
+                                className="mt-4 pt-3.5 border-t border-black/[0.06] dark:border-white/[0.06] flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-300 cursor-pointer w-full text-left transition-colors"
                               >
                                 Open Lecture Note
                                 <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
@@ -1123,383 +1126,396 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                         })}
                       </div>
                     ) : (
-                      <div className="py-16 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
-                        <FileText className="h-8 w-8 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
-                        <p className="text-[12px] text-slate-400 dark:text-slate-500 font-medium">No lecture materials found.</p>
+                      <div className="py-16 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
+                        <FileText className="h-8 w-8 text-black/20 dark:text-white/20 mx-auto mb-3" />
+                        <p className="text-[12px] text-[#6e6e73] dark:text-white/40 font-medium">No lecture materials found.</p>
                       </div>
                     )}
                   </div>
-                ) : (
-                  <motion.div id="note-reader" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/[0.06] pb-4">
-                      <div>
-                        <button onClick={() => setSelectedNote(null)} className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 mb-1.5 inline-flex items-center gap-1 cursor-pointer">
-                          <ArrowLeft className="h-3 w-3" /> Back to Materials
-                        </button>
-                        <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">{selectedNote.title}</h2>
-                      </div>
-                      <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 flex items-center gap-1 flex-shrink-0 ml-4">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(selectedNote.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
-                      </span>
+                </div>
+              ) : (
+                <motion.div id="note-reader" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-start justify-between gap-4">
+                    <div>
+                      <button onClick={() => setSelectedNote(null)} className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-600 mb-1.5 inline-flex items-center gap-1 cursor-pointer">
+                        <ArrowLeft className="h-3 w-3" /> Back to Materials
+                      </button>
+                      <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">{selectedNote.title}</h2>
                     </div>
-                    <div className="bg-slate-50/80 dark:bg-white/[0.03] border border-slate-100 dark:border-white/[0.05] rounded-xl p-5">
+                    <span className="text-[11px] font-mono text-[#6e6e73] dark:text-white/35 flex items-center gap-1 flex-shrink-0 mt-6">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(selectedNote.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                    </span>
+                  </div>
+                  <div className="p-5">
+                    <div className="bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-5">
                       <MarkdownView content={selectedNote.content} />
                     </div>
-                  </motion.div>
-                )}
-              </div>
-            )}
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          )}
 
-            {/* QUIZZES VIEW */}
-            {activeTab === "quizzes" && (
-              <div id="quizzes-view-container" className="space-y-4">
-                <div>
-                  <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Academic Quizzes</h2>
-                  <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Secure timed assessments for your enrolled courses.</p>
+          {/* ── QUIZZES TAB ── */}
+          {activeTab === "quizzes" && (
+            <div id="quizzes-view-container">
+              <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+                  <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Academic Quizzes</h2>
+                  <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Secure timed assessments for your enrolled courses.</p>
                 </div>
+                <div className="p-5 space-y-4">
+                  {submitError && !activeQuiz && (
+                    <div className="flex items-center gap-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-800 dark:text-red-300 rounded-[10px] p-3.5 text-[12.5px]">
+                      <ShieldAlert className="h-4 w-4 shrink-0 text-red-500" />
+                      <span className="font-semibold">{submitError}</span>
+                      <button onClick={() => setSubmitError(null)} className="ml-auto text-red-400 hover:text-red-600 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  )}
 
-                {submitError && !activeQuiz && (
-                  <div className="flex items-center gap-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-800 dark:text-red-300 rounded-xl p-3.5 text-[12.5px]">
-                    <ShieldAlert className="h-4 w-4 shrink-0 text-red-500" />
-                    <span className="font-semibold">{submitError}</span>
-                    <button onClick={() => setSubmitError(null)} className="ml-auto text-red-400 hover:text-red-600 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
-                  </div>
-                )}
-
-                {loading ? (
-                  <div className="space-y-3 animate-pulse" id="quizzes-skeleton">
-                    {[1,2,3].map((i) => (
-                      <div key={i} className="flex items-center justify-between p-4 rounded-xl border border-slate-200/60 dark:border-white/[0.06]">
-                        <div className="space-y-2 w-1/2">
-                          <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-lg w-40" />
-                          <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-lg w-32" />
+                  {loading ? (
+                    <div className="space-y-3 animate-pulse" id="quizzes-skeleton">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="flex items-center justify-between p-4 rounded-[12px] border border-black/[0.06] dark:border-white/[0.06]">
+                          <div className="space-y-2 w-1/2">
+                            <div className="h-4 bg-black/[0.06] dark:bg-white/[0.06] rounded-lg w-40" />
+                            <div className="h-3 bg-black/[0.04] dark:bg-white/[0.04] rounded-lg w-32" />
+                          </div>
+                          <div className="h-8 bg-black/[0.06] dark:bg-white/[0.06] rounded-[10px] w-24" />
                         </div>
-                        <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded-xl w-24" />
-                      </div>
-                    ))}
-                  </div>
-                ) : quizzes && quizzes.length > 0 ? (
-                  <div className="space-y-3">
-                    {quizzes.map((quiz) => {
-                      const attempt = attempts[quiz.id];
-                      const isCompleted = attempt?.isCompleted;
-                      return (
-                        <div key={quiz.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200/60 dark:border-white/[0.06] hover:border-emerald-100 dark:hover:border-emerald-900/30 shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(4,120,87,0.10)] dark:hover:shadow-[0_4px_16px_rgba(0,0,0,0.22)] transition-all duration-300 ease-out bg-white dark:bg-white/[0.02]">
-                          <div className="space-y-1 min-w-0">
-                            <h4 className="text-[13px] font-semibold text-slate-900 dark:text-white truncate">{quiz.title}</h4>
-                            <div className="flex items-center gap-3 text-[10.5px] text-slate-400 dark:text-slate-500 font-mono">
-                              <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {quiz.durationMinutes} min</span>
-                              <span className="flex items-center gap-1"><FileText className="h-3 w-3" /> {quiz._count?.questions || 0} questions</span>
+                      ))}
+                    </div>
+                  ) : quizzes && quizzes.length > 0 ? (
+                    <div className="space-y-3">
+                      {quizzes.map((quiz) => {
+                        const attempt = attempts[quiz.id];
+                        const isCompleted = attempt?.isCompleted;
+                        return (
+                          <div key={quiz.id} className="flex items-center justify-between p-4 rounded-[12px] border border-black/[0.07] dark:border-white/[0.07] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 bg-black/[0.01] dark:bg-white/[0.02] hover:shadow-sm transition-all duration-200">
+                            <div className="space-y-1 min-w-0">
+                              <h4 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{quiz.title}</h4>
+                              <div className="flex items-center gap-3 text-[10.5px] text-[#6e6e73] dark:text-white/40 font-mono">
+                                <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {quiz.durationMinutes} min</span>
+                                <span className="flex items-center gap-1"><FileText className="h-3 w-3" /> {quiz._count?.questions || 0} questions</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                              {isCompleted ? (
+                                <div className="text-right">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+                                    Score: {attempt.score?.toFixed(1)}%
+                                  </span>
+                                  <p className="text-[11px] text-[#6e6e73] dark:text-white/35 font-mono mt-1 text-right">
+                                    {new Date(attempt.submittedAt!).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleStartExam(quiz)}
+                                  className="px-4 py-2.5 rounded-[10px] bg-emerald-600 hover:bg-emerald-500 text-white text-[13px] font-semibold transition shadow-sm flex items-center gap-1.5"
+                                >
+                                  <Play className="h-3 w-3 fill-current" />
+                                  Start
+                                </button>
+                              )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-                            {isCompleted ? (
-                              <div className="text-right">
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30">
-                                  Score: {attempt.score?.toFixed(1)}%
-                                </span>
-                                <p className="text-[11px] text-slate-400 dark:text-slate-500 font-mono mt-1 text-right">
-                                  {new Date(attempt.submittedAt!).toLocaleDateString()}
-                                </p>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => handleStartExam(quiz)}
-                                className="btn-gradient flex items-center gap-1.5"
-                                style={{ width: "auto", padding: "8px 16px", fontSize: "12px" }}
-                              >
-                                <Play className="h-3 w-3 fill-current" />
-                                Start Exam
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="py-16 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
-                    <Award className="h-8 w-8 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
-                    <p className="text-[12px] text-slate-400 dark:text-slate-500 font-medium">No exams scheduled for this course.</p>
-                  </div>
-                )}
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-16 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
+                      <Award className="h-8 w-8 text-black/20 dark:text-white/20 mx-auto mb-3" />
+                      <p className="text-[12px] text-[#6e6e73] dark:text-white/40 font-medium">No exams scheduled for this course.</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* LIVE CLASSROOM VIEW */}
-            {activeTab === "live-classroom" && (
-              <div id="live-classroom-view-container" className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/[0.06] pb-3">
+          {/* ── LIVE CLASSROOM TAB ── */}
+          {activeTab === "live-classroom" && (
+            <div id="live-classroom-view-container">
+              <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display flex items-center gap-2">
+                    <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90 flex items-center gap-2">
                       <Radio className="h-4 w-4 text-red-500 animate-pulse" />
                       Virtual Classroom
                     </h2>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">
                       {selectedCourse ? `${selectedCourse.code} · ${selectedCourse.title}` : "Select a Course"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {activeLiveSession && (
-                      <button onClick={handleToggleHandRaise}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-xl border transition-colors ${handRaised ? "bg-amber-100 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400" : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:border-amber-300"}`}>
+                      <button
+                        onClick={handleToggleHandRaise}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] border transition-colors ${handRaised ? "bg-amber-100 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400" : "border-black/[0.09] dark:border-white/[0.10] text-[#3a3a3c] dark:text-white/60 hover:border-amber-300"}`}
+                      >
                         <ThumbsUp className="h-3.5 w-3.5" /> {handRaised ? "Hand Raised" : "Raise Hand"}
                       </button>
                     )}
                     {activeLiveSession ? (
                       <span className="flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 text-[12px] font-bold uppercase tracking-wider border border-red-100 dark:border-red-900/30 rounded-full">
-                        <span className="h-1.5 w-1.5 bg-red-600 rounded-full animate-ping" />Live
+                        <span className="h-1.5 w-1.5 bg-red-600 rounded-full animate-ping" />
+                        Live
                       </span>
                     ) : (
-                      <span className="px-3 py-1 bg-slate-100 dark:bg-white/[0.04] text-slate-400 text-[12px] font-bold uppercase tracking-wider border border-slate-200 dark:border-white/[0.06] rounded-full">Offline</span>
+                      <span className="px-3 py-1 bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 text-[12px] font-bold uppercase tracking-wider border border-black/[0.07] dark:border-white/[0.07] rounded-full">Offline</span>
                     )}
                   </div>
                 </div>
 
-                {!activeLiveSession ? (
-                  <div className="py-16 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
-                    <Radio className="h-8 w-8 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
-                    <h4 className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">No Active Live Lecture</h4>
-                    <p className="text-[12px] text-slate-400 dark:text-slate-500 max-w-sm mx-auto mt-1.5 leading-relaxed">When a live lecture starts, everything will appear here automatically.</p>
-                  </div>
-                ) : (() => {
-                  const slides = activeLiveSession.content.split(/^---$/m).map((s: string) => s.trim()).filter(Boolean);
-                  const currentSlide = activeLiveSession.currentSlide ?? 0;
-                  const slide = slides[Math.min(currentSlide, slides.length - 1)] ?? activeLiveSession.content;
-                  const activePoll: any = (activeLiveSession.polls ?? [])[0] ?? null;
-
-                  return (
-                    <div className="space-y-3">
-                      {/* File download banner */}
-                      {activeLiveSession.attachmentName && activeLiveSession.attachmentData && (
-                        <div className="flex items-center justify-between gap-3 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                            <span className="text-[12.5px] font-semibold text-slate-800 dark:text-slate-200">Shared File: {activeLiveSession.attachmentName}</span>
-                          </div>
-                          <a href={activeLiveSession.attachmentData} download={activeLiveSession.attachmentName}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold rounded-lg transition">Download</a>
-                        </div>
-                      )}
-
-                      {/* Sub-tabs */}
-                      <div className="flex gap-1 bg-slate-100/80 dark:bg-white/[0.04] rounded-xl p-1 border border-slate-200/60 dark:border-white/[0.05] overflow-x-auto">
-                        {([
-                          { id: "jitsi",  icon: Mic,           label: "Audio/Video" },
-                          { id: "slides", icon: Layers,        label: `Slides${slides.length > 1 ? ` (${Math.min(currentSlide, slides.length - 1) + 1}/${slides.length})` : ""}` },
-                          { id: "poll",   icon: BarChart2,     label: `Poll${activePoll ? " •" : ""}` },
-                          { id: "chat",   icon: MessageSquare, label: `Chat (${liveChats.length})` },
-                        ] as { id: "jitsi" | "slides" | "poll" | "chat"; icon: React.ElementType; label: string }[]).map(tab => (
-                          <button key={tab.id} onClick={() => setLiveStudentTab(tab.id)}
-                            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveStudentTab === tab.id ? "bg-white dark:bg-white/[0.10] text-slate-800 dark:text-white shadow-sm border border-slate-200/60 dark:border-white/[0.08]" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}>
-                            <tab.icon className="h-3.5 w-3.5 flex-shrink-0" />
-                            {tab.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Jitsi */}
-                      {liveStudentTab === "jitsi" && (
-                        <div className="rounded-2xl overflow-hidden border border-slate-200/60 dark:border-white/[0.06]" style={{ height: 420 }}>
-                          <iframe
-                            src={`https://meet.jit.si/${activeLiveSession.jitsiRoom ?? activeLiveSession.id}#userInfo.displayName=${encodeURIComponent(user.fullName)}&config.prejoinPageEnabled=false`}
-                            allow="camera; microphone; fullscreen; display-capture; autoplay"
-                            className="w-full h-full border-0"
-                            title="Jitsi Meet"
-                          />
-                        </div>
-                      )}
-
-                      {/* Slides */}
-                      {liveStudentTab === "slides" && (
-                        <div className="bg-slate-950 rounded-xl border border-slate-800/60 p-5 min-h-[280px] flex flex-col">
-                          <div className="flex items-center justify-between border-b border-slate-800/60 pb-2.5 mb-4">
-                            <span className="text-[11px] font-mono text-slate-500 uppercase tracking-widest font-bold">{activeLiveSession.topic}</span>
-                            <div className="flex items-center gap-2">
-                              {slides.length > 1 && <span className="text-[11px] font-mono text-slate-500">{Math.min(currentSlide, slides.length - 1) + 1}/{slides.length}</span>}
-                              <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-500 font-bold"><span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />Synced</span>
-                            </div>
-                          </div>
-                          <div className="text-[13px] text-slate-200 flex-1 leading-relaxed">
-                            <MarkdownView content={slide} />
-                          </div>
-                          <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] font-mono text-slate-600">
-                            <span>{selectedCourse?.code}</span>
-                            <span>Started {new Date(activeLiveSession.createdAt).toLocaleTimeString()}</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Poll */}
-                      {liveStudentTab === "poll" && (
-                        <div>
-                          {!activePoll ? (
-                            <div className="py-10 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
-                              <p className="text-[12px] text-slate-400">No active poll right now. Check back soon.</p>
-                            </div>
-                          ) : (
-                            <div className="bg-amber-50/60 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/30 rounded-xl p-5 space-y-4">
-                              <p className="text-[14px] font-semibold text-slate-800 dark:text-slate-200">{activePoll.question}</p>
-                              <div className="space-y-2">
-                                {(JSON.parse(activePoll.optionsJson) as string[]).map(opt => (
-                                  <button key={opt} onClick={() => handlePollRespond(activePoll.id, opt)}
-                                    className={`w-full text-left px-4 py-3 rounded-xl border text-[13px] font-semibold transition-all ${myPollAnswer === opt ? "bg-emerald-600 border-emerald-600 text-white" : "border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"}`}>
-                                    {opt}
-                                    {myPollAnswer === opt && <CheckCircle className="h-3.5 w-3.5 ml-1.5 inline-block" />}
-                                  </button>
-                                ))}
-                              </div>
-                              {myPollAnswer && <p className="text-[12px] text-emerald-600 dark:text-emerald-400 text-center">Response recorded: <strong>{myPollAnswer}</strong></p>}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Chat */}
-                      {liveStudentTab === "chat" && (
-                        <div className="border border-slate-200/60 dark:border-white/[0.06] rounded-xl overflow-hidden flex flex-col h-[380px] bg-white dark:bg-white/[0.02]">
-                          <div className="flex-1 p-3 overflow-y-auto space-y-3">
-                            {liveChats.length === 0 ? (
-                              <div className="h-full flex items-center justify-center text-center text-slate-400 dark:text-slate-600 text-[11px] font-medium">Start the discussion!</div>
-                            ) : liveChats.map((chat) => {
-                              const isMe = chat.senderId === user.id;
-                              const isStaff = chat.senderRole === "lecturer";
-                              return (
-                                <div key={chat.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                                  <UserAvatar userId={chat.senderId} role={isStaff ? "lecturer" : "student"} size={26} initials={chat.senderName} className="shrink-0" />
-                                  <div className={`max-w-[75%] flex flex-col gap-0.5 ${isMe ? "items-end" : "items-start"}`}>
-                                    <span className={`text-[11px] font-bold font-mono uppercase tracking-wide ${isStaff ? "text-amber-600 dark:text-amber-500" : "text-slate-400 dark:text-slate-500"}`}>{chat.senderName}{isStaff && " · Staff"}</span>
-                                    <div className={`px-3 py-2 rounded-2xl text-[12px] break-words ${isMe ? "bg-emerald-700 text-white rounded-br-md" : isStaff ? "bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/30 text-slate-800 dark:text-slate-200 rounded-bl-md" : "bg-slate-100 dark:bg-white/[0.06] text-slate-800 dark:text-slate-200 rounded-bl-md"}`}>{chat.message}</div>
-                                    <span className="text-[8.5px] text-slate-400 font-mono">{new Date(chat.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            <div ref={chatEndRef} />
-                          </div>
-                          <form onSubmit={handleSendChatMessage} className="p-2.5 border-t border-slate-100 dark:border-white/[0.06] flex gap-2 bg-white dark:bg-[#011a0d]">
-                            <input type="text" required value={chatMessage} onChange={e => setChatMessage(e.target.value)} placeholder="Type a message..."
-                              className="flex-1 px-3 py-2.5 bg-white dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.08] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 outline-none focus:border-emerald-400 focus:shadow-[0_0_0_3px_rgba(5,150,105,0.12)] transition-[border-color,box-shadow] duration-200" />
-                            <button type="submit" disabled={isSendingChat} className="flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 transition flex-shrink-0">
-                              <Send className="h-3.5 w-3.5 text-white" />
-                            </button>
-                          </form>
-                        </div>
-                      )}
+                <div className="p-5">
+                  {!activeLiveSession ? (
+                    <div className="py-16 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
+                      <Radio className="h-8 w-8 text-black/20 dark:text-white/20 mx-auto mb-3" />
+                      <h4 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/70">No Active Live Lecture</h4>
+                      <p className="text-[12px] text-[#6e6e73] dark:text-white/40 max-w-sm mx-auto mt-1.5 leading-relaxed">When a live lecture starts, everything will appear here automatically.</p>
                     </div>
-                  );
-                })()}
-              </div>
-            )}
+                  ) : (() => {
+                    const slides = activeLiveSession.content.split(/^---$/m).map((s: string) => s.trim()).filter(Boolean);
+                    const currentSlide = activeLiveSession.currentSlide ?? 0;
+                    const slide = slides[Math.min(currentSlide, slides.length - 1)] ?? activeLiveSession.content;
+                    const activePoll: any = (activeLiveSession.polls ?? [])[0] ?? null;
 
+                    return (
+                      <div className="space-y-3">
+                        {activeLiveSession.attachmentName && activeLiveSession.attachmentData && (
+                          <div className="flex items-center justify-between gap-3 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-[12px]">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                              <span className="text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/85">Shared File: {activeLiveSession.attachmentName}</span>
+                            </div>
+                            <a href={activeLiveSession.attachmentData} download={activeLiveSession.attachmentName}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold rounded-[8px] transition">Download</a>
+                          </div>
+                        )}
+
+                        {/* Sub-tabs */}
+                        <div className="flex gap-1 bg-black/[0.04] dark:bg-white/[0.04] rounded-[12px] p-1 border border-black/[0.06] dark:border-white/[0.05] overflow-x-auto">
+                          {([
+                            { id: "jitsi",  icon: Mic,           label: "Audio/Video" },
+                            { id: "slides", icon: Layers,        label: `Slides${slides.length > 1 ? ` (${Math.min(currentSlide, slides.length - 1) + 1}/${slides.length})` : ""}` },
+                            { id: "poll",   icon: BarChart2,     label: `Poll${activePoll ? " •" : ""}` },
+                            { id: "chat",   icon: MessageSquare, label: `Chat (${liveChats.length})` },
+                          ] as { id: "jitsi" | "slides" | "poll" | "chat"; icon: React.ElementType; label: string }[]).map(tab => (
+                            <button key={tab.id} onClick={() => setLiveStudentTab(tab.id)}
+                              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveStudentTab === tab.id ? "bg-[#ffffff] dark:bg-white/[0.10] text-[#1d1d1f] dark:text-white/90 shadow-sm border border-black/[0.07] dark:border-white/[0.08]" : "text-[#6e6e73] dark:text-white/50 hover:text-[#1d1d1f] dark:hover:text-white/75"}`}>
+                              <tab.icon className="h-3.5 w-3.5 flex-shrink-0" />
+                              {tab.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Jitsi */}
+                        {liveStudentTab === "jitsi" && (
+                          <div className="rounded-[12px] overflow-hidden border border-black/[0.07] dark:border-white/[0.07]" style={{ height: 420 }}>
+                            <iframe
+                              src={`https://meet.jit.si/${activeLiveSession.jitsiRoom ?? activeLiveSession.id}#userInfo.displayName=${encodeURIComponent(user.fullName)}&config.prejoinPageEnabled=false`}
+                              allow="camera; microphone; fullscreen; display-capture; autoplay"
+                              className="w-full h-full border-0"
+                              title="Jitsi Meet"
+                            />
+                          </div>
+                        )}
+
+                        {/* Slides */}
+                        {liveStudentTab === "slides" && (
+                          <div className="bg-slate-950 rounded-[12px] border border-slate-800/60 p-5 min-h-[280px] flex flex-col">
+                            <div className="flex items-center justify-between border-b border-slate-800/60 pb-2.5 mb-4">
+                              <span className="text-[11px] font-mono text-slate-500 uppercase tracking-widest font-bold">{activeLiveSession.topic}</span>
+                              <div className="flex items-center gap-2">
+                                {slides.length > 1 && <span className="text-[11px] font-mono text-slate-500">{Math.min(currentSlide, slides.length - 1) + 1}/{slides.length}</span>}
+                                <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-500 font-bold"><span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />Synced</span>
+                              </div>
+                            </div>
+                            <div className="text-[13px] text-slate-200 flex-1 leading-relaxed">
+                              <MarkdownView content={slide} />
+                            </div>
+                            <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] font-mono text-slate-600">
+                              <span>{selectedCourse?.code}</span>
+                              <span>Started {new Date(activeLiveSession.createdAt).toLocaleTimeString()}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Poll */}
+                        {liveStudentTab === "poll" && (
+                          <div>
+                            {!activePoll ? (
+                              <div className="py-10 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
+                                <p className="text-[12px] text-[#6e6e73] dark:text-white/40">No active poll right now. Check back soon.</p>
+                              </div>
+                            ) : (
+                              <div className="bg-amber-50/60 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/30 rounded-[12px] p-5 space-y-4">
+                                <p className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">{activePoll.question}</p>
+                                <div className="space-y-2">
+                                  {(JSON.parse(activePoll.optionsJson) as string[]).map(opt => (
+                                    <button key={opt} onClick={() => handlePollRespond(activePoll.id, opt)}
+                                      className={`w-full text-left px-4 py-3 rounded-[10px] border text-[13px] font-semibold transition-all ${myPollAnswer === opt ? "bg-emerald-600 border-emerald-600 text-white" : "border-black/[0.08] dark:border-white/[0.09] text-[#1d1d1f] dark:text-white/80 hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"}`}>
+                                      {opt}
+                                      {myPollAnswer === opt && <CheckCircle className="h-3.5 w-3.5 ml-1.5 inline-block" />}
+                                    </button>
+                                  ))}
+                                </div>
+                                {myPollAnswer && <p className="text-[12px] text-emerald-600 dark:text-emerald-400 text-center">Response recorded: <strong>{myPollAnswer}</strong></p>}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Chat */}
+                        {liveStudentTab === "chat" && (
+                          <div className="border border-black/[0.07] dark:border-white/[0.07] rounded-[12px] overflow-hidden flex flex-col h-[380px]">
+                            <div className="flex-1 p-3 overflow-y-auto space-y-3 bg-black/[0.01] dark:bg-white/[0.02]">
+                              {liveChats.length === 0 ? (
+                                <div className="h-full flex items-center justify-center text-center text-[#6e6e73] dark:text-white/35 text-[11px] font-medium">Start the discussion!</div>
+                              ) : liveChats.map((chat) => {
+                                const isMe = chat.senderId === user.id;
+                                const isStaff = chat.senderRole === "lecturer";
+                                return (
+                                  <div key={chat.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                                    <UserAvatar userId={chat.senderId} role={isStaff ? "lecturer" : "student"} size={26} initials={chat.senderName} className="shrink-0" />
+                                    <div className={`max-w-[75%] flex flex-col gap-0.5 ${isMe ? "items-end" : "items-start"}`}>
+                                      <span className={`text-[11px] font-bold font-mono uppercase tracking-wide ${isStaff ? "text-amber-600 dark:text-amber-500" : "text-[#6e6e73] dark:text-white/40"}`}>{chat.senderName}{isStaff && " · Staff"}</span>
+                                      <div className={`px-3 py-2 rounded-2xl text-[12px] break-words ${isMe ? "bg-emerald-700 text-white rounded-br-md" : isStaff ? "bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/30 text-slate-800 dark:text-slate-200 rounded-bl-md" : "bg-[#f0f0f0] dark:bg-white/[0.07] text-[#1d1d1f] dark:text-white/85 rounded-bl-md"}`}>{chat.message}</div>
+                                      <span className="text-[8.5px] text-[#6e6e73] dark:text-white/30 font-mono">{new Date(chat.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              <div ref={chatEndRef} />
+                            </div>
+                            <form onSubmit={handleSendChatMessage} className="p-2.5 border-t border-black/[0.06] dark:border-white/[0.06] flex gap-2 bg-[#ffffff] dark:bg-[#1c1c1e]">
+                              <input type="text" required value={chatMessage} onChange={e => setChatMessage(e.target.value)} placeholder="Type a message..."
+                                className="flex-1 px-3 py-2.5 bg-black/[0.04] dark:bg-white/[0.07] border border-black/[0.09] dark:border-white/[0.10] rounded-[10px] text-[12.5px] text-[#1d1d1f] dark:text-white/90 placeholder-[#6e6e73] dark:placeholder-white/30 outline-none focus:border-emerald-500/60 transition" />
+                              <button type="submit" disabled={isSendingChat} className="flex items-center justify-center w-9 h-9 rounded-[10px] bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition flex-shrink-0">
+                                <Send className="h-3.5 w-3.5 text-white" />
+                              </button>
+                            </form>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── EXAMS TAB ── */}
           {activeTab === "exams" && (
             <div className="space-y-4">
               {!activeExam ? (
-                <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
-                  <div>
-                    <h2 className="text-[16px] font-bold text-slate-900 dark:text-white font-display">Written Examinations</h2>
-                    <p className="text-[12.5px] text-slate-400 dark:text-slate-500 mt-0.5">Read each question carefully and type your answers. The AI will grade your submission.</p>
+                <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+                    <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">Written Examinations</h2>
+                    <p className="text-[12px] text-[#6e6e73] dark:text-white/50 mt-0.5">Read each question carefully and type your answers. The AI will grade your submission.</p>
                   </div>
-                  {exams.length === 0 ? (
-                    <div className="py-12 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
-                      <Upload className="h-7 w-7 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
-                      <p className="text-[12px] text-slate-400">No exams available yet.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {exams.map(exam => (
-                        <button key={exam.id} onClick={async () => { setActiveExam(exam); setMySubmission(null); await fetchMySubmission(exam.id); }}
-                          className="w-full text-left p-4 border border-slate-200/70 dark:border-white/[0.06] rounded-xl bg-white dark:bg-white/[0.02] hover:border-emerald-300 dark:hover:border-emerald-800 hover:shadow-[0_4px_16px_rgba(4,120,87,0.10)] transition-all duration-200 flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-200">{exam.title}</p>
-                            <p className="text-[11px] text-slate-400 mt-0.5">{exam.course?.code} / {exam.course?.title}</p>
-                          </div>
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${exam.isOpen ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30" : "bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700"}`}>
-                            {exam.isOpen ? "Open" : "Closed"}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="p-5">
+                    {exams.length === 0 ? (
+                      <div className="py-12 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
+                        <Upload className="h-7 w-7 text-black/20 dark:text-white/20 mx-auto mb-2" />
+                        <p className="text-[12px] text-[#6e6e73] dark:text-white/40">No exams available yet.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {exams.map(exam => (
+                          <button key={exam.id} onClick={async () => { setActiveExam(exam); setMySubmission(null); await fetchMySubmission(exam.id); }}
+                            className="w-full text-left p-4 border border-black/[0.07] dark:border-white/[0.07] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 hover:shadow-sm transition-all duration-200 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{exam.title}</p>
+                              <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">{exam.course?.code} / {exam.course?.title}</p>
+                            </div>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${exam.isOpen ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30" : "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"}`}>
+                              {exam.isOpen ? "Open" : "Closed"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : mySubmission ? (
-                /* Result view */
-                <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
-                  <button onClick={() => { setActiveExam(null); setMySubmission(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"><ArrowLeft className="h-3.5 w-3.5" /> Back to Exams</button>
-                  <h2 className="text-[16px] font-bold text-slate-900 dark:text-white">{activeExam.title}: Result</h2>
-
-                  {mySubmission.isGraded ? (
-                    <div className="space-y-4">
-                      <div className={`rounded-2xl p-6 text-center border ${mySubmission.score >= 50 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30" : "bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30"}`}>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1">Your Score</p>
-                        <p className={`text-5xl font-black ${mySubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{mySubmission.score?.toFixed(1)}%</p>
-                        <p className={`text-[13px] font-semibold mt-2 ${mySubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{mySubmission.score >= 50 ? "Passed" : "Failed"}</p>
-                      </div>
-                      {mySubmission.feedback && (
-                        <div>
-                          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">AI Feedback</p>
-                          <p className="text-[13px] text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4">{mySubmission.feedback}</p>
+                <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+                    <button onClick={() => { setActiveExam(null); setMySubmission(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 mb-1.5 cursor-pointer"><ArrowLeft className="h-3.5 w-3.5" /> Back to Exams</button>
+                    <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">{activeExam.title}: Result</h2>
+                  </div>
+                  <div className="p-5 space-y-5">
+                    {mySubmission.isGraded ? (
+                      <div className="space-y-4">
+                        <div className={`rounded-[12px] p-6 text-center border ${mySubmission.score >= 50 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30" : "bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30"}`}>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-1">Your Score</p>
+                          <p className={`text-5xl font-black ${mySubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{mySubmission.score?.toFixed(1)}%</p>
+                          <p className={`text-[13px] font-semibold mt-2 ${mySubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{mySubmission.score >= 50 ? "Passed" : "Failed"}</p>
                         </div>
-                      )}
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">Your Submitted Answers</p>
-                        <pre className="text-[12px] text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{mySubmission.answersText}</pre>
+                        {mySubmission.feedback && (
+                          <div>
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">AI Feedback</p>
+                            <p className="text-[13px] text-[#1d1d1f] dark:text-white/80 leading-relaxed bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4">{mySubmission.feedback}</p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">Your Submitted Answers</p>
+                          <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{mySubmission.answersText}</pre>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="py-10 text-center">
-                      <Loader2 className="h-8 w-8 text-emerald-400 animate-spin mx-auto mb-3" />
-                      <p className="text-[13px] font-semibold text-slate-600 dark:text-slate-400">Submitted: awaiting AI grading</p>
-                      <p className="text-[12px] text-slate-400 mt-1">Your lecturer will trigger grading once all students have submitted.</p>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="py-10 text-center">
+                        <Loader2 className="h-8 w-8 text-emerald-400 animate-spin mx-auto mb-3" />
+                        <p className="text-[13px] font-semibold text-[#3a3a3c] dark:text-white/70">Submitted: awaiting AI grading</p>
+                        <p className="text-[12px] text-[#6e6e73] dark:text-white/40 mt-1">Your lecturer will trigger grading once all students have submitted.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
-                /* Answer submission view */
-                <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
-                  <button onClick={() => { setActiveExam(null); setExamAnswers(""); setExamError(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"><ArrowLeft className="h-3.5 w-3.5" /> Back to Exams</button>
-
-                  <div>
-                    <h2 className="text-[15px] font-bold text-slate-900 dark:text-white">{activeExam.title}</h2>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{activeExam.course?.code} · {activeExam.isOpen ? "Open for submission" : "Closed"}</p>
+                <div className="bg-[#ffffff] dark:bg-[#1c1c1e] rounded-[14px] border border-black/[0.07] dark:border-white/[0.07] shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+                    <button onClick={() => { setActiveExam(null); setExamAnswers(""); setExamError(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 mb-1.5 cursor-pointer"><ArrowLeft className="h-3.5 w-3.5" /> Back to Exams</button>
+                    <h2 className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white/90">{activeExam.title}</h2>
+                    <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">{activeExam.course?.code} · {activeExam.isOpen ? "Open for submission" : "Closed"}</p>
                   </div>
+                  <div className="p-5 space-y-5">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">Exam Questions</p>
+                      <pre className="text-[13px] text-[#1d1d1f] dark:text-white/80 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto">{activeExam.questionsText}</pre>
+                    </div>
 
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">Exam Questions</p>
-                    <pre className="text-[13px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.05] rounded-xl p-4 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto">{activeExam.questionsText}</pre>
+                    {activeExam.isOpen ? (
+                      <div className="space-y-3">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">Your Answers</p>
+                        <textarea
+                          rows={12}
+                          value={examAnswers}
+                          onChange={e => setExamAnswers(e.target.value)}
+                          placeholder={"Type your answers here. For example:\n\n1. [Your answer to question 1]\n\n2. [Your answer to question 2]\n\netc."}
+                          className="w-full px-3.5 py-2.5 rounded-[10px] text-[13.5px] bg-black/[0.04] dark:bg-white/[0.07] border border-black/[0.09] dark:border-white/[0.10] text-[#1d1d1f] dark:text-white/90 placeholder-[#6e6e73] dark:placeholder-white/30 outline-none focus:border-emerald-500/60 dark:focus:border-emerald-500/50 transition resize-none leading-relaxed"
+                        />
+                        {examError && <p className="text-[12px] text-red-500 font-medium">{examError}</p>}
+                        <button onClick={handleExamSubmit} disabled={isSubmittingExam} className="btn-gradient disabled:opacity-60 flex items-center justify-center gap-2">
+                          {isSubmittingExam ? <><Loader2 className="h-4 w-4 animate-spin" />Submitting…</> : "Submit Answers"}
+                        </button>
+                        <p className="text-[11px] text-[#6e6e73] dark:text-white/40 text-center">Once submitted you cannot change your answers. The AI will grade your submission after the exam closes.</p>
+                      </div>
+                    ) : (
+                      <div className="py-8 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
+                        <p className="text-[13px] font-semibold text-[#6e6e73] dark:text-white/50">This exam is closed for submissions.</p>
+                      </div>
+                    )}
                   </div>
-
-                  {activeExam.isOpen ? (
-                    <div className="space-y-3">
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Your Answers</p>
-                      <textarea
-                        rows={12}
-                        value={examAnswers}
-                        onChange={e => setExamAnswers(e.target.value)}
-                        placeholder={"Type your answers here. For example:\n\n1. [Your answer to question 1]\n\n2. [Your answer to question 2]\n\netc."}
-                        className="form-input resize-none leading-relaxed"
-                      />
-                      {examError && <p className="text-[12px] text-red-500 font-medium">{examError}</p>}
-                      <button onClick={handleExamSubmit} disabled={isSubmittingExam} className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
-                        {isSubmittingExam ? <><Loader2 className="h-4 w-4 animate-spin" />Submitting…</> : "Submit Answers"}
-                      </button>
-                      <p className="text-[11px] text-slate-400 text-center">Once submitted you cannot change your answers. The AI will grade your submission after the exam closes.</p>
-                    </div>
-                  ) : (
-                    <div className="py-8 text-center border border-dashed border-slate-200 dark:border-slate-700/50 rounded-xl">
-                      <p className="text-[13px] font-semibold text-slate-500">This exam is closed for submissions.</p>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
           )}
 
-          </div>
-        </section>
-
-      </main>
+        </main>
+      </div>
 
       <AvatarModal
         isOpen={isAvatarModalOpen}
