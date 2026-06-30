@@ -32,6 +32,14 @@
   --shadow-xs:        0 1px 3px rgba(0,0,0,0.06);
   --shadow-sm:        0 2px 10px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05);
   --shadow-md:        0 8px 32px rgba(4,120,87,0.10), 0 2px 10px rgba(0,0,0,0.06);
+  --shadow-panel:     0 1px 4px rgba(0,0,0,0.03),
+                      0 6px 20px rgba(0,0,0,0.05),
+                      0 20px 48px rgba(4,120,87,0.04),
+                      inset 0 1px 0 rgba(255,255,255,0.92);
+  --shadow-panel-dark:0 1px 4px rgba(0,0,0,0.20),
+                      0 6px 20px rgba(0,0,0,0.26),
+                      0 20px 48px rgba(0,0,0,0.36),
+                      inset 0 1px 0 rgba(255,255,255,0.05);
   --shadow-lg:        0 2px 8px rgba(0,0,0,0.04),
                       0 12px 32px rgba(0,0,0,0.06),
                       0 40px 80px rgba(4,120,87,0.07),
@@ -275,34 +283,43 @@ select.premium-input {
 .form-input {
   display: block;
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 14px;
   font-size: 13px;
   line-height: 1.5;
   font-family: var(--font-sans);
   color: #1e293b;
-  background: rgba(240, 253, 244, 0.70);
-  border: 1.5px solid rgba(187, 247, 208, 0.80);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.90);
+  border: 1.5px solid rgba(203, 213, 225, 0.75);
+  border-radius: 12px;
   outline: none;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03), inset 0 1px 2px rgba(0,0,0,0.02);
+  transition: border-color 0.20s cubic-bezier(0.16,1,0.3,1),
+              box-shadow 0.20s cubic-bezier(0.16,1,0.3,1),
+              background 0.20s cubic-bezier(0.16,1,0.3,1);
   -webkit-appearance: none;
 }
 .form-input::placeholder { color: #94a3b8; }
 .form-input:focus {
   background: #fff;
-  border-color: rgba(5, 150, 105, 0.72);
-  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.10);
+  border-color: rgba(5, 150, 105, 0.68);
+  box-shadow:
+    0 0 0 3px rgba(5, 150, 105, 0.14),
+    0 1px 6px rgba(4, 120, 87, 0.10),
+    inset 0 1px 2px rgba(0,0,0,0.01);
 }
 .dark .form-input {
-  background: rgba(1, 18, 9, 0.70) !important;
+  background: rgba(1, 18, 9, 0.72) !important;
   border-color: rgba(5, 150, 105, 0.18) !important;
   color: #f1f5f9 !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15), inset 0 1px 2px rgba(0,0,0,0.10) !important;
 }
 .dark .form-input::placeholder { color: #475569 !important; }
 .dark .form-input:focus {
-  background: rgba(1, 24, 12, 0.90) !important;
-  border-color: rgba(52, 211, 153, 0.62) !important;
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.10) !important;
+  background: rgba(1, 24, 12, 0.92) !important;
+  border-color: rgba(52, 211, 153, 0.60) !important;
+  box-shadow:
+    0 0 0 3px rgba(52, 211, 153, 0.12),
+    0 1px 6px rgba(16, 185, 129, 0.08) !important;
 }
 select.form-input {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -322,6 +339,29 @@ textarea.form-input { resize: none; }
 .orb-3 { animation: float-orb 20s ease-in-out infinite 6s; }
 
 .logo-float { animation: logo-float 4.5s ease-in-out infinite; }
+
+/* ───────────────────────────────────────────────
+   DASHBOARD PANEL CARD — multi-layer shadow + top specular
+   ─────────────────────────────────────────────── */
+
+.dash-card {
+  position: relative;
+  box-shadow: var(--shadow-panel);
+}
+.dark .dash-card { box-shadow: var(--shadow-panel-dark); }
+.dash-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 8%; right: 8%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.88) 50%, transparent 100%);
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 1;
+}
+.dark .dash-card::before {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.14) 50%, transparent 100%);
+}
 
 /* ═══════════════════════════════════════════════
    DARK MODE — Global Tailwind Overrides

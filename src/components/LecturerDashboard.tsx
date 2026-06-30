@@ -505,7 +505,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         }}
         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-[12px] font-medium transition-all duration-150 cursor-pointer ${
           isActive
-            ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/30"
+            ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/30 shadow-[0_1px_4px_rgba(4,120,87,0.10),inset_0_1px_0_rgba(255,255,255,0.80)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.20),inset_0_1px_0_rgba(255,255,255,0.06)]"
             : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white border border-transparent"
         }`}
       >
@@ -521,13 +521,23 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   /* ─── label helper ─── */
-  const lbl = "block text-[12px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5";
+  const lbl = "block text-[11px] font-semibold uppercase tracking-[0.09em] text-slate-500 dark:text-slate-400 mb-2";
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
+      {/* Background depth layers */}
+      <div className="fixed inset-0 pointer-events-none dark:opacity-0"
+        style={{background: "radial-gradient(ellipse 70% 50% at 18% 12%, rgba(167,243,208,0.20) 0%, transparent 70%)"}} />
+      <div className="fixed inset-0 pointer-events-none opacity-0 dark:opacity-100"
+        style={{background: "radial-gradient(ellipse 70% 50% at 18% 12%, rgba(4,120,87,0.10) 0%, transparent 70%)"}} />
+      <div className="fixed inset-0 pointer-events-none opacity-[0.018] dark:opacity-[0.032]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          backgroundSize: "256px 256px",
+        }} />
 
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#010e07]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06]">
+      <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#010e07]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.04)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 flex-shrink-0">
             <img src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"} alt="QuizOS" className="h-9 w-auto select-none rounded-md" />
@@ -584,7 +594,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
         {/* Sidebar nav */}
         <aside className="lg:col-span-3">
-          <div className="bg-white dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-4 shadow-sm">
+          <div className="bg-white dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-4 dash-card">
             <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 px-1">Workspace</p>
             <nav className="space-y-1">
               {navBtn("gradebook",    "Registry Gradebook",    <ClipboardList className="h-4 w-4" />)}
@@ -606,7 +616,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300 rounded-xl p-3.5 flex items-center gap-2.5 text-[12.5px] shadow-sm"
+              className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300 rounded-xl p-3.5 flex items-center gap-2.5 text-[12.5px] shadow-[0_2px_8px_rgba(4,120,87,0.12),0_6px_20px_rgba(4,120,87,0.08)]"
             >
               <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <span className="font-semibold">{successMsg}</span>
@@ -617,7 +627,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
             <motion.div
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-800 dark:text-red-300 rounded-xl p-3.5 flex items-center gap-2.5 text-[12.5px] shadow-sm"
+              className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-800 dark:text-red-300 rounded-xl p-3.5 flex items-center gap-2.5 text-[12.5px] shadow-[0_2px_8px_rgba(239,68,68,0.10),0_6px_20px_rgba(239,68,68,0.06)]"
             >
               <AlertTriangle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
               <span className="font-semibold">{errorMsg}</span>
@@ -626,7 +636,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 1. GRADEBOOK ── */}
           {activeTab === "gradebook" && (
-            <div id="gradebook-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="gradebook-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Student Assessment Gradebook</h2>
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Evaluate, mark, and adjust examination attempt logs.</p>
@@ -781,7 +791,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 2. LIVE LECTURE ── */}
           {activeTab === "live-lecture" && (
-            <div id="live-lecture-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="live-lecture-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display flex items-center gap-2">
                   <Radio className="h-4 w-4 text-red-500 animate-pulse" />
@@ -906,7 +916,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           value={lecturerChatMessage}
                           onChange={(e) => setLecturerChatMessage(e.target.value)}
                           placeholder="Reply to class…"
-                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-emerald-300 dark:focus:border-emerald-700 transition-colors"
+                          className="flex-1 px-3 py-2.5 bg-white dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.08] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 outline-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] focus:border-emerald-400 dark:focus:border-emerald-600 focus:shadow-[0_0_0_3px_rgba(5,150,105,0.12),inset_0_1px_2px_rgba(0,0,0,0.01)] transition-[border-color,box-shadow] duration-200"
                         />
                         <button
                           type="submit"
@@ -925,7 +935,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 3. PUBLISH NOTES ── */}
           {activeTab === "notes" && (
-            <div id="notes-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="notes-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Publish Course Study Notes</h2>
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Upload comprehensive module details for students to study.</p>
@@ -960,7 +970,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 4. DEPLOY QUIZ ── */}
           {activeTab === "quizzes" && (
-            <div id="quizzes-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="quizzes-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Deploy Secure Quiz & Examination</h2>
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Configure timed question sets for instant testing and score logging.</p>
@@ -1046,7 +1056,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 5. COURSE REGISTRY ── */}
           {activeTab === "courses" && (
-            <div id="courses-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="courses-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Course Registry</h2>
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Register new academic course modules.</p>
@@ -1083,7 +1093,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {courses.map((c) => (
-                      <div key={c.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-emerald-100 dark:hover:border-emerald-900/30 transition-all">
+                      <div key={c.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-emerald-100 dark:hover:border-emerald-900/30 shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(4,120,87,0.10),0_1px_4px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_4px_16px_rgba(0,0,0,0.22)] transition-all duration-300 ease-out">
                         <div>
                           <span className="block font-mono text-[12px] font-bold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">{c.code}</span>
                           <span className="block text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 leading-tight mt-0.5">{c.title}</span>
@@ -1101,7 +1111,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 6. DEPARTMENTS ── */}
           {activeTab === "departments" && (
-            <div id="departments-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            <div id="departments-panel" className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card space-y-5">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 dark:text-white font-display">Academic Departments</h2>
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">Establish and manage school departments.</p>
@@ -1134,7 +1144,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                 ) : departments.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {departments.map((dept) => (
-                      <div key={dept.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-emerald-100 dark:hover:border-emerald-900/30 transition-all">
+                      <div key={dept.id} className="p-4 border border-slate-200/60 dark:border-white/[0.06] rounded-xl flex items-center justify-between bg-white dark:bg-white/[0.02] hover:border-emerald-100 dark:hover:border-emerald-900/30 shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(4,120,87,0.10),0_1px_4px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_4px_16px_rgba(0,0,0,0.22)] transition-all duration-300 ease-out">
                         <div>
                           <span className="block text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 leading-tight">{dept.name}</span>
                           <span className="block font-mono text-[11px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-0.5">ID: {dept.id.substring(0, 8)}</span>

@@ -471,7 +471,17 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   /* ─── EXAM RESULT SCREEN ─── */
   if (examResult) {
     return (
-      <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-gradient-to-br from-emerald-50 via-white to-green-50/60 dark:from-[#010e07] dark:via-[#011208] dark:to-[#021a0d] font-sans">
+      <div className="min-h-screen relative bg-gradient-to-br from-emerald-50 via-white to-green-50/60 dark:from-[#010e07] dark:via-[#011208] dark:to-[#021a0d] font-sans">
+        <div className="fixed inset-0 pointer-events-none dark:opacity-0"
+          style={{background: "radial-gradient(ellipse 80% 65% at 50% 38%, rgba(167,243,208,0.30) 0%, transparent 70%)"}} />
+        <div className="fixed inset-0 pointer-events-none opacity-0 dark:opacity-100"
+          style={{background: "radial-gradient(ellipse 80% 65% at 50% 38%, rgba(4,120,87,0.16) 0%, transparent 70%)"}} />
+        <div className="fixed inset-0 pointer-events-none opacity-[0.022] dark:opacity-[0.04]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+            backgroundSize: "256px 256px",
+          }} />
+        <div className="relative z-10 flex items-center justify-center py-12 px-4 min-h-screen">
         <motion.div
           id="summary-screen"
           initial={{ opacity: 0, y: 16, scale: 0.97 }}
@@ -565,6 +575,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             </div>
           </div>
         </motion.div>
+        </div>
       </div>
     );
   }
@@ -806,8 +817,19 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   /* ─── MAIN DASHBOARD ─── */
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
+      {/* Background depth layers */}
+      <div className="fixed inset-0 pointer-events-none dark:opacity-0"
+        style={{background: "radial-gradient(ellipse 70% 50% at 18% 12%, rgba(167,243,208,0.20) 0%, transparent 70%)"}} />
+      <div className="fixed inset-0 pointer-events-none opacity-0 dark:opacity-100"
+        style={{background: "radial-gradient(ellipse 70% 50% at 18% 12%, rgba(4,120,87,0.10) 0%, transparent 70%)"}} />
+      <div className="fixed inset-0 pointer-events-none opacity-[0.018] dark:opacity-[0.032]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          backgroundSize: "256px 256px",
+        }} />
+
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#010e07]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06]">
+      <header className="sticky top-0 z-30 bg-white/85 dark:bg-[#010e07]/90 backdrop-blur-2xl border-b border-slate-200/60 dark:border-white/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.04)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 flex-shrink-0">
             <img src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"} alt="QuizOS" className="h-9 w-auto select-none rounded-md" />
@@ -878,7 +900,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
         {/* Sidebar */}
         <aside className="lg:col-span-3">
-          <div className="bg-white dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-4 shadow-sm">
+          <div className="bg-white dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-4 dash-card">
             <p className="text-[12px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 px-1">Academic Courses</p>
             <div className="space-y-1">
               {loading ? (
@@ -899,7 +921,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       onClick={() => { fetchCourseDetail(c.id); setSelectedNote(null); setNotesFilterCourseId(c.id); }}
                       className={`w-full flex items-center justify-between p-3 rounded-xl text-left text-[12px] transition-all duration-150 cursor-pointer ${
                         isSelected
-                          ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/30"
+                          ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/30 shadow-[0_1px_4px_rgba(4,120,87,0.10),inset_0_1px_0_rgba(255,255,255,0.80)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.20),inset_0_1px_0_rgba(255,255,255,0.06)]"
                           : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white border border-transparent"
                       }`}
                     >
@@ -934,7 +956,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   onClick={() => setActiveTab(tab.id as any)}
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[12px] font-semibold rounded-[10px] transition-all duration-200 cursor-pointer ${
                     isActive
-                      ? "bg-white dark:bg-white/[0.10] text-slate-800 dark:text-white shadow-sm border border-slate-200/60 dark:border-white/[0.08]"
+                      ? "bg-white dark:bg-white/[0.10] text-slate-800 dark:text-white border border-slate-200/60 dark:border-white/[0.08] shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.90)] dark:shadow-[0_1px_4px_rgba(0,0,0,0.22),0_4px_12px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.07)]"
                       : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                   }`}
                 >
@@ -953,7 +975,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           </div>
 
           {/* Content panel */}
-          <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 shadow-sm">
+          <div className="bg-white dark:bg-[#011a0d] border border-slate-200/70 dark:border-white/[0.06] rounded-2xl p-5 sm:p-6 dash-card">
 
             {/* NOTES VIEW */}
             {activeTab === "notes" && (
@@ -1000,7 +1022,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                         {allNotes.filter(n => !notesFilterCourseId || n.courseId === notesFilterCourseId).map((note) => {
                           const noteCourse = courses.find((c) => c.id === note.courseId) || note.course;
                           return (
-                            <div key={note.id} className="group p-5 border border-slate-200/60 dark:border-white/[0.06] hover:border-emerald-200 dark:hover:border-emerald-800/40 rounded-xl transition-all duration-200 flex flex-col justify-between bg-white dark:bg-white/[0.02] hover:shadow-md dark:hover:shadow-none">
+                            <div key={note.id} className="group p-5 border border-slate-200/60 dark:border-white/[0.06] hover:border-emerald-200 dark:hover:border-emerald-800/40 rounded-xl transition-all duration-300 ease-out flex flex-col justify-between bg-white dark:bg-white/[0.02] shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(4,120,87,0.10),0_1px_4px_rgba(0,0,0,0.04)] dark:hover:shadow-[0_4px_16px_rgba(0,0,0,0.22)]">
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="px-2 py-0.5 text-[11px] font-mono font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/30 text-emerald-800 dark:text-emerald-400 rounded-md">
@@ -1088,7 +1110,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       const attempt = attempts[quiz.id];
                       const isCompleted = attempt?.isCompleted;
                       return (
-                        <div key={quiz.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200/60 dark:border-white/[0.06] hover:border-emerald-100 dark:hover:border-emerald-900/30 transition-all bg-white dark:bg-white/[0.02]">
+                        <div key={quiz.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200/60 dark:border-white/[0.06] hover:border-emerald-100 dark:hover:border-emerald-900/30 shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_16px_rgba(4,120,87,0.10)] dark:hover:shadow-[0_4px_16px_rgba(0,0,0,0.22)] transition-all duration-300 ease-out bg-white dark:bg-white/[0.02]">
                           <div className="space-y-1 min-w-0">
                             <h4 className="text-[13px] font-semibold text-slate-900 dark:text-white truncate">{quiz.title}</h4>
                             <div className="flex items-center gap-3 text-[10.5px] text-slate-400 dark:text-slate-500 font-mono">
@@ -1236,7 +1258,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           value={chatMessage}
                           onChange={(e) => setChatMessage(e.target.value)}
                           placeholder="Type a message..."
-                          className="flex-1 px-3 py-2 bg-slate-50 dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.07] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-emerald-400 dark:focus:border-emerald-600 transition-colors"
+                          className="flex-1 px-3 py-2.5 bg-white dark:bg-white/[0.04] border border-slate-200/60 dark:border-white/[0.08] rounded-xl text-[12.5px] text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 outline-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] focus:border-emerald-400 dark:focus:border-emerald-600 focus:shadow-[0_0_0_3px_rgba(5,150,105,0.12),inset_0_1px_2px_rgba(0,0,0,0.01)] transition-[border-color,box-shadow] duration-200"
                         />
                         <button
                           type="submit"
