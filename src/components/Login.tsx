@@ -202,37 +202,62 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
 
   const yearsOptions = ["Year 1","Year 2","Year 3","Year 4","Year 5","Extra Year","Postgraduate"];
 
-  const labelClass = "block text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5";
+  const labelClass = "block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-[0.10em] mb-2";
   const linkClass  = "text-[13px] text-emerald-700 dark:text-emerald-400 font-semibold hover:text-emerald-600 dark:hover:text-emerald-300 transition-colors cursor-pointer";
 
   return (
     <div className="min-h-screen relative overflow-x-hidden font-sans antialiased">
 
-      {/* ── Background gradient ── */}
+      {/* ── L1: Base gradient ── */}
       <div className="fixed inset-0 bg-gradient-to-br from-emerald-50 via-white to-green-50/60 dark:from-[#010e07] dark:via-[#011208] dark:to-[#021a0d]" />
+
+      {/* ── L2: Center bloom ── */}
+      <div
+        className="fixed inset-0 pointer-events-none dark:opacity-0"
+        style={{ background: "radial-gradient(ellipse 80% 65% at 50% 38%, rgba(167,243,208,0.32) 0%, transparent 70%)" }}
+      />
+      <div
+        className="fixed inset-0 pointer-events-none opacity-0 dark:opacity-100"
+        style={{ background: "radial-gradient(ellipse 80% 65% at 50% 38%, rgba(4,120,87,0.17) 0%, transparent 70%)" }}
+      />
+
+      {/* ── L3: Noise texture ── */}
+      <div
+        className="fixed inset-0 pointer-events-none opacity-[0.025] dark:opacity-[0.045]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          backgroundSize: "256px 256px",
+        }}
+      />
+
+      {/* ── L4: Vignette ── */}
+      <div
+        className="fixed inset-0 pointer-events-none"
+        style={{ background: "radial-gradient(ellipse 110% 110% at 50% 50%, transparent 50%, rgba(0,0,0,0.07) 100%)" }}
+      />
 
       {/* ── Ambient orbs – light mode ── */}
       <div
-        className="fixed -top-[18%] -left-[8%] w-[58%] aspect-square rounded-full pointer-events-none orb-1 dark:opacity-0"
-        style={{ background: "radial-gradient(circle, rgba(110,231,183,0.30) 0%, transparent 68%)" }}
+        className="fixed -top-[18%] -left-[8%] w-[60%] aspect-square rounded-full pointer-events-none orb-1 dark:opacity-0"
+        style={{ background: "radial-gradient(circle, rgba(110,231,183,0.34) 0%, transparent 68%)" }}
       />
       <div
         className="fixed -bottom-[18%] -right-[8%] w-[52%] aspect-square rounded-full pointer-events-none orb-2 dark:opacity-0"
-        style={{ background: "radial-gradient(circle, rgba(167,243,208,0.24) 0%, transparent 68%)" }}
+        style={{ background: "radial-gradient(circle, rgba(167,243,208,0.28) 0%, transparent 68%)" }}
       />
       <div
-        className="fixed top-[35%] right-[15%] w-[30%] aspect-square rounded-full pointer-events-none orb-3 dark:opacity-0"
-        style={{ background: "radial-gradient(circle, rgba(209,250,229,0.30) 0%, transparent 70%)" }}
+        className="fixed top-[35%] right-[12%] w-[32%] aspect-square rounded-full pointer-events-none orb-3 dark:opacity-0"
+        style={{ background: "radial-gradient(circle, rgba(209,250,229,0.34) 0%, transparent 70%)" }}
       />
 
       {/* ── Ambient orbs – dark mode ── */}
       <div
         className="fixed top-[5%] left-[2%] w-[50%] aspect-square rounded-full pointer-events-none orb-1 opacity-0 dark:opacity-100"
-        style={{ background: "radial-gradient(circle, rgba(4,120,87,0.22) 0%, transparent 68%)" }}
+        style={{ background: "radial-gradient(circle, rgba(4,120,87,0.26) 0%, transparent 68%)" }}
       />
       <div
         className="fixed bottom-[5%] right-[2%] w-[45%] aspect-square rounded-full pointer-events-none orb-2 opacity-0 dark:opacity-100"
-        style={{ background: "radial-gradient(circle, rgba(5,150,105,0.16) 0%, transparent 68%)" }}
+        style={{ background: "radial-gradient(circle, rgba(5,150,105,0.20) 0%, transparent 68%)" }}
       />
 
       {/* ── Theme toggle ── */}
@@ -260,14 +285,26 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
           id="login-container"
           initial={{ opacity: 0, y: 28, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full max-w-[472px]"
+          transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full max-w-[472px] relative"
         >
+
+          {/* Offset decorative glows — visual asymmetry, light behind card */}
+          <div
+            className="absolute -top-12 -right-8 w-44 h-44 rounded-full pointer-events-none blur-[56px] opacity-55 dark:opacity-28"
+            style={{ background: "radial-gradient(circle, rgba(52,211,153,0.55) 0%, transparent 70%)" }}
+          />
+          <div
+            className="absolute -bottom-8 -left-10 w-36 h-36 rounded-full pointer-events-none blur-[48px] opacity-40 dark:opacity-18"
+            style={{ background: "radial-gradient(circle, rgba(16,185,129,0.50) 0%, transparent 70%)" }}
+          />
 
           {/* ╔══════════════════════════════╗
               ║     GLASS CARD               ║
               ╚══════════════════════════════╝ */}
-          <div className="glass-card rounded-[28px] overflow-hidden">
+          <div className="glass-card rounded-[28px] overflow-hidden relative">
+            {/* Top-edge specular — light catches the card rim */}
+            <div className="absolute top-0 left-6 right-6 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent pointer-events-none z-10 dark:via-white/22" />
             <div className="px-8 pt-9 pb-8 sm:px-10 sm:pt-10 sm:pb-9">
 
               {/* ── Logo & Header ── */}
@@ -276,28 +313,30 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                 {/* Logo badge */}
                 <div className="inline-flex items-center justify-center mb-3 relative">
                   <div
-                    className="absolute inset-[-24px] rounded-full pointer-events-none"
+                    className="absolute inset-[-44px] rounded-full pointer-events-none"
                     style={{
-                      background: "radial-gradient(circle, rgba(30,58,110,0.13) 0%, transparent 68%)",
-                      animation: "pulse-glow 3.2s ease-in-out infinite",
+                      background: "radial-gradient(circle, rgba(16,185,129,0.24) 0%, rgba(4,120,87,0.10) 44%, transparent 70%)",
+                      animation: "logo-glow 3.5s ease-in-out infinite",
                     }}
                   />
                   <img
                     src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"}
                     alt="QuizOS"
-                    className="relative h-[118px] w-auto select-none rounded-[22px] shadow-[0_4px_24px_rgba(30,58,110,0.22)] dark:shadow-[0_4px_32px_rgba(0,0,0,0.55)]"
+                    className="relative h-[118px] w-auto select-none rounded-[22px] logo-float
+                      shadow-[0_4px_24px_rgba(30,58,110,0.20),0_16px_48px_rgba(4,120,87,0.12)]
+                      dark:shadow-[0_4px_32px_rgba(0,0,0,0.55),0_16px_48px_rgba(0,0,0,0.32)]"
                   />
                 </div>
 
                 {/* Motto */}
-                <p className="text-[13px] font-semibold tracking-[0.14em] uppercase text-slate-400 dark:text-slate-500 mt-2">
+                <p className="text-[12px] font-semibold tracking-[0.18em] uppercase text-slate-400 dark:text-slate-500 mt-2">
                   Assess · Learn · Excel
                 </p>
 
                 <div className="mt-5 mb-4 h-px bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700/60 to-transparent" />
 
                 {/* Description */}
-                <p className="text-base text-slate-500 dark:text-slate-400 leading-[1.65] max-w-[285px] mx-auto">
+                <p className="text-[15px] text-slate-500 dark:text-slate-400 leading-[1.72] max-w-[285px] mx-auto tracking-[-0.01em]">
                   FUTO's secure academic portal — timed examinations, live lectures &amp; instant results.
                 </p>
               </div>
@@ -405,9 +444,9 @@ export default function Login({ theme, onToggleTheme, onLoginSuccess }: LoginPro
                     <div className="flex items-center gap-2.5 mb-1">
                       <button
                         onClick={() => { setMode("login"); setError(null); setSuccess(null); setFixStep("enter-reg"); }}
-                        className="flex items-center justify-center w-7 h-7 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 transition-colors cursor-pointer"
+                        className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 transition-colors cursor-pointer -ml-2"
                       >
-                        <ArrowLeft className="h-3.5 w-3.5" />
+                        <ArrowLeft className="h-4 w-4" />
                       </button>
                       <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                         <KeyRound className="h-3.5 w-3.5 text-emerald-600" />
