@@ -1,208 +1,141 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Shield, Database, Brain, Radio, Wifi, Lock, ArrowRight, BookOpen } from "lucide-react";
-
-const BOOT_SEQUENCE = [
-  { tag: "BIOS",  icon: Shield,   text: "FUTO SecureBoot v2.1 — hardware integrity check passed" },
-  { tag: "INIT",  icon: Database, text: "Turso cloud database cluster connected" },
-  { tag: "AUTH",  icon: Lock,     text: "JWT authentication subsystem online" },
-  { tag: "KERN",  icon: Brain,    text: "NVIDIA AI grading engine loaded" },
-  { tag: "NET",   icon: Wifi,     text: "Live lecture broadcast system active" },
-  { tag: "ACAD",  icon: BookOpen, text: "Academic modules: courses, quizzes, exams ready" },
-  { tag: "STRM",  icon: Radio,    text: "Jitsi audio/video relay established" },
-  { tag: "SYS",   icon: Shield,   text: "All systems operational — QuizOS ready" },
-];
 
 interface Props {
   onDone: () => void;
 }
 
 export default function BootScreen({ onDone }: Props) {
-  const [phase, setPhase] = useState<"bios" | "boot" | "ready">("bios");
-  const [visibleLines, setVisibleLines] = useState(0);
-  const [cursor, setCursor] = useState(true);
-  const [progress, setProgress] = useState(0);
+  const [logoVisible, setLogoVisible] = useState(false);
+  const [barVisible, setBarVisible]   = useState(false);
+  const [progress,   setProgress]     = useState(0);
+  const [exiting,    setExiting]      = useState(false);
+  const rafRef = useRef<number | null>(null);
+  const startRef = useRef<number | null>(null);
 
-  // Blinking cursor
+  /* ── sequence ──────────────────────────────────────────── */
   useEffect(() => {
-    const t = setInterval(() => setCursor(c => !c), 530);
-    return () => clearInterval(t);
+    const t1 = setTimeout(() => setLogoVisible(true), 350);
+    const t2 = setTimeout(() => setBarVisible(true),  950);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
-  // Phase: BIOS flash → boot sequence
+  /* ── eased progress fill (macOS feel: slow-fast-slow) ─── */
   useEffect(() => {
-    const t = setTimeout(() => setPhase("boot"), 1100);
-    return () => clearTimeout(t);
-  }, []);
+    if (!barVisible) return;
 
-  // Boot sequence: reveal lines one by one
-  useEffect(() => {
-    if (phase !== "boot") return;
-    if (visibleLines >= BOOT_SEQUENCE.length) {
-      const t = setTimeout(() => setPhase("ready"), 600);
-      return () => clearTimeout(t);
-    }
-    const delay = visibleLines === 0 ? 80 : 360;
-    const t = setTimeout(() => {
-      setVisibleLines(v => v + 1);
-      setProgress(Math.round(((visibleLines + 1) / BOOT_SEQUENCE.length) * 100));
-    }, delay);
-    return () => clearTimeout(t);
-  }, [phase, visibleLines]);
+    const DURATION = 3200; // ms — total fill time
+
+    const tick = (now: number) => {
+      if (startRef.current === null) startRef.current = now;
+      const t = Math.min((now - startRef.current) / DURATION, 1);
+      // ease-in-out cubic: slow → fast → slow
+      const eased = t < 0.5
+        ? 4 * t * t * t
+        : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+      setProgress(Math.round(eased * 100));
+
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        // brief pause at 100 %, then fade the whole screen out
+        setTimeout(() => {
+          setExiting(true);
+          setTimeout(onDone, 700);
+        }, 480);
+      }
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [barVisible, onDone]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#020d06] flex flex-col items-center justify-center overflow-hidden select-none">
+    <AnimatePresence>
+      {!exiting && (
+        <motion.div
+          key="boot"
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.65, ease: [0.25, 0, 0.25, 1] }}
+          className="fixed inset-0 z-50"
+          style={{ backgroundColor: "#000" }}
+        >
+          {/* ── ultra-subtle noise for perceived depth ── */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+              backgroundSize: "256px 256px",
+              opacity: 0.028,
+            }}
+          />
 
-      {/* Noise grain */}
-      <div className="absolute inset-0 opacity-[0.035]" style={{
-        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-        backgroundSize: "256px 256px",
-      }} />
+          {/* ── very faint radial bloom behind logo ── */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                "radial-gradient(ellipse 38% 32% at 50% 47%, rgba(255,255,255,0.045) 0%, transparent 100%)",
+            }}
+          />
 
-      {/* Ambient core glow */}
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: "radial-gradient(ellipse 55% 55% at 50% 48%, rgba(4,120,87,0.16) 0%, transparent 72%)",
-      }} />
+          {/* ── centred content cluster ── */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-[52px]">
 
-      {/* Scan lines overlay */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.025]" style={{
-        backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.4) 2px, rgba(0,0,0,0.4) 4px)",
-      }} />
-
-      <div className="relative z-10 w-full max-w-[560px] px-6 sm:px-10 space-y-10">
-
-        {/* ── BIOS phase ── */}
-        <AnimatePresence>
-          {phase === "bios" && (
+            {/* Logo */}
             <motion.div
-              key="bios"
               initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="font-mono text-[11px] text-emerald-600/60 space-y-1 absolute top-8 left-6 sm:left-10"
+              animate={{ opacity: logoVisible ? 1 : 0 }}
+              transition={{ duration: 1.1, ease: [0.25, 0, 0.25, 1] }}
+              style={{
+                filter:
+                  "drop-shadow(0 0 32px rgba(255,255,255,0.10)) drop-shadow(0 0 8px rgba(255,255,255,0.06))",
+              }}
             >
-              <p>QuizOS UEFI SecureBoot v2.1</p>
-              <p>Copyright (C) 2026 FUTO Academic Systems. All rights reserved.</p>
-              <p className="mt-2">CPU: FUTO-Cortex-X3 @ 4.2GHz  RAM: 16384 MB</p>
-              <p>Checking NVME0n1... <span className="text-emerald-500">OK</span></p>
-              <p>Verifying boot signature... <span className="text-emerald-500">PASS</span></p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* ── Logo ── */}
-        <AnimatePresence>
-          {phase !== "bios" && (
-            <motion.div
-              key="logo"
-              initial={{ opacity: 0, scale: 0.88, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-              className="flex flex-col items-center gap-3"
-            >
-              <div className="relative">
-                {/* Glow ring */}
-                <motion.div
-                  className="absolute inset-0 rounded-2xl"
-                  animate={{ opacity: [0.3, 0.7, 0.3] }}
-                  transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-                  style={{ boxShadow: "0 0 48px 12px rgba(4,120,87,0.35)", borderRadius: 16 }}
-                />
-                <img
-                  src="/logo-dark.png"
-                  alt="QuizOS"
-                  className="h-20 w-auto relative z-10 rounded-xl"
-                />
-              </div>
-              <div className="text-center">
-                <p className="text-[9px] font-mono font-bold tracking-[0.38em] text-emerald-600/70 uppercase">
-                  Federal University of Technology Owerri
-                </p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* ── Boot log ── */}
-        {phase !== "bios" && (
-          <div className="space-y-2 min-h-[200px]">
-            {BOOT_SEQUENCE.slice(0, visibleLines).map((line, i) => {
-              const Icon = line.icon;
-              const isLast = i === visibleLines - 1;
-              return (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.18 }}
-                  className="flex items-center gap-3 font-mono"
-                >
-                  <span className="text-emerald-400 text-[10px] font-bold w-[38px] shrink-0">
-                    [ {line.tag} ]
-                  </span>
-                  <Icon className="h-3 w-3 text-emerald-600/80 shrink-0" />
-                  <span className="text-[11.5px] text-slate-400 leading-tight">
-                    {line.text}
-                    {isLast && phase !== "ready" && (
-                      <span className={`ml-0.5 text-emerald-400 transition-opacity ${cursor ? "opacity-100" : "opacity-0"}`}>▌</span>
-                    )}
-                  </span>
-                  {phase === "ready" || i < visibleLines - 1 ? (
-                    <span className="ml-auto text-emerald-500 text-[10px] font-bold shrink-0">OK</span>
-                  ) : null}
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ── Progress bar ── */}
-        {phase !== "bios" && (
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="font-mono text-[9.5px] text-slate-600 tracking-widest uppercase">QuizOS v1.0.0-academic</span>
-              <span className="font-mono text-[9.5px] text-emerald-600 font-bold">{progress}%</span>
-            </div>
-            <div className="h-[3px] bg-slate-800 rounded-full overflow-hidden">
-              <motion.div
-                className="h-full rounded-full"
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                style={{ background: "linear-gradient(90deg, #065f46, #10b981)" }}
+              <img
+                src="/logo-dark.png"
+                alt="QuizOS"
+                draggable={false}
+                style={{ height: 88, width: "auto", userSelect: "none" }}
               />
-            </div>
-          </div>
-        )}
-
-        {/* ── Ready state ── */}
-        <AnimatePresence>
-          {phase === "ready" && (
-            <motion.div
-              key="ready"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              className="flex flex-col items-center gap-4"
-            >
-              <p className="font-mono text-[11px] text-emerald-400/80 tracking-[0.2em] uppercase">
-                System ready{cursor ? "_" : " "}
-              </p>
-              <button
-                onClick={onDone}
-                className="group flex items-center gap-2.5 px-7 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-[13px] font-bold rounded-2xl transition-all duration-200 shadow-[0_0_24px_rgba(4,120,87,0.40)] hover:shadow-[0_0_36px_rgba(16,185,129,0.50)]"
-              >
-                Enter Portal
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </button>
-              <p className="font-mono text-[9.5px] text-slate-700 tracking-widest">
-                PRESS ENTER OR CLICK TO CONTINUE
-              </p>
             </motion.div>
-          )}
-        </AnimatePresence>
 
-      </div>
-    </div>
+            {/* Progress bar — macOS proportions */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: barVisible ? 1 : 0 }}
+              transition={{ duration: 0.55, ease: "easeOut" }}
+            >
+              {/* Track */}
+              <div
+                style={{
+                  width: 220,
+                  height: 3,
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,0.10)",
+                  overflow: "hidden",
+                  boxShadow: "0 0 0 0.5px rgba(255,255,255,0.04)",
+                }}
+              >
+                {/* Fill */}
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${progress}%`,
+                    borderRadius: 999,
+                    background: "rgba(255,255,255,0.86)",
+                    boxShadow: "0 0 8px rgba(255,255,255,0.35)",
+                    transition: "width 60ms linear",
+                  }}
+                />
+              </div>
+            </motion.div>
+
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

@@ -223,17 +223,9 @@ export default function App() {
     <div className="font-sans antialiased text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-950 min-h-screen selection:bg-emerald-500/20 selection:text-emerald-900 relative transition-colors duration-300">
 
       {/* Boot screen — shown once per session, only when not already logged in */}
-      <AnimatePresence>
-        {showBoot && !token && !loading && (
-          <motion.div
-            key="boot"
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <BootScreen onDone={handleBootDone} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {showBoot && !token && !loading && (
+        <BootScreen onDone={handleBootDone} />
+      )}
 
       <AnimatePresence mode="wait">
         {!token || !user ? (
