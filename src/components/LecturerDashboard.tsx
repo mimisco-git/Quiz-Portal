@@ -715,7 +715,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f0f0f5] dark:bg-[#141416] font-sans relative">
+    <div className="flex h-screen overflow-hidden apple-window-bg dark:bg-[#141416] font-sans relative">
 
       {/* Subtle radial bg gradients */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -808,8 +808,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
 
         {/* Top toolbar */}
-        <header className="flex-shrink-0 flex items-center justify-between px-6 h-[44px] border-b border-black/[0.06] dark:border-white/[0.05] bg-[#f0f0f5]/85 dark:bg-[#141416]/85 backdrop-blur-xl"
-          style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.70)" }}>
+        <header className="flex-shrink-0 flex items-center justify-between px-6 h-[44px] border-b border-black/[0.05] dark:border-white/[0.04] backdrop-blur-xl"
+          style={{ background: "rgba(240,240,245,0.82)", boxShadow: "0 1px 0 rgba(255,255,255,0.75)" }}>
           <h1 className="text-[13.5px] font-semibold text-[#1d1d1f] dark:text-white/88 tracking-[-0.01em]">
             {sectionTitle[activeTab] ?? "Dashboard"}
           </h1>
@@ -933,11 +933,11 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
                 {/* Table */}
                 <div className="overflow-x-auto rounded-[12px] border border-black/[0.07] dark:border-white/[0.06]">
-                  <table className="min-w-full divide-y divide-black/[0.06] dark:divide-white/[0.06] text-left">
-                    <thead className="bg-black/[0.02] dark:bg-white/[0.03]">
+                  <table className="min-w-full divide-y divide-black/[0.05] dark:divide-white/[0.05] text-left">
+                    <thead className="apple-thead">
                       <tr>
                         {["Student Name","Reg. No.","Department","Year","Exam Target","Status","Score","Action"].map((h) => (
-                          <th key={h} className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#6e6e73] dark:text-white/40 whitespace-nowrap">{h}</th>
+                          <th key={h}>{h}</th>
                         ))}
                       </tr>
                     </thead>
