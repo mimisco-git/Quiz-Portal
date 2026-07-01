@@ -1053,8 +1053,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
 
         {/* Top toolbar */}
-        <header className="flex-shrink-0 flex items-center justify-between px-6 h-[44px] border-b border-black/[0.05] dark:border-white/[0.04] backdrop-blur-xl"
-          style={{ background: "rgba(240,240,245,0.82)", boxShadow: "0 1px 0 rgba(255,255,255,0.75)" }}>
+        <header className="apple-header-bar flex-shrink-0 flex items-center justify-between px-6 h-[44px] border-b border-black/[0.05] dark:border-white/[0.04] backdrop-blur-xl">
           <h1 className="text-[13.5px] font-semibold text-[#1d1d1f] dark:text-white/88 tracking-[-0.01em]">
             {activeTab === "notes" ? "Lecture Materials"
               : activeTab === "quizzes" ? "Academic Quizzes"

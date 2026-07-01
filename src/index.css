@@ -151,6 +151,19 @@
 }
 
 /* ─────────────────────────────────────────────────────
+   APPLE HEADER BAR — tab bar / title bar
+───────────────────────────────────────────────────── */
+
+.apple-header-bar {
+  background: rgba(240, 240, 245, 0.82);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.75);
+}
+.dark .apple-header-bar {
+  background: rgba(20, 20, 22, 0.85);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04);
+}
+
+/* ─────────────────────────────────────────────────────
    APPLE SIDEBAR MATERIAL
    Melts into the window — more transparent, softer edge.
 ───────────────────────────────────────────────────── */
