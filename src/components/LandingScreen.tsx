@@ -243,11 +243,11 @@ export default function LandingScreen({
         <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 30% 25% at 60% 85%, rgba(37,99,235,0.07) 0%, transparent 55%)" }} />
         <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 80% 30% at 50% 0%, rgba(0,0,0,0.40) 0%, transparent 100%)" }} />
         <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 100% 50% at 50% 100%, rgba(0,0,0,0.50) 0%, transparent 80%)" }} />
-        {/* 1% noise overlay */}
+        {/* Film grain noise — adds natural richness to the gradients */}
         <div className="absolute inset-0 pointer-events-none" style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
           backgroundSize: "220px 220px",
-          opacity: 0.048,
+          opacity: 0.058,
         }} />
         {/* Edge vignette */}
         <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 130% 130% at 50% 48%, transparent 50%, rgba(0,0,0,0.60) 100%)" }} />
@@ -311,15 +311,15 @@ export default function LandingScreen({
                 <p className="text-white/90 font-light leading-none" style={{ fontSize: "clamp(26px,3.6vw,42px)", letterSpacing: "-0.02em" }}>
                   {timeStr}
                 </p>
-                <p className="text-white/40 text-[12.5px] font-medium mt-1.5">{dateStr}</p>
+                <p className="text-white/40 text-[12.5px] font-medium mt-3">{dateStr}</p>
               </div>
 
               {/* Logo (small) + theme toggle */}
-              <div className="flex items-center gap-3 pointer-events-auto mt-1">
+              <div className="flex items-center gap-2 pointer-events-auto mt-1">
                 <img
                   src="/logo-dark.png"
                   alt="QuizOS"
-                  className="h-9 w-auto select-none opacity-65"
+                  className="h-10 w-auto select-none opacity-65"
                   style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.07))" }}
                 />
                 <button
@@ -339,72 +339,98 @@ export default function LandingScreen({
                 {selectedUser === null && (
                   <motion.div
                     key="user-select"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                     exit={{ opacity: 0, y: -14, scale: 0.97 }}
                     transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                    className="flex flex-col items-center gap-14"
+                    className="flex flex-col items-center gap-[84px]"
                   >
-                    {/* Logo — large, bold */}
-                    <div className="flex flex-col items-center gap-4">
+                    {/* Logo — anchor composition */}
+                    <motion.div
+                      className="flex flex-col items-center gap-4"
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                    >
                       <div className="relative flex items-center justify-center">
-                        {/* Soft ambient glow — larger, less saturated, more realistic */}
-                        <div className="absolute pointer-events-none" style={{ width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(10,148,99,0.22) 0%, rgba(4,120,87,0.10) 45%, transparent 72%)", transform: "translateY(10px)", filter: "blur(12px)" }} />
-                        <div className="absolute pointer-events-none" style={{ width: 180, height: 180, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(18,184,122,0.14) 0%, transparent 70%)", filter: "blur(6px)" }} />
+                        {/* Outermost ambient bloom — wide, very soft, breathes */}
+                        <motion.div
+                          className="absolute pointer-events-none"
+                          animate={{ opacity: [0.7, 0.38, 0.7] }}
+                          transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+                          style={{ width: 440, height: 440, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(10,148,99,0.16) 0%, rgba(4,120,87,0.06) 50%, transparent 75%)", transform: "translateY(12px)", filter: "blur(28px)" }}
+                        />
+                        {/* Mid glow — softer, breathes slightly offset */}
+                        <motion.div
+                          className="absolute pointer-events-none"
+                          animate={{ opacity: [0.8, 0.45, 0.8] }}
+                          transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+                          style={{ width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(18,184,122,0.13) 0%, rgba(4,120,87,0.05) 55%, transparent 75%)", filter: "blur(14px)" }}
+                        />
+                        {/* Tight inner glow */}
+                        <div className="absolute pointer-events-none" style={{ width: 160, height: 160, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(52,211,153,0.09) 0%, transparent 70%)", filter: "blur(6px)" }} />
                         <img
                           src="/logo-dark.png"
                           alt="QuizOS"
                           draggable={false}
                           className="relative select-none rounded-[22px]"
                           style={{
-                            height: 130,
+                            height: 152,
                             width: "auto",
-                            filter: "drop-shadow(0 2px 20px rgba(4,120,87,0.30)) drop-shadow(0 1px 4px rgba(0,0,0,0.55)) brightness(1.06) contrast(1.02)",
+                            filter: "drop-shadow(0 2px 24px rgba(4,120,87,0.32)) drop-shadow(0 1px 5px rgba(0,0,0,0.60)) brightness(1.06) contrast(1.02)",
                           }}
                         />
                       </div>
-                      <p className="text-white/35 text-[11px] font-mono tracking-[0.32em] uppercase select-none">
+                      <p className="text-white/35 text-[11px] font-mono tracking-[0.27em] uppercase select-none">
                         FUTO Academic Portal
                       </p>
-                    </div>
+                    </motion.div>
 
                     {/* User circles */}
                     <div className="flex items-start gap-10 sm:gap-16">
-                      {USERS.map(u => {
+                      {USERS.map((u, idx) => {
                         const Icon = u.icon;
                         return (
                           <motion.button
                             key={u.id}
                             onClick={() => handleSelectUser(u.id)}
-                            whileHover={{ scale: 1.06 }}
+                            initial={{ opacity: 0, y: 18 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            whileHover={{ scale: 1.06, y: -3 }}
                             whileTap={{ scale: 0.97 }}
-                            transition={{ type: "spring", stiffness: 420, damping: 26 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 24, delay: 0.18 + idx * 0.07 }}
                             className="group flex flex-col items-center gap-4 cursor-pointer outline-none"
                           >
                             <div
                               className="relative h-[108px] w-[108px] rounded-full flex items-center justify-center"
                               style={{
                                 background: u.gradient,
-                                boxShadow: `0 4px 8px rgba(0,0,0,0.30), 0 12px 40px rgba(0,0,0,0.55), 0 32px 72px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.12) inset`,
+                                boxShadow: `0 2px 4px rgba(0,0,0,0.40), 0 8px 32px rgba(0,0,0,0.55), 0 24px 60px rgba(0,0,0,0.26), 0 0 0 1px rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`,
                                 transition: "box-shadow 0.28s cubic-bezier(0.34,1.56,0.64,1)",
                               }}
                               onMouseEnter={e => {
-                                (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 8px rgba(0,0,0,0.30), 0 16px 56px rgba(0,0,0,0.62), 0 40px 88px rgba(0,0,0,0.34), 0 0 0 2.5px ${u.ring} inset, 0 0 0 1px rgba(255,255,255,0.14) inset`;
+                                (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 4px rgba(0,0,0,0.40), 0 14px 48px rgba(0,0,0,0.62), 0 36px 80px rgba(0,0,0,0.32), 0 0 0 2px ${u.ring} inset, 0 0 0 1px rgba(255,255,255,0.16) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`;
                               }}
                               onMouseLeave={e => {
-                                (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 8px rgba(0,0,0,0.30), 0 12px 40px rgba(0,0,0,0.55), 0 32px 72px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.12) inset`;
+                                (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 4px rgba(0,0,0,0.40), 0 8px 32px rgba(0,0,0,0.55), 0 24px 60px rgba(0,0,0,0.26), 0 0 0 1px rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`;
                               }}
                             >
-                              {/* Liquid glass reflection */}
+                              {/* Physical sphere layers */}
                               <div className="absolute inset-0 rounded-full pointer-events-none overflow-hidden">
-                                <div style={{ position: "absolute", top: "-10%", left: "10%", right: "10%", height: "55%", background: "linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.06) 60%, transparent 100%)", borderRadius: "50% 50% 60% 60% / 60% 60% 40% 40%", filter: "blur(1px)" }} />
-                                <div style={{ position: "absolute", bottom: "8%", left: "20%", right: "20%", height: "25%", background: "linear-gradient(0deg, rgba(255,255,255,0.08) 0%, transparent 100%)", borderRadius: "50%" }} />
+                                {/* Main top highlight — diffuse */}
+                                <div style={{ position: "absolute", top: "-8%", left: "8%", right: "8%", height: "52%", background: "linear-gradient(180deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.08) 55%, transparent 100%)", borderRadius: "50% 50% 58% 58% / 58% 58% 42% 42%", filter: "blur(1.5px)" }} />
+                                {/* Tight rim light at top edge */}
+                                <div style={{ position: "absolute", top: "3%", left: "20%", right: "20%", height: "6%", background: "rgba(255,255,255,0.22)", borderRadius: "50%", filter: "blur(2px)" }} />
+                                {/* Subtle inner gradient — darker at sides */}
+                                <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 75% 75% at 50% 50%, transparent 55%, rgba(0,0,0,0.18) 100%)", borderRadius: "50%" }} />
+                                {/* Bottom soft reflection */}
+                                <div style={{ position: "absolute", bottom: "6%", left: "22%", right: "22%", height: "20%", background: "linear-gradient(0deg, rgba(255,255,255,0.09) 0%, transparent 100%)", borderRadius: "50%", filter: "blur(2px)" }} />
                               </div>
                               <Icon className="h-12 w-12 text-white relative z-10 drop-shadow-sm" strokeWidth={1.4} />
                             </div>
                             <div className="text-center">
-                              <p className="text-white text-[15px] font-medium leading-tight select-none">{u.label}</p>
-                              <p className="text-white/38 text-[12px] mt-0.5 select-none">{u.sub}</p>
+                              <p className="text-white text-[15px] font-semibold leading-tight select-none">{u.label}</p>
+                              <p className="text-white/30 text-[11px] mt-0.5 select-none">{u.sub}</p>
                             </div>
                           </motion.button>
                         );
