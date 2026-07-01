@@ -1,4 +1,5 @@
 import { prisma } from "./db.js";
+import bcrypt from "bcryptjs";
 
 async function migrateColumns() {
   const stmts = [
@@ -45,19 +46,20 @@ export async function seedDatabase() {
     }
     console.log(`Created ${depts.length} departments.`);
 
-    // Create default Lecturer
+    // Create default Lecturer — password hashed at seed time
+    const defaultLecturerPassword = process.env.SEED_LECTURER_PASSWORD || "ChangeMe@2026!";
     const lecturer = await prisma.lecturer.create({
       data: {
         name: "Dr. Charles Xavier",
         email: "xavier@futo.edu.ng",
-        password: "admin123", // Standard password for demo
+        password: await bcrypt.hash(defaultLecturerPassword, 10),
       },
     });
 
     console.log(`Created Lecturer: ${lecturer.name}`);
 
-    // Create default Students
-    const students = [
+    // Create default Students — security answers hashed at seed time
+    const rawStudents = [
       {
         fullName: "John Doe",
         email: "john.doe@futo.edu.ng",
@@ -65,7 +67,7 @@ export async function seedDatabase() {
         department: "Computer Science",
         year: "Year 3",
         securityQuestion: "What is your favorite academic course?",
-        securityAnswer: "Computer Science",
+        securityAnswer: "computer science",
       },
       {
         fullName: "Jane Smith",
@@ -74,7 +76,7 @@ export async function seedDatabase() {
         department: "Information Technology",
         year: "Year 2",
         securityQuestion: "What is your favorite academic course?",
-        securityAnswer: "IT",
+        securityAnswer: "it",
       },
       {
         fullName: "Amina Yusuf",
@@ -83,7 +85,7 @@ export async function seedDatabase() {
         department: "Software Engineering",
         year: "Year 4",
         securityQuestion: "What is your high school name?",
-        securityAnswer: "Federal GC",
+        securityAnswer: "federal gc",
       },
       {
         fullName: "Chidi Okafor",
@@ -92,16 +94,19 @@ export async function seedDatabase() {
         department: "Cybersecurity",
         year: "Year 1",
         securityQuestion: "What was your childhood nickname?",
-        securityAnswer: "Chidi",
+        securityAnswer: "chidi",
       },
     ];
 
-    for (const s of students) {
+    for (const s of rawStudents) {
       await prisma.student.create({
-        data: s,
+        data: {
+          ...s,
+          securityAnswer: await bcrypt.hash(s.securityAnswer, 10),
+        },
       });
     }
-    console.log(`Created ${students.length} pre-registered Students.`);
+    console.log(`Created ${rawStudents.length} pre-registered Students.`);
 
     // Create Course 1: MTH 101
     const mth101 = await prisma.course.create({
