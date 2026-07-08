@@ -2249,34 +2249,30 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       {/* ── MOBILE BOTTOM DOCK ── */}
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 px-5 pb-7 pt-2" aria-label="Main navigation">
         <div className="apple-bottom-dock flex items-center justify-around h-[60px] px-3">
-          {([
-            { id: "notes",          icon: FileText,      label: "Materials" },
-            { id: "quizzes",        icon: Award,         label: "Quizzes"   },
-            { id: "exams",          icon: Upload,        label: "Exams"     },
-            { id: "assignments",    icon: Pencil,        label: "Tasks"     },
-            { id: "live-classroom", icon: Radio,         label: "Live"      },
-          ] as const).map((item) => {
-            const isActive = activeTab === item.id;
+          {(["notes", "quizzes", "exams", "assignments", "live-classroom"] as const).map((id) => {
+            const isActive = activeTab === id;
+            const label = id === "notes" ? "Materials" : id === "quizzes" ? "Quizzes" : id === "exams" ? "Exams" : id === "assignments" ? "Assign" : "Live";
             return (
               <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className="flex flex-col items-center justify-center gap-[5px] min-w-[56px] min-h-[44px] px-2 rounded-[14px] transition-all"
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className="flex flex-col items-center justify-center gap-[5px] min-w-[52px] min-h-[44px] px-1 rounded-[14px] transition-all"
                 style={{ transform: isActive ? "scale(1.06)" : "scale(1)", transition: "transform 220ms cubic-bezier(0.34,1.56,0.64,1)" }}
               >
-                {item.id === "live-classroom" && !isActive ? (
+                {id === "notes" && <FileText className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`} strokeWidth={isActive ? 2.2 : 1.6} />}
+                {id === "quizzes" && <Award className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`} strokeWidth={isActive ? 2.2 : 1.6} />}
+                {id === "exams" && <Upload className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`} strokeWidth={isActive ? 2.2 : 1.6} />}
+                {id === "assignments" && <Pencil className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`} strokeWidth={isActive ? 2.2 : 1.6} />}
+                {id === "live-classroom" && !isActive ? (
                   <span className="relative flex items-center justify-center h-5 w-5">
                     <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-red-400 opacity-60" />
-                    <item.icon className="relative h-5 w-5 text-[#8e8e93]" strokeWidth={1.6} />
+                    <Radio className="relative h-5 w-5 text-[#8e8e93]" strokeWidth={1.6} />
                   </span>
-                ) : (
-                  <item.icon
-                    className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`}
-                    strokeWidth={isActive ? 2.2 : 1.6}
-                  />
-                )}
+                ) : id === "live-classroom" ? (
+                  <Radio className="h-5 w-5 text-emerald-500" strokeWidth={2.2} />
+                ) : null}
                 <span className={`text-[9.5px] font-semibold tracking-[0.01em] transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`}>
-                  {item.label}
+                  {label}
                 </span>
               </button>
             );
