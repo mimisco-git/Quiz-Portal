@@ -647,7 +647,7 @@ app.post("/api/quizzes", authenticateToken, async (req: any, res) => {
     return res.status(201).json(quiz);
   } catch (error: any) {
     console.error("Error creating quiz:", error);
-    return res.status(500).json({ error: "Error creating quiz" });
+    return res.status(500).json({ error: "Error creating quiz", detail: error?.message ?? String(error) });
   }
 });
 

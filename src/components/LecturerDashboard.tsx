@@ -545,7 +545,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         fetchQuizList();
       } else {
         const d = await res.json();
-        showError(d.error || "Failed to deploy quiz");
+        showError(d.detail ? `${d.error}: ${d.detail}` : d.error || "Failed to deploy quiz");
       }
     } catch (err: any) {
       showError(err.message);
