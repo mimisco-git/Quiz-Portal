@@ -61,6 +61,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [avatarRefreshTrigger, setAvatarRefreshTrigger] = useState(0);
 
   const [activeLiveSession, setActiveLiveSession] = useState<any | null>(null);
+  const [allLiveSessions, setAllLiveSessions] = useState<any[]>([]);
+  const [joinedCourseId, setJoinedCourseId] = useState<string | null>(null);
   const [liveChats, setLiveChats] = useState<any[]>([]);
   const [chatMessage, setChatMessage] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
@@ -79,20 +81,42 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [isSubmittingExam, setIsSubmittingExam] = useState(false);
   const [examError, setExamError] = useState<string | null>(null);
 
-  const fetchActiveLiveSession = async () => {
-    if (!selectedCourse) return;
+  const fetchAllLiveSessions = async () => {
     try {
-      const res = await fetch(`/api/lectures/active/${selectedCourse.id}`, {
+      const res = await fetch("/api/lectures/active-all", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setAllLiveSessions(await res.json());
+    } catch {}
+  };
+
+  const joinLiveSession = async (courseId: string) => {
+    try {
+      const res = await fetch(`/api/lectures/active/${courseId}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        if (!data) return;
+        setActiveLiveSession(data);
+        setJoinedCourseId(courseId);
+        if (data.chats) setLiveChats(data.chats);
+        else setLiveChats([]);
+        if (data.id) {
+          fetch(`/api/lectures/${data.id}/join`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.error("Error joining live session:", e);
+    }
+  };
+
+  const fetchActiveLiveSession = async () => {
+    if (!joinedCourseId) { fetchAllLiveSessions(); return; }
+    try {
+      const res = await fetch(`/api/lectures/active/${joinedCourseId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setActiveLiveSession(data);
-        if (data && data.chats) setLiveChats(data.chats);
-        else setLiveChats([]);
-        if (data?.id) {
-          fetch(`/api/lectures/${data.id}/join`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
-        }
+        if (!data) { setActiveLiveSession(null); setJoinedCourseId(null); fetchAllLiveSessions(); }
+        else { setActiveLiveSession(data); if (data.chats) setLiveChats(data.chats); }
       }
     } catch (e) {
       console.error("Error fetching live lecture session:", e);
@@ -165,15 +189,17 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   useEffect(() => {
     let interval: any;
-    if (activeTab === "live-classroom" && selectedCourse) {
+    if (activeTab === "live-classroom") {
       fetchActiveLiveSession();
       interval = setInterval(fetchActiveLiveSession, 4000);
     } else {
       setActiveLiveSession(null);
+      setJoinedCourseId(null);
+      setAllLiveSessions([]);
       setLiveChats([]);
     }
     return () => clearInterval(interval);
-  }, [activeTab, selectedCourse?.id]);
+  }, [activeTab, joinedCourseId]);
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -1505,17 +1531,27 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       Virtual Classroom
                     </h2>
                     <p className="apple-subtitle">
-                      {selectedCourse ? `${selectedCourse.code} · ${selectedCourse.title}` : "Select a Course"}
+                      {activeLiveSession
+                        ? `${activeLiveSession.course?.code ?? ""} · ${activeLiveSession.topic}`
+                        : allLiveSessions.length > 0
+                          ? `${allLiveSessions.length} live class${allLiveSessions.length !== 1 ? "es" : ""} available`
+                          : "No live classes right now"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {activeLiveSession && (
-                      <button
-                        onClick={handleToggleHandRaise}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] border transition-colors ${handRaised ? "bg-amber-100 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400" : "border-black/[0.09] dark:border-white/[0.10] text-[#3a3a3c] dark:text-white/60 hover:border-amber-300"}`}
-                      >
-                        <ThumbsUp className="h-3.5 w-3.5" /> {handRaised ? "Hand Raised" : "Raise Hand"}
-                      </button>
+                      <>
+                        <button
+                          onClick={handleToggleHandRaise}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] border transition-colors ${handRaised ? "bg-amber-100 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400" : "border-black/[0.09] dark:border-white/[0.10] text-[#3a3a3c] dark:text-white/60 hover:border-amber-300"}`}
+                        >
+                          <ThumbsUp className="h-3.5 w-3.5" /> {handRaised ? "Hand Raised" : "Raise Hand"}
+                        </button>
+                        <button onClick={() => { setActiveLiveSession(null); setJoinedCourseId(null); fetchAllLiveSessions(); }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold border border-black/[0.09] dark:border-white/[0.10] text-[#6e6e73] dark:text-white/40 hover:text-red-500 hover:border-red-300 rounded-[8px] transition cursor-pointer">
+                          <ArrowLeft className="h-3.5 w-3.5" /> Leave
+                        </button>
+                      </>
                     )}
                     {activeLiveSession ? (
                       <span className="flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 text-[12px] font-bold uppercase tracking-wider border border-red-100 dark:border-red-900/30 rounded-full">
@@ -1530,10 +1566,46 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
                 <div className="p-5">
                   {!activeLiveSession ? (
-                    <div className="py-16 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
-                      <Radio className="h-8 w-8 text-black/20 dark:text-white/20 mx-auto mb-3" />
-                      <h4 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/70">No Active Live Lecture</h4>
-                      <p className="text-[12px] text-[#6e6e73] dark:text-white/40 max-w-sm mx-auto mt-1.5 leading-relaxed">When a live lecture starts, everything will appear here automatically.</p>
+                    <div className="space-y-4">
+                      {allLiveSessions.length === 0 ? (
+                        <div className="py-16 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
+                          <Radio className="h-8 w-8 text-black/20 dark:text-white/20 mx-auto mb-3" />
+                          <h4 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/70">No Live Lectures Right Now</h4>
+                          <p className="text-[12px] text-[#6e6e73] dark:text-white/40 max-w-sm mx-auto mt-1.5 leading-relaxed">When a lecturer goes live, their class will appear here. Check back soon.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">Live Now — Select a Class to Join</p>
+                          {allLiveSessions.map((session: any) => (
+                            <motion.div key={session.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                              className="flex items-center justify-between gap-3 p-4 border border-red-100 dark:border-red-900/30 bg-red-50/40 dark:bg-red-950/10 rounded-[14px]">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex-shrink-0 relative">
+                                  <span className="flex h-2.5 w-2.5">
+                                    <span className="animate-ping absolute h-2.5 w-2.5 rounded-full bg-red-400 opacity-75" />
+                                    <span className="relative h-2.5 w-2.5 rounded-full bg-red-500" />
+                                  </span>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{session.topic}</p>
+                                  <p className="text-[11.5px] text-[#6e6e73] dark:text-white/50 truncate">
+                                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{session.course?.code}</span>
+                                    {" · "}{session.course?.title}
+                                    {" · "}{session.course?.lecturer?.name}
+                                  </p>
+                                  <p className="text-[10.5px] font-mono text-[#6e6e73] dark:text-white/30 mt-0.5">
+                                    {session.attendance?.length ?? 0} student{session.attendance?.length !== 1 ? "s" : ""} joined · Started {new Date(session.createdAt).toLocaleTimeString()}
+                                  </p>
+                                </div>
+                              </div>
+                              <button onClick={() => joinLiveSession(session.course.id)}
+                                className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-[12px] font-semibold rounded-[10px] transition cursor-pointer">
+                                <Play className="h-3.5 w-3.5 fill-white" /> Join
+                              </button>
+                            </motion.div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ) : (() => {
                     const slides = activeLiveSession.content.split(/^---$/m).map((s: string) => s.trim()).filter(Boolean);

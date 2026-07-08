@@ -1204,6 +1204,23 @@ app.post("/api/lectures", authenticateToken, async (req: any, res) => {
   }
 });
 
+app.get("/api/lectures/active-all", authenticateToken, async (req: any, res) => {
+  try {
+    const sessions = await prisma.lectureSession.findMany({
+      where: { isActive: true },
+      include: {
+        course: { select: { id: true, code: true, title: true, lecturer: { select: { name: true } } } },
+        attendance: { select: { studentId: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.json(sessions);
+  } catch (error: any) {
+    console.error("Error fetching all active sessions:", error);
+    return res.status(500).json({ error: "Error fetching active sessions" });
+  }
+});
+
 app.get("/api/lectures/active/:courseId", authenticateToken, async (req: any, res) => {
   const { courseId } = req.params;
   try {
