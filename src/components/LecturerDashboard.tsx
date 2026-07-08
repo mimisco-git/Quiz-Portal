@@ -45,6 +45,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [quizQuestions, setQuizQuestions] = useState<
     Array<{ uid: string; text: string; options: string[]; correctOption: string }>
   >([{ uid: crypto.randomUUID(), text: "", options: ["", "", "", ""], correctOption: "" }]);
+  const [isParsing, setIsParsing] = useState(false);
+  const [parseDocError, setParseDocError] = useState<string | null>(null);
+  const parseFileInputRef = useRef<HTMLInputElement>(null);
 
   const [newDeptName, setNewDeptName] = useState("");
 
@@ -323,6 +326,36 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   const handleAddQuestionRow = () => {
     setQuizQuestions((prev) => [...prev, { uid: crypto.randomUUID(), text: "", options: ["", "", "", ""], correctOption: "" }]);
+  };
+
+  const handleParseDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsParsing(true);
+    setParseDocError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/quizzes/parse-questions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) { setParseDocError(data.error || "Failed to parse document"); return; }
+      const mapped = (data.questions as { text: string; options: string[]; correctOption: string }[]).map((q) => ({
+        uid: crypto.randomUUID(),
+        text: q.text,
+        options: [...q.options.slice(0, 4), ...Array(Math.max(0, 4 - q.options.length)).fill("")].slice(0, 4),
+        correctOption: q.correctOption,
+      }));
+      setQuizQuestions(mapped);
+    } catch (err: any) {
+      setParseDocError(err.message || "Upload failed");
+    } finally {
+      setIsParsing(false);
+      if (parseFileInputRef.current) parseFileInputRef.current.value = "";
+    }
   };
 
   const handleRemoveQuestionRow = (index: number) => {
@@ -1442,7 +1475,36 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   </div>
 
                   <div className="space-y-3">
-                    <h3 className="text-[12px] font-bold text-[#3a3a3c] dark:text-white/70 uppercase tracking-wider">Questions</h3>
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-[12px] font-bold text-[#3a3a3c] dark:text-white/70 uppercase tracking-wider">Questions ({quizQuestions.length})</h3>
+                      <div>
+                        <input
+                          ref={parseFileInputRef}
+                          type="file"
+                          accept=".docx,.doc,.txt"
+                          className="hidden"
+                          onChange={handleParseDocUpload}
+                        />
+                        <button
+                          type="button"
+                          disabled={isParsing}
+                          onClick={() => parseFileInputRef.current?.click()}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-semibold border border-emerald-300 dark:border-emerald-700/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-[8px] transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {isParsing ? (
+                            <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Parsing…</>
+                          ) : (
+                            <><Upload className="h-3.5 w-3.5" /> Upload Word Doc</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    {parseDocError && (
+                      <div className="flex items-center gap-2 text-[11.5px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-[8px] px-3 py-2">
+                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                        {parseDocError}
+                      </div>
+                    )}
                     {quizQuestions.map((q, qIdx) => (
                       <div key={q.uid} className="p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] space-y-3">
                         <div className="flex items-center justify-between pb-1.5 border-b border-black/[0.06] dark:border-white/[0.06]">

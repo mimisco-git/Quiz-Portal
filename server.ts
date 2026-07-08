@@ -621,6 +621,55 @@ app.post("/api/quizzes", authenticateToken, async (req: any, res) => {
   }
 });
 
+// Parse MCQ questions from an uploaded Word document using AI
+app.post("/api/quizzes/parse-questions", authenticateToken, upload.single("file"), async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  try {
+    const text = await extractTextFromFile(req.file);
+    if (!text.trim()) return res.status(400).json({ error: "Could not extract text from document" });
+
+    const nvidia = getNvidiaClient();
+    const prompt = `You are an MCQ question parser. Extract ALL multiple-choice questions from the text below and return them as a JSON array.
+
+Rules:
+- Each question must have exactly 4 options (A, B, C, D).
+- "options" array must contain the FULL option text (not just the letter).
+- "correctOption" must be the EXACT string from the options array that is correct.
+- If the document marks an answer (e.g. "Ans: B", "Answer: C", "*", underlining cues in text), use it.
+- If no answer is marked, pick the most plausible one.
+- Strip option prefixes like "A)", "A.", "(A)" from the stored option text — store only the content.
+- Return ONLY valid JSON, no markdown fences, no extra text.
+
+Format:
+[{"text":"...","options":["...","...","...","..."],"correctOption":"..."}]
+
+TEXT:
+${text.slice(0, 12000)}`;
+
+    const response = await nvidia.chat.completions.create({
+      model: "meta/llama-3.1-70b-instruct",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 4096,
+    });
+
+    const raw = response.choices[0]?.message?.content ?? "[]";
+    const jsonMatch = raw.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return res.status(422).json({ error: "AI could not parse questions from this document. Check the format and try again." });
+
+    const parsed: { text: string; options: string[]; correctOption: string }[] = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return res.status(422).json({ error: "No questions found in document." });
+    }
+
+    return res.json({ questions: parsed, count: parsed.length });
+  } catch (err: any) {
+    console.error("Error parsing quiz questions:", err);
+    return res.status(500).json({ error: err.message || "Failed to parse questions" });
+  }
+});
+
 // List quizzes for the authenticated lecturer's courses
 app.get("/api/quizzes", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
