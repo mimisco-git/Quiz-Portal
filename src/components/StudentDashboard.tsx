@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import MarkdownView from "./MarkdownView";
 import UserAvatar from "./UserAvatar";
@@ -49,6 +49,11 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [attempts, setAttempts] = useState<Record<string, StudentAttempt>>({});
   const [attemptsList, setAttemptsList] = useState<any[]>([]);
   const [examSubmissions, setExamSubmissions] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [dismissedAnns, setDismissedAnns] = useState<Set<string>>(new Set());
+  const [leaderboard, setLeaderboard] = useState<any[] | null>(null);
+  const [leaderboardQuizTitle, setLeaderboardQuizTitle] = useState("");
+  const [pushGranted, setPushGranted] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
@@ -253,6 +258,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     fetchCourses();
     fetchAttempts();
     fetchAllNotes();
+    fetchAnnouncements();
+    subscribeToPush();
   }, []);
 
   useEffect(() => {
@@ -328,6 +335,51 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       console.error("Error fetching exam submissions:", err);
     }
   };
+
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await fetch("/api/announcements", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setAnnouncements(await res.json());
+    } catch {}
+  };
+
+  const fetchLeaderboard = async (quizId: string, title: string) => {
+    setLeaderboard(null);
+    setLeaderboardQuizTitle(title);
+    try {
+      const res = await fetch(`/api/quizzes/${quizId}/leaderboard`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setLeaderboard(await res.json());
+    } catch {}
+  };
+
+  const subscribeToPush = async () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    try {
+      const keyRes = await fetch("/api/vapid-public-key");
+      const { key } = await keyRes.json();
+      if (!key) return;
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") return;
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(key),
+      });
+      await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(sub),
+      });
+      setPushGranted(true);
+    } catch {}
+  };
+
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = atob(base64);
+    return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+  }
 
   const handleStartExam = async (quiz: Quiz) => {
     if (attempts[quiz.id]?.isCompleted) {
@@ -1107,6 +1159,13 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 {selectedCourse.code}
               </span>
             )}
+            {/* Push notification bell */}
+            {!pushGranted && "Notification" in window && Notification.permission !== "granted" && (
+              <button onClick={subscribeToPush} title="Enable notifications"
+                className="flex items-center justify-center w-9 h-9 rounded-[10px] text-[#6e6e73] dark:text-white/50 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition">
+                <Bell className="h-4 w-4" strokeWidth={1.6} />
+              </button>
+            )}
             {/* Mobile-only: theme + logout */}
             <button
               onClick={onToggleTheme}
@@ -1128,6 +1187,71 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
         {/* Scrollable content */}
         <main className="flex-1 overflow-y-auto">
           <div className="px-6 py-5 pb-[96px] sm:pb-5 max-w-5xl mx-auto w-full space-y-5">
+
+          {/* ── ANNOUNCEMENTS BANNER ── */}
+          {announcements.filter(a => !dismissedAnns.has(a.id)).slice(0, 3).map(ann => (
+            <motion.div key={ann.id} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-start gap-3 p-3.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/30 rounded-[12px]">
+              <Megaphone className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12.5px] font-semibold text-amber-900 dark:text-amber-200">{ann.title}</p>
+                <p className="text-[11.5px] text-amber-800 dark:text-amber-300/80 mt-0.5 leading-relaxed">{ann.body}</p>
+                <p className="text-[10px] font-mono text-amber-600/60 dark:text-amber-400/40 mt-1">{ann.lecturer?.name} · {new Date(ann.createdAt).toLocaleDateString()}</p>
+              </div>
+              <button onClick={() => setDismissedAnns(p => new Set([...p, ann.id]))} className="flex-shrink-0 p-1 text-amber-400 hover:text-amber-600 cursor-pointer"><X className="h-3.5 w-3.5" /></button>
+            </motion.div>
+          ))}
+
+          {/* ── PROGRESS OVERVIEW ── */}
+          {attemptsList.filter(a => a.isCompleted).length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {(() => {
+                const done = attemptsList.filter(a => a.isCompleted);
+                const quizAvg = done.length > 0 ? done.reduce((s, a) => s + (a.score ?? 0), 0) / done.length : 0;
+                const gradedExams = examSubmissions.filter(e => e.isGraded);
+                const examAvg = gradedExams.length > 0 ? gradedExams.reduce((s, e) => s + (e.score ?? 0), 0) / gradedExams.length : 0;
+                return [
+                  { icon: Award,       label: "Quizzes Done",   value: done.length },
+                  { icon: TrendingUp,  label: "Quiz Avg",        value: `${quizAvg.toFixed(1)}%` },
+                  { icon: FileText,    label: "Exams Submitted", value: examSubmissions.length },
+                  { icon: CheckCircle, label: "Exam Avg",        value: gradedExams.length > 0 ? `${examAvg.toFixed(1)}%` : "—" },
+                ].map(stat => (
+                  <div key={stat.label} className="text-center p-3 apple-card rounded-[12px]">
+                    <stat.icon className="h-4 w-4 text-emerald-500 mx-auto mb-1" strokeWidth={1.8} />
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">{stat.label}</p>
+                    <p className="text-[18px] font-black text-[#1d1d1f] dark:text-white/90 tabular-nums">{stat.value}</p>
+                  </div>
+                ));
+              })()}
+            </motion.div>
+          )}
+
+          {/* ── LEADERBOARD MODAL ── */}
+          {leaderboard !== null && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setLeaderboard(null)}>
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="apple-card max-w-sm w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
+                  <div><h2 className="apple-title flex items-center gap-2"><Trophy className="h-4 w-4 text-amber-500" /> Leaderboard</h2><p className="apple-subtitle truncate">{leaderboardQuizTitle}</p></div>
+                  <button onClick={() => setLeaderboard(null)} className="p-1.5 rounded-[8px] hover:bg-black/[0.05] dark:hover:bg-white/[0.07] cursor-pointer"><X className="h-4 w-4 text-[#6e6e73]" /></button>
+                </div>
+                <div className="p-4 space-y-2">
+                  {leaderboard.length === 0 ? <p className="text-center text-[12px] text-[#6e6e73] py-6">No completed attempts yet.</p> :
+                    leaderboard.map(entry => (
+                      <div key={entry.rank} className={`flex items-center gap-3 p-3 rounded-[10px] ${entry.rank <= 3 ? "bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/30" : "border border-black/[0.06] dark:border-white/[0.06]"}`}>
+                        <span className={`text-[13px] font-black w-6 text-center flex-shrink-0 ${entry.rank === 1 ? "text-amber-500" : entry.rank === 2 ? "text-slate-400" : entry.rank === 3 ? "text-orange-400" : "text-[#6e6e73]"}`}>
+                          {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : `#${entry.rank}`}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{entry.fullName}</p>
+                          <p className="text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40">{entry.regNumber}</p>
+                        </div>
+                        <span className={`flex-shrink-0 text-[12px] font-bold ${entry.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{entry.score.toFixed(1)}%</span>
+                      </div>
+                    ))
+                  }
+                </div>
+              </motion.div>
+            </div>
+          )}
 
           {/* ── NOTES TAB ── */}
           {activeTab === "notes" && (
@@ -1321,13 +1445,17 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                             </div>
                             <div className="flex items-center gap-3 flex-shrink-0 ml-4">
                               {isCompleted ? (
-                                <div className="text-right">
+                                <div className="text-right space-y-1">
                                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
                                     Score: {attempt.score?.toFixed(1)}%
                                   </span>
-                                  <p className="text-[11px] text-[#6e6e73] dark:text-white/35 font-mono mt-1 text-right">
+                                  <p className="text-[11px] text-[#6e6e73] dark:text-white/35 font-mono text-right">
                                     {new Date(attempt.submittedAt!).toLocaleDateString()}
                                   </p>
+                                  <button onClick={() => fetchLeaderboard(quiz.id, quiz.title)}
+                                    className="flex items-center gap-1 text-[10.5px] font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-500 cursor-pointer ml-auto">
+                                    <Trophy className="h-3 w-3" /> Leaderboard
+                                  </button>
                                 </div>
                               ) : isExpired ? (
                                 <span className="px-4 py-2.5 rounded-[10px] bg-black/[0.05] dark:bg-white/[0.05] text-[#6e6e73] dark:text-white/35 text-[13px] font-semibold cursor-not-allowed">

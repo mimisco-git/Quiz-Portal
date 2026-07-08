@@ -9,12 +9,13 @@ generator client {
 }
 
 model Lecturer {
-  id         String   @id @default(uuid())
-  name       String
-  email      String   @unique
-  password   String
-  avatarData String?
-  courses    Course[]
+  id            String         @id @default(uuid())
+  name          String
+  email         String         @unique
+  password      String
+  avatarData    String?
+  courses       Course[]
+  announcements Announcement[]
 }
 
 model Student {
@@ -38,15 +39,16 @@ model Department {
 }
 
 model Course {
-  id           String           @id @default(uuid())
-  code         String           @unique // e.g. MTH101, CSC201
-  title        String
-  lecturerId   String
-  lecturer     Lecturer         @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
-  notes        LectureNote[]
-  quizzes      Quiz[]
-  liveSessions LectureSession[]
-  exams        Exam[]
+  id            String           @id @default(uuid())
+  code          String           @unique // e.g. MTH101, CSC201
+  title         String
+  lecturerId    String
+  lecturer      Lecturer         @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  notes         LectureNote[]
+  quizzes       Quiz[]
+  liveSessions  LectureSession[]
+  exams         Exam[]
+  announcements Announcement[]
 }
 
 model Exam {
@@ -191,4 +193,25 @@ model LectureChat {
   createdAt        DateTime       @default(now())
   lectureSessionId String
   lectureSession   LectureSession @relation(fields: [lectureSessionId], references: [id], onDelete: Cascade)
+}
+
+model Announcement {
+  id         String    @id @default(uuid())
+  title      String
+  body       String
+  lecturerId String
+  courseId   String?
+  createdAt  DateTime  @default(now())
+  lecturer   Lecturer  @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  course     Course?   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  userRole  String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
 }

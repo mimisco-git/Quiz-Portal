@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X } from "lucide-react";
+import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import AvatarModal from "./AvatarModal";
@@ -18,7 +18,7 @@ interface LecturerDashboardProps {
 }
 
 export default function LecturerDashboard({ token, user, theme, onToggleTheme, onLogout }: LecturerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture" | "exams">("gradebook");
+  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture" | "exams" | "announcements">("gradebook");
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [attempts, setAttempts] = useState<StudentAttempt[]>([]);
@@ -48,6 +48,27 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [isParsing, setIsParsing] = useState(false);
   const [parseDocError, setParseDocError] = useState<string | null>(null);
   const parseFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Edit quiz
+  const [editingQuiz, setEditingQuiz] = useState<any | null>(null);
+  const [editQuizTitle, setEditQuizTitle] = useState("");
+  const [editQuizDuration, setEditQuizDuration] = useState("10");
+  const [editAvailableFrom, setEditAvailableFrom] = useState("");
+  const [editAvailableUntil, setEditAvailableUntil] = useState("");
+  const [editQuestions, setEditQuestions] = useState<Array<{ uid: string; text: string; options: string[]; correctOption: string }>>([]);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Analytics modal
+  const [analyticsData, setAnalyticsData] = useState<any | null>(null);
+  const [analyticsQuizTitle, setAnalyticsQuizTitle] = useState("");
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+
+  // Announcements
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [annTitle, setAnnTitle] = useState("");
+  const [annBody, setAnnBody] = useState("");
+  const [annCourseId, setAnnCourseId] = useState("");
+  const [isPostingAnn, setIsPostingAnn] = useState(false);
 
   const [newDeptName, setNewDeptName] = useState("");
 
@@ -135,6 +156,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   useEffect(() => {
     if (activeTab === "quizzes") fetchQuizList();
     if (activeTab === "exams") fetchExams();
+    if (activeTab === "announcements") fetchAnnouncements();
   }, [activeTab]);
 
   const showSuccess = (msg: string) => {
@@ -361,6 +383,107 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const handleRemoveQuestionRow = (index: number) => {
     if (quizQuestions.length === 1) return;
     setQuizQuestions((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const openEditQuiz = (quiz: any) => {
+    setEditingQuiz(quiz);
+    setEditQuizTitle(quiz.title);
+    setEditQuizDuration(String(quiz.durationMinutes));
+    setEditAvailableFrom(quiz.availableFrom ? new Date(quiz.availableFrom).toISOString().slice(0, 16) : "");
+    setEditAvailableUntil(quiz.availableUntil ? new Date(quiz.availableUntil).toISOString().slice(0, 16) : "");
+    // Load full quiz questions
+    fetch(`/api/quizzes/${quiz.id}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => {
+        setEditQuestions((data.questions || []).map((q: any) => ({
+          uid: q.id,
+          text: q.text,
+          options: JSON.parse(q.optionsJson),
+          correctOption: q.correctOption,
+        })));
+      });
+  };
+
+  const handleEditQuestionChange = (idx: number, field: string, value: string, optIdx?: number) => {
+    setEditQuestions(prev => prev.map((q, i) => {
+      if (i !== idx) return q;
+      if (field === "text") return { ...q, text: value };
+      if (field === "correctOption") return { ...q, correctOption: value };
+      if (field === "option" && optIdx !== undefined) {
+        const opts = [...q.options]; opts[optIdx] = value; return { ...q, options: opts };
+      }
+      return q;
+    }));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingQuiz) return;
+    setIsSavingEdit(true);
+    try {
+      const res = await fetch(`/api/quizzes/${editingQuiz.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title: editQuizTitle,
+          durationMinutes: parseInt(editQuizDuration),
+          availableFrom: editAvailableFrom ? new Date(editAvailableFrom).toISOString() : undefined,
+          availableUntil: editAvailableUntil ? new Date(editAvailableUntil).toISOString() : undefined,
+          questions: editQuestions.map(q => ({ text: q.text, options: q.options, correctOption: q.correctOption })),
+        }),
+      });
+      if (res.ok) { showSuccess("Quiz updated successfully."); setEditingQuiz(null); fetchQuizList(); }
+      else { const d = await res.json(); showError(d.error || "Update failed"); }
+    } catch (e: any) { showError(e.message); }
+    finally { setIsSavingEdit(false); }
+  };
+
+  const handleDuplicateQuiz = async (quizId: string, title: string) => {
+    try {
+      const res = await fetch(`/api/quizzes/${quizId}/duplicate`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { showSuccess(`"${title}" duplicated.`); fetchQuizList(); }
+      else { const d = await res.json(); showError(d.error || "Failed to duplicate"); }
+    } catch (e: any) { showError(e.message); }
+  };
+
+  const handleShowAnalytics = async (quizId: string, title: string) => {
+    setAnalyticsQuizTitle(title);
+    setAnalyticsData(null);
+    setIsLoadingAnalytics(true);
+    try {
+      const res = await fetch(`/api/quizzes/${quizId}/analytics`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setAnalyticsData(await res.json());
+      else { const d = await res.json(); showError(d.error || "Failed to load analytics"); }
+    } catch (e: any) { showError(e.message); }
+    finally { setIsLoadingAnalytics(false); }
+  };
+
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await fetch("/api/announcements", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setAnnouncements(await res.json());
+    } catch {}
+  };
+
+  const handlePostAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!annTitle.trim() || !annBody.trim()) return;
+    setIsPostingAnn(true);
+    try {
+      const res = await fetch("/api/announcements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: annTitle, body: annBody, courseId: annCourseId || undefined }),
+      });
+      if (res.ok) { showSuccess("Announcement posted."); setAnnTitle(""); setAnnBody(""); setAnnCourseId(""); fetchAnnouncements(); }
+      else { const d = await res.json(); showError(d.error || "Failed to post"); }
+    } catch (e: any) { showError(e.message); }
+    finally { setIsPostingAnn(false); }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (!confirm("Delete this announcement?")) return;
+    const res = await fetch(`/api/announcements/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) fetchAnnouncements();
   };
 
   const handleDeployQuizSubmit = async (e: React.FormEvent) => {
@@ -790,6 +913,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     quizzes: "Deploy MCQ Quiz",
     exams: "Written Exams (AI)",
     courses: "Course Registry",
+    announcements: "Announcements",
     departments: "Departments",
   };
 
@@ -856,7 +980,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {navBtn("notes",        "Publish Notes",  <PlusCircle className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("quizzes",      "Deploy Quiz",    <Award className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("exams",        "Written Exams",  <FileText className="h-4 w-4" strokeWidth={1.6} />)}
-          {navBtn("courses",      "Courses",        <BookOpen className="h-4 w-4" strokeWidth={1.6} />)}
+          {navBtn("courses",       "Courses",        <BookOpen className="h-4 w-4" strokeWidth={1.6} />)}
+          {navBtn("announcements","Announcements",  <Megaphone className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("departments",  "Departments",    <Users className="h-4 w-4" strokeWidth={1.6} />)}
         </nav>
 
@@ -1579,14 +1704,186 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                               {quiz.availableUntil && <span>Closes {new Date(quiz.availableUntil).toLocaleString()}</span>}
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteQuiz(quiz.id, quiz.title)}
-                            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold border border-red-200 dark:border-red-900/40 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-[8px] transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Delete
-                          </button>
+                          <div className="flex-shrink-0 flex items-center gap-1.5 flex-wrap">
+                            <button type="button" onClick={() => handleShowAnalytics(quiz.id, quiz.title)}
+                              className="flex items-center gap-1 px-2.5 py-1.5 text-[11.5px] font-semibold border border-black/[0.09] dark:border-white/[0.10] text-[#3a3a3c] dark:text-white/60 hover:border-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-400 rounded-[8px] transition-colors cursor-pointer">
+                              <BarChart2 className="h-3.5 w-3.5" /> Stats
+                            </button>
+                            <button type="button" onClick={() => handleDuplicateQuiz(quiz.id, quiz.title)}
+                              className="flex items-center gap-1 px-2.5 py-1.5 text-[11.5px] font-semibold border border-black/[0.09] dark:border-white/[0.10] text-[#3a3a3c] dark:text-white/60 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-[8px] transition-colors cursor-pointer">
+                              <Copy className="h-3.5 w-3.5" /> Copy
+                            </button>
+                            <button type="button" onClick={() => openEditQuiz(quiz)}
+                              className="flex items-center gap-1 px-2.5 py-1.5 text-[11.5px] font-semibold border border-black/[0.09] dark:border-white/[0.10] text-[#3a3a3c] dark:text-white/60 hover:border-amber-400 hover:text-amber-600 dark:hover:text-amber-400 rounded-[8px] transition-colors cursor-pointer">
+                              <Pencil className="h-3.5 w-3.5" /> Edit
+                            </button>
+                            <button type="button" onClick={() => handleDeleteQuiz(quiz.id, quiz.title)}
+                              className="flex items-center gap-1 px-2.5 py-1.5 text-[11.5px] font-semibold border border-red-200 dark:border-red-900/40 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-[8px] transition-colors cursor-pointer">
+                              <Trash2 className="h-3.5 w-3.5" /> Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── ANALYTICS MODAL ── */}
+          {(analyticsData || isLoadingAnalytics) && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setAnalyticsData(null)}>
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="apple-card max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
+                  <div>
+                    <h2 className="apple-title flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-500" /> Analytics</h2>
+                    <p className="apple-subtitle truncate">{analyticsQuizTitle}</p>
+                  </div>
+                  <button onClick={() => setAnalyticsData(null)} className="p-1.5 rounded-[8px] hover:bg-black/[0.05] dark:hover:bg-white/[0.07] cursor-pointer"><X className="h-4 w-4 text-[#6e6e73]" /></button>
+                </div>
+                <div className="p-5 space-y-5">
+                  {isLoadingAnalytics ? (
+                    <div className="flex items-center justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-emerald-500" /></div>
+                  ) : analyticsData && (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                          { label: "Attempts",  value: analyticsData.total },
+                          { label: "Avg Score", value: `${analyticsData.avgScore}%` },
+                          { label: "Pass Rate", value: `${analyticsData.passRate}%` },
+                          { label: "Passed",    value: `${analyticsData.passCount}/${analyticsData.total}` },
+                        ].map(stat => (
+                          <div key={stat.label} className="text-center p-3 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px]">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">{stat.label}</p>
+                            <p className="text-[20px] font-black text-[#1d1d1f] dark:text-white/90 tabular-nums">{stat.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">Question Difficulty</p>
+                        <div className="space-y-2">
+                          {analyticsData.questionStats.map((q: any, i: number) => (
+                            <div key={q.id} className="space-y-1">
+                              <div className="flex items-center justify-between text-[11.5px]">
+                                <span className="text-[#3a3a3c] dark:text-white/70 truncate flex-1 mr-3">Q{i+1}. {q.text}</span>
+                                <span className={`font-bold flex-shrink-0 ${q.correctRate >= 70 ? "text-emerald-600 dark:text-emerald-400" : q.correctRate >= 40 ? "text-amber-600 dark:text-amber-400" : "text-red-500"}`}>{q.correctRate}%</span>
+                              </div>
+                              <div className="h-1.5 bg-black/[0.06] dark:bg-white/[0.08] rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all ${q.correctRate >= 70 ? "bg-emerald-500" : q.correctRate >= 40 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${q.correctRate}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {/* ── EDIT QUIZ PANEL ── */}
+          {editingQuiz && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setEditingQuiz(null)}>
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="apple-card max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
+                  <div>
+                    <h2 className="apple-title flex items-center gap-2"><Pencil className="h-4 w-4 text-amber-500" /> Edit Quiz</h2>
+                    <p className="apple-subtitle">Changes replace all existing questions. Existing student attempts keep their original scores.</p>
+                  </div>
+                  <button onClick={() => setEditingQuiz(null)} className="p-1.5 rounded-[8px] hover:bg-black/[0.05] dark:hover:bg-white/[0.07] cursor-pointer"><X className="h-4 w-4 text-[#6e6e73]" /></button>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label className={lbl}>Title</label><input type="text" value={editQuizTitle} onChange={e => setEditQuizTitle(e.target.value)} className="form-input" /></div>
+                    <div><label className={lbl}>Duration (min)</label><input type="number" min="1" value={editQuizDuration} onChange={e => setEditQuizDuration(e.target.value)} className="form-input" /></div>
+                    <div><label className={lbl}>Opens At (optional)</label><input type="datetime-local" value={editAvailableFrom} onChange={e => setEditAvailableFrom(e.target.value)} className="form-input" /></div>
+                    <div><label className={lbl}>Closes At (optional)</label><input type="datetime-local" value={editAvailableUntil} onChange={e => setEditAvailableUntil(e.target.value)} className="form-input" /></div>
+                  </div>
+                  <div className="space-y-3">
+                    <h3 className="text-[12px] font-bold text-[#3a3a3c] dark:text-white/70 uppercase tracking-wider">Questions ({editQuestions.length})</h3>
+                    {editQuestions.length === 0 ? <div className="py-6 text-center text-[12px] text-[#6e6e73]"><Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-emerald-500" />Loading questions…</div> : editQuestions.map((q, idx) => (
+                      <div key={q.uid} className="p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] space-y-3">
+                        <div className="flex items-center justify-between"><span className="text-[11.5px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase">Q{idx+1}</span>
+                          {editQuestions.length > 1 && <button type="button" onClick={() => setEditQuestions(p => p.filter((_, i) => i !== idx))} className="p-1 text-red-400 hover:text-red-600 cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>}
+                        </div>
+                        <input type="text" value={q.text} onChange={e => handleEditQuestionChange(idx, "text", e.target.value)} placeholder="Question text" className="form-input" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {q.options.map((opt, oi) => (
+                            <div key={oi}><label className={lbl}>Option {["A","B","C","D"][oi]}</label>
+                              <input type="text" value={opt} onChange={e => handleEditQuestionChange(idx, "option", e.target.value, oi)} className="form-input" />
+                            </div>
+                          ))}
+                        </div>
+                        <div><label className={lbl}>Correct Answer</label>
+                          <select value={q.correctOption} onChange={e => handleEditQuestionChange(idx, "correctOption", e.target.value)} className="form-input">
+                            <option value="">-- Select --</option>
+                            {q.options.map((opt, oi) => <option key={oi} value={opt}>{["A","B","C","D"][oi]}: {opt}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setEditQuestions(p => [...p, { uid: crypto.randomUUID(), text: "", options: ["","","",""], correctOption: "" }])}
+                      className="w-full py-2 border-2 border-dashed border-black/[0.10] dark:border-white/[0.10] hover:border-emerald-300 text-[12px] font-semibold text-[#6e6e73] hover:text-emerald-600 rounded-[10px] transition cursor-pointer">
+                      + Add Question
+                    </button>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button onClick={() => setEditingQuiz(null)} className="flex-1 py-2.5 border border-black/[0.09] dark:border-white/[0.10] text-[13px] font-semibold text-[#3a3a3c] dark:text-white/60 rounded-[10px] hover:bg-black/[0.04] transition cursor-pointer">Cancel</button>
+                    <button onClick={handleSaveEdit} disabled={isSavingEdit} className="flex-1 btn-gradient disabled:opacity-50 flex items-center justify-center gap-2">
+                      {isSavingEdit ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : <><Save className="h-4 w-4" /> Save Changes</>}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {/* ── ANNOUNCEMENTS TAB ── */}
+          {activeTab === "announcements" && (
+            <motion.div className="space-y-5" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
+              <div className="apple-card">
+                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                  <h2 className="apple-title flex items-center gap-2"><Megaphone className="h-4 w-4 text-emerald-500" /> Post Announcement</h2>
+                  <p className="apple-subtitle">Notify all students instantly. A push notification is sent when you post.</p>
+                </div>
+                <form onSubmit={handlePostAnnouncement} className="p-6 space-y-4">
+                  <div><label className={lbl}>Title</label><input required value={annTitle} onChange={e => setAnnTitle(e.target.value)} placeholder="e.g. Exam rescheduled to Friday" className="form-input" /></div>
+                  <div><label className={lbl}>Message</label><textarea required rows={3} value={annBody} onChange={e => setAnnBody(e.target.value)} placeholder="Write your announcement here…" className="form-input resize-none" /></div>
+                  <div><label className={lbl}>Tag Course (optional)</label>
+                    <select value={annCourseId} onChange={e => setAnnCourseId(e.target.value)} className="form-input">
+                      <option value="">All Students</option>
+                      {courses.filter(c => c.lecturerId === user.id).map(c => <option key={c.id} value={c.id}>{c.code} — {c.title}</option>)}
+                    </select>
+                  </div>
+                  <button type="submit" disabled={isPostingAnn} className="btn-gradient flex items-center gap-2 disabled:opacity-50">
+                    {isPostingAnn ? <><Loader2 className="h-4 w-4 animate-spin" /> Posting…</> : <><Send className="h-4 w-4" /> Post Announcement</>}
+                  </button>
+                </form>
+              </div>
+              <div className="apple-card">
+                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                  <h2 className="apple-title">Posted Announcements</h2>
+                </div>
+                <div className="p-5">
+                  {announcements.length === 0 ? (
+                    <div className="apple-empty-state"><div className="apple-empty-state__icon"><Megaphone className="h-6 w-6 text-[#8e8e93] dark:text-white/30" /></div><p className="apple-empty-state__title">No announcements yet</p></div>
+                  ) : (
+                    <div className="space-y-3">
+                      {announcements.map(ann => (
+                        <div key={ann.id} className="flex items-start justify-between gap-3 p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px]">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{ann.title}</p>
+                              {ann.course && <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase">{ann.course.code}</span>}
+                            </div>
+                            <p className="text-[12px] text-[#6e6e73] dark:text-white/50 leading-relaxed">{ann.body}</p>
+                            <p className="text-[10.5px] font-mono text-[#6e6e73] dark:text-white/30 mt-1">{new Date(ann.createdAt).toLocaleString()}</p>
+                          </div>
+                          {ann.lecturerId === user.id && (
+                            <button onClick={() => handleDeleteAnnouncement(ann.id)} className="flex-shrink-0 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-[8px] transition cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
+                          )}
                         </div>
                       ))}
                     </div>

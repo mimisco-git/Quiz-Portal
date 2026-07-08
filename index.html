@@ -6,6 +6,11 @@
     <title>QuizOS — FUTO Academic Portal</title>
     <meta name="description" content="Federal University of Technology Owerri — Secure online examination and live lecture platform." />
     <meta name="theme-color" content="#047857" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Quiz Portal" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/png" sizes="32x32" href="/logo.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/logo.png" />
     <link rel="shortcut icon" href="/logo.png" />
@@ -14,6 +19,13 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>
 

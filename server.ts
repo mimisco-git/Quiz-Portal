@@ -9,8 +9,37 @@ import mammoth from "mammoth";
 import JSZip from "jszip";
 import OpenAI from "openai";
 import rateLimit from "express-rate-limit";
+import webpush from "web-push";
 import { prisma } from "./src/lib/db.js";
 import { seedDatabase } from "./src/lib/seed.js";
+
+// ── Web Push (VAPID) setup — graceful no-op if keys not configured ──
+const PUSH_ENABLED = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+if (PUSH_ENABLED) {
+  webpush.setVapidDetails(
+    `mailto:${process.env.VAPID_EMAIL || "admin@quizportal.app"}`,
+    process.env.VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY!
+  );
+}
+
+async function sendPushToAll(role: "student" | "lecturer" | "all", title: string, body: string, url = "/") {
+  if (!PUSH_ENABLED) return;
+  const where = role === "all" ? {} : { userRole: role };
+  const subs = await prisma.pushSubscription.findMany({ where });
+  const payload = JSON.stringify({ title, body, url });
+  await Promise.allSettled(
+    subs.map(async (sub) => {
+      try {
+        await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload);
+      } catch (err: any) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+        }
+      }
+    })
+  );
+}
 
 const app = express();
 const PORT = 3000;
@@ -614,6 +643,7 @@ app.post("/api/quizzes", authenticateToken, async (req: any, res) => {
       });
     }
 
+    sendPushToAll("student", "New Quiz Available", `A new quiz "${quiz.title}" has been posted. Open the app to take it.`, "/").catch(() => {});
     return res.status(201).json(quiz);
   } catch (error: any) {
     console.error("Error creating quiz:", error);
@@ -1629,6 +1659,7 @@ app.post("/api/exams", authenticateToken, upload.single("file"), async (req: any
         availableUntil: availableUntil ? new Date(availableUntil) : undefined,
       },
     });
+    sendPushToAll("student", "New Exam Posted", `A new written exam "${title}" is now available. Open the app to check it.`, "/").catch(() => {});
     return res.status(201).json(exam);
   } catch (err) {
     console.error("Error creating exam:", err);
@@ -1875,6 +1906,239 @@ app.get("/api/user/avatar/:role/:id", async (req: any, res) => {
   } catch (err) {
     console.error("Error fetching avatar:", err);
     return res.status(500).json({ error: "Failed to fetch avatar" });
+  }
+});
+
+// -------------------------------------------------------------
+// PUSH NOTIFICATION SUBSCRIPTION
+// -------------------------------------------------------------
+
+app.get("/api/vapid-public-key", (_req, res) => {
+  res.json({ key: process.env.VAPID_PUBLIC_KEY || null });
+});
+
+app.post("/api/push/subscribe", authenticateToken, async (req: any, res) => {
+  const { endpoint, keys } = req.body;
+  if (!endpoint || !keys?.p256dh || !keys?.auth) return res.status(400).json({ error: "Invalid subscription" });
+  try {
+    await prisma.pushSubscription.upsert({
+      where: { endpoint },
+      update: { p256dh: keys.p256dh, auth: keys.auth, userId: req.user.id, userRole: req.user.role },
+      create: { userId: req.user.id, userRole: req.user.role, endpoint, p256dh: keys.p256dh, auth: keys.auth },
+    });
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to save subscription" });
+  }
+});
+
+app.delete("/api/push/unsubscribe", authenticateToken, async (req: any, res) => {
+  const { endpoint } = req.body;
+  if (!endpoint) return res.status(400).json({ error: "endpoint required" });
+  await prisma.pushSubscription.deleteMany({ where: { endpoint } }).catch(() => {});
+  return res.json({ success: true });
+});
+
+// -------------------------------------------------------------
+// ANNOUNCEMENTS
+// -------------------------------------------------------------
+
+app.get("/api/announcements", authenticateToken, async (_req, res) => {
+  try {
+    const items = await prisma.announcement.findMany({
+      include: {
+        lecturer: { select: { name: true } },
+        course:   { select: { code: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+    });
+    return res.json(items);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch announcements" });
+  }
+});
+
+app.post("/api/announcements", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { title, body, courseId } = req.body;
+  if (!title?.trim() || !body?.trim()) return res.status(400).json({ error: "Title and body required" });
+  try {
+    const ann = await prisma.announcement.create({
+      data: { title: title.trim(), body: body.trim(), lecturerId: req.user.id, courseId: courseId || null },
+      include: { lecturer: { select: { name: true } }, course: { select: { code: true } } },
+    });
+    sendPushToAll("student", `📢 ${title}`, body, "/").catch(() => {});
+    return res.status(201).json(ann);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to create announcement" });
+  }
+});
+
+app.delete("/api/announcements/:id", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const ann = await prisma.announcement.findUnique({ where: { id: req.params.id } });
+    if (!ann) return res.status(404).json({ error: "Not found" });
+    if (ann.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied" });
+    await prisma.announcement.delete({ where: { id: req.params.id } });
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to delete announcement" });
+  }
+});
+
+// -------------------------------------------------------------
+// QUIZ — EDIT / DUPLICATE / ANALYTICS / LEADERBOARD
+// -------------------------------------------------------------
+
+app.put("/api/quizzes/:id", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { title, durationMinutes, availableFrom, availableUntil, questions } = req.body;
+  if (!title || !durationMinutes || !Array.isArray(questions) || questions.length === 0)
+    return res.status(400).json({ error: "title, durationMinutes, and questions are required" });
+  try {
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: req.params.id },
+      include: { course: { select: { lecturerId: true } } },
+    });
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    if (quiz.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied" });
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.question.deleteMany({ where: { quizId: req.params.id } });
+      return tx.quiz.update({
+        where: { id: req.params.id },
+        data: {
+          title,
+          durationMinutes: parseInt(durationMinutes),
+          availableFrom: availableFrom ? new Date(availableFrom) : null,
+          availableUntil: availableUntil ? new Date(availableUntil) : null,
+          questions: {
+            create: questions.map((q: any) => ({
+              text: q.text,
+              optionsJson: JSON.stringify(q.options),
+              correctOption: q.correctOption,
+            })),
+          },
+        },
+        include: {
+          course: { select: { code: true, title: true } },
+          _count: { select: { questions: true, attempts: true } },
+        },
+      });
+    });
+    return res.json(updated);
+  } catch (err) {
+    console.error("Error updating quiz:", err);
+    return res.status(500).json({ error: "Failed to update quiz" });
+  }
+});
+
+app.post("/api/quizzes/:id/duplicate", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: req.params.id },
+      include: { questions: true, course: { select: { lecturerId: true } } },
+    });
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    if (quiz.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied" });
+
+    const copy = await prisma.quiz.create({
+      data: {
+        title: `${quiz.title} (Copy)`,
+        durationMinutes: quiz.durationMinutes,
+        courseId: quiz.courseId,
+        questions: {
+          create: quiz.questions.map((q) => ({
+            text: q.text,
+            optionsJson: q.optionsJson,
+            correctOption: q.correctOption,
+          })),
+        },
+      },
+      include: {
+        course: { select: { code: true, title: true } },
+        _count: { select: { questions: true, attempts: true } },
+      },
+    });
+    return res.status(201).json(copy);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to duplicate quiz" });
+  }
+});
+
+app.get("/api/quizzes/:id/analytics", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: req.params.id },
+      include: {
+        questions: true,
+        course: { select: { lecturerId: true, code: true } },
+        attempts: { where: { isCompleted: true }, select: { score: true, answersJson: true } },
+      },
+    });
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    if (quiz.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied" });
+
+    const total = quiz.attempts.length;
+    const scores = quiz.attempts.map((a) => a.score ?? 0);
+    const avg = total > 0 ? scores.reduce((s, x) => s + x, 0) / total : 0;
+    const passCount = scores.filter((s) => s >= 50).length;
+
+    const questionStats = quiz.questions.map((q) => {
+      let correct = 0, attempted = 0;
+      for (const att of quiz.attempts) {
+        try {
+          const ans = JSON.parse(att.answersJson ?? "{}");
+          if (ans[q.id] !== undefined) { attempted++; if (ans[q.id] === q.correctOption) correct++; }
+        } catch { /* skip */ }
+      }
+      return {
+        id: q.id,
+        text: q.text.slice(0, 100),
+        correct,
+        attempted,
+        correctRate: attempted > 0 ? Math.round((correct / attempted) * 100) : 0,
+      };
+    });
+
+    return res.json({
+      quizTitle: quiz.title,
+      courseCode: quiz.course.code,
+      total,
+      avgScore: Math.round(avg * 10) / 10,
+      passRate: total > 0 ? Math.round((passCount / total) * 100) : 0,
+      passCount,
+      failCount: total - passCount,
+      questionStats,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
+app.get("/api/quizzes/:id/leaderboard", authenticateToken, async (req: any, res) => {
+  try {
+    const attempts = await prisma.studentAttempt.findMany({
+      where: { quizId: req.params.id, isCompleted: true },
+      include: { student: { select: { fullName: true, regNumber: true, department: true } } },
+      orderBy: { score: "desc" },
+      take: 20,
+    });
+    const board = attempts.map((a, i) => ({
+      rank: i + 1,
+      fullName: a.student.fullName,
+      regNumber: a.student.regNumber,
+      department: a.student.department,
+      score: a.score ?? 0,
+      submittedAt: a.submittedAt,
+    }));
+    return res.json(board);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch leaderboard" });
   }
 });
 
