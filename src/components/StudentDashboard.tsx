@@ -5,6 +5,7 @@ import MarkdownView from "./MarkdownView";
 import UserAvatar from "./UserAvatar";
 import AvatarModal from "./AvatarModal";
 import { motion, AnimatePresence } from "motion/react";
+import SlideView from "./SlideView";
 
 interface StudentDashboardProps {
   token: string;
@@ -1583,21 +1584,17 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
                         {/* Slides */}
                         {liveStudentTab === "slides" && (
-                          <div className="bg-slate-950 rounded-[12px] border border-slate-800/60 p-5 min-h-[280px] flex flex-col">
-                            <div className="flex items-center justify-between border-b border-slate-800/60 pb-2.5 mb-4">
-                              <span className="text-[11px] font-mono text-slate-500 uppercase tracking-widest font-bold">{activeLiveSession.topic}</span>
-                              <div className="flex items-center gap-2">
-                                {slides.length > 1 && <span className="text-[11px] font-mono text-slate-500">{Math.min(currentSlide, slides.length - 1) + 1}/{slides.length}</span>}
-                                <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-500 font-bold"><span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />Synced</span>
-                              </div>
-                            </div>
-                            <div className="text-[13px] text-slate-200 flex-1 leading-relaxed">
-                              <MarkdownView content={slide} />
-                            </div>
-                            <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] font-mono text-slate-600">
-                              <span>{selectedCourse?.code}</span>
-                              <span>Started {new Date(activeLiveSession.createdAt).toLocaleTimeString()}</span>
-                            </div>
+                          <div className="space-y-2">
+                            <SlideView
+                              content={slide}
+                              slideNumber={Math.min(currentSlide, slides.length - 1) + 1}
+                              totalSlides={slides.length}
+                              topic={activeLiveSession.topic}
+                              courseCode={selectedCourse?.code}
+                            />
+                            <p className="text-center text-[10.5px] font-mono text-[#6e6e73] dark:text-white/30">
+                              <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />Live — slides advance automatically</span>
+                            </p>
                           </div>
                         )}
 

@@ -3,7 +3,8 @@ import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Chec
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import AvatarModal from "./AvatarModal";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
+import SlideView from "./SlideView";
 
 interface LecturerDashboardProps {
   token: string;
@@ -161,6 +162,19 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     if (activeTab === "exams") fetchExams();
     if (activeTab === "announcements") fetchAnnouncements();
   }, [activeTab]);
+
+  // Keyboard arrow-key slide navigation for lecturer
+  useEffect(() => {
+    if (!broadcastingSession || liveSubTab !== "slides") return;
+    const slides = broadcastingSession.content.split(/^---$/m).map((s: string) => s.trim()).filter(Boolean);
+    const safeSlide = Math.min(broadcastingSession.currentSlide ?? 0, slides.length - 1);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); handleSlideChange(Math.min(slides.length - 1, safeSlide + 1)); }
+      if (e.key === "ArrowLeft"  || e.key === "ArrowUp")   { e.preventDefault(); handleSlideChange(Math.max(0, safeSlide - 1)); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [broadcastingSession, liveSubTab]);
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -1437,18 +1451,26 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       {/* Slides */}
                       {liveSubTab === "slides" && (
                         <div className="space-y-4">
-                          {slides.length > 1 && (
-                            <div className="bg-slate-900 dark:bg-black/40 rounded-[12px] overflow-hidden">
-                              <div className="px-4 py-2.5 flex items-center justify-between border-b border-white/[0.08]">
-                                <span className="text-[11px] font-mono text-slate-400 font-bold uppercase tracking-widest">Slide {safeSlide + 1} of {slides.length}</span>
-                                <div className="flex items-center gap-2">
-                                  <button onClick={() => handleSlideChange(Math.max(0, safeSlide - 1))} disabled={safeSlide === 0}
-                                    className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold bg-white/[0.08] hover:bg-white/[0.14] text-white rounded-[8px] disabled:opacity-30 transition"><ChevronLeft className="h-3.5 w-3.5" /> Prev</button>
-                                  <button onClick={() => handleSlideChange(Math.min(slides.length - 1, safeSlide + 1))} disabled={safeSlide === slides.length - 1}
-                                    className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-[8px] disabled:opacity-30 transition">Next <ChevronRight className="h-3.5 w-3.5" /></button>
-                                </div>
+                          {slides.length > 0 && (
+                            <div className="space-y-3">
+                              <SlideView
+                                content={slides[safeSlide]}
+                                slideNumber={safeSlide + 1}
+                                totalSlides={slides.length}
+                                topic={broadcastingSession.topic}
+                                courseCode={courses.find((c: any) => c.id === broadcastingSession.courseId)?.code}
+                              />
+                              <div className="flex items-center justify-between gap-3">
+                                <button onClick={() => handleSlideChange(Math.max(0, safeSlide - 1))} disabled={safeSlide === 0}
+                                  className="flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold bg-black/[0.06] dark:bg-white/[0.08] hover:bg-black/[0.12] dark:hover:bg-white/[0.14] text-[#3a3a3c] dark:text-white/70 rounded-[10px] disabled:opacity-30 transition cursor-pointer">
+                                  <ChevronLeft className="h-4 w-4" /> Previous
+                                </button>
+                                <span className="text-[11px] font-mono text-[#6e6e73] dark:text-white/40 select-none">← → arrow keys work too</span>
+                                <button onClick={() => handleSlideChange(Math.min(slides.length - 1, safeSlide + 1))} disabled={safeSlide === slides.length - 1}
+                                  className="flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-[10px] disabled:opacity-30 transition cursor-pointer">
+                                  Next <ChevronRight className="h-4 w-4" />
+                                </button>
                               </div>
-                              <pre className="p-5 text-[13px] text-slate-100 whitespace-pre-wrap leading-relaxed min-h-[120px] font-sans">{slides[safeSlide]}</pre>
                             </div>
                           )}
                           <div className="bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4 space-y-3">
