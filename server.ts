@@ -630,29 +630,47 @@ app.post("/api/quizzes/parse-questions", authenticateToken, upload.single("file"
     if (!text.trim()) return res.status(400).json({ error: "Could not extract text from document" });
 
     const nvidia = getNvidiaClient();
-    const prompt = `You are an MCQ question parser. Extract ALL multiple-choice questions from the text below and return them as a JSON array.
+    const prompt = `You are an expert MCQ question parser. Extract ALL multiple-choice questions from the text and return a JSON array.
 
-Rules:
-- Each question must have exactly 4 options.
-- "options" array must contain the FULL option text with the letter prefix REMOVED. Strip any prefix of the form: "a." "b." "c." "d." or "A." "B." "C." "D." or "a)" "b)" "c)" "d)" or "A)" "B)" "C)" "D)" or "(a)" "(b)" "(A)" "(B)" etc. Store only the content after the prefix.
-- "correctOption" must be the EXACT string from the options array that is correct (after prefix removal, matching the cleaned option text).
-- Detect the correct answer from any marker below the question, including: "Answer: a", "Answer: b", "Ans: A", "Ans: B", "Correct: c", "Key: d", or a letter on its own line after the options. Both uppercase and lowercase letters are valid answer markers.
-- If no answer is marked, pick the most plausible option.
-- Return ONLY valid JSON array, no markdown fences, no explanation, no extra text.
+OPTION PREFIX STRIPPING — remove ANY of these label styles from the start of each option, then store only the content:
+  Uppercase:  A.  B.  C.  D.   |  A)  B)  C)  D)   |  (A)  (B)  (C)  (D)   |  A:  B:  C:  D:   |  [A]  [B]  [C]  [D]
+  Lowercase:  a.  b.  c.  d.   |  a)  b)  c)  d)   |  (a)  (b)  (c)  (d)   |  a:  b:  c:  d:   |  [a]  [b]  [c]  [d]
+  Roman:      i.  ii.  iii.  iv.  (treat as options 1-4 in order)
+  Numeric:    1.  2.  3.  4.   |  1)  2)  3)  4)    (when used as option labels, not question numbers)
 
-Format:
+CORRECT ANSWER DETECTION — detect the answer from ANY of these patterns (case-insensitive):
+  - "Answer: A"  /  "Answer: a"  /  "Ans: B"  /  "ANS: C"  /  "Correct: d"  /  "Key: A"
+  - "The answer is A"  /  "The correct answer is b"  /  "Answer = C"
+  - A lone letter (A/B/C/D or a/b/c/d) on its own line immediately after the options
+  - An asterisk (*) before or after an option label, e.g. "*A." or "A*" — that option is correct
+  - The word "ANSWER" or "ANS" followed by any separator then a letter
+
+RULES:
+- Each question needs exactly 4 options. If a question has more or fewer, do your best.
+- "correctOption" must EXACTLY match one of the cleaned strings in the "options" array.
+- If no answer can be detected, choose the most plausible option.
+- Ignore page headers, footers, course codes, and instructor names.
+- Return ONLY a valid JSON array — no markdown, no explanation, no extra text.
+
+FORMAT:
 [{"text":"...","options":["...","...","...","..."],"correctOption":"..."}]
 
-Example input:
-1. What is the powerhouse of the cell?
-a. Nucleus
-b. Mitochondria
-c. Ribosome
-d. Golgi body
+EXAMPLES:
+
+Input style 1 (lowercase dot):
+1. What is H2O?
+a. Carbon dioxide  b. Water  c. Oxygen  d. Hydrogen
 Answer: b
 
-Example output for that question:
-{"text":"What is the powerhouse of the cell?","options":["Nucleus","Mitochondria","Ribosome","Golgi body"],"correctOption":"Mitochondria"}
+Input style 2 (uppercase paren, asterisk):
+2. The CPU stands for?
+*A) Central Processing Unit
+B) Computer Power Unit
+C) Core Processing Unit
+D) Central Power Utility
+(no answer line — asterisk marks correct)
+
+Both produce the same JSON shape with cleaned option text and matching correctOption.
 
 TEXT TO PARSE:
 ${text.slice(0, 12000)}`;
