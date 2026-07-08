@@ -1,0 +1,194 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+model Lecturer {
+  id         String   @id @default(uuid())
+  name       String
+  email      String   @unique
+  password   String
+  avatarData String?
+  courses    Course[]
+}
+
+model Student {
+  id               String           @id @default(uuid())
+  fullName         String
+  email            String           @unique @default("student@futo.edu.ng")
+  regNumber        String           @unique // Normalized FUTO/2026/10423
+  department       String           @default("Computer Science")
+  year             String           @default("Year 1")
+  securityQuestion String           @default("What is your favorite academic course?")
+  securityAnswer   String           @default("Computer Science")
+  avatarData       String?
+  attempts         StudentAttempt[]
+  examSubmissions  ExamSubmission[]
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model Course {
+  id           String           @id @default(uuid())
+  code         String           @unique // e.g. MTH101, CSC201
+  title        String
+  lecturerId   String
+  lecturer     Lecturer         @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  notes        LectureNote[]
+  quizzes      Quiz[]
+  liveSessions LectureSession[]
+  exams        Exam[]
+}
+
+model Exam {
+  id            String          @id @default(uuid())
+  title         String
+  courseId      String
+  course        Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questionsText String          // Extracted text from uploaded questions doc
+  answerKeyText String?         // Extracted text from uploaded answer key doc
+  isOpen        Boolean         @default(true)
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  createdAt     DateTime        @default(now())
+  submissions   ExamSubmission[]
+}
+
+model ExamSubmission {
+  id          String   @id @default(uuid())
+  examId      String
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answersText String   // Student's typed answers
+  score       Float?   // AI-graded 0–100
+  feedback    String?  // AI feedback text
+  isGraded    Boolean  @default(false)
+  submittedAt DateTime @default(now())
+}
+
+model LectureNote {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   // Text or rich text Markdown content
+  createdAt DateTime @default(now())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model Quiz {
+  id              String           @id @default(uuid())
+  title           String
+  durationMinutes Int              // Allowed time in minutes
+  availableFrom   DateTime?
+  availableUntil  DateTime?
+  courseId        String
+  course          Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions       Question[]
+  attempts        StudentAttempt[]
+}
+
+model Question {
+  id            String @id @default(uuid())
+  quizId        String
+  quiz          Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  text          String // The question prompt
+  optionsJson   String // Serialized JSON array of options: ["A", "B", "C", "D"]
+  correctOption String // The correct option
+}
+
+model StudentAttempt {
+  id          String    @id @default(uuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  quizId      String
+  quiz        Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+  isCompleted Boolean   @default(false)
+  score       Float?    // Calculated score percentage or count
+  answersJson String?   // Serialized JSON of selected answers: {"questionId": "answer"}
+}
+
+model LectureSession {
+  id             String               @id @default(uuid())
+  topic          String
+  content        String
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  courseId       String
+  course         Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  jitsiRoom      String?
+  currentSlide   Int                  @default(0)
+  aiSummary      String?
+  attachmentName String?
+  attachmentData String?
+  chats          LectureChat[]
+  attendance     LectureAttendance[]
+  handRaises     HandRaise[]
+  polls          LecturePoll[]
+}
+
+model LectureAttendance {
+  id        String         @id @default(uuid())
+  sessionId String
+  session   LectureSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId String
+  studentName String
+  joinedAt  DateTime       @default(now())
+
+  @@unique([sessionId, studentId])
+}
+
+model HandRaise {
+  id          String         @id @default(uuid())
+  sessionId   String
+  session     LectureSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId   String
+  studentName String
+  raisedAt    DateTime       @default(now())
+  isResolved  Boolean        @default(false)
+}
+
+model LecturePoll {
+  id          String         @id @default(uuid())
+  sessionId   String
+  session     LectureSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question    String
+  optionsJson String
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  responses   PollResponse[]
+}
+
+model PollResponse {
+  id          String      @id @default(uuid())
+  pollId      String
+  poll        LecturePoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  studentId   String
+  studentName String
+  answer      String
+  respondedAt DateTime    @default(now())
+
+  @@unique([pollId, studentId])
+}
+
+model LectureChat {
+  id               String         @id @default(uuid())
+  senderId         String         @default("")
+  senderName       String
+  senderRole       String         // "student" | "lecturer"
+  message          String
+  createdAt        DateTime       @default(now())
+  lectureSessionId String
+  lectureSession   LectureSession @relation(fields: [lectureSessionId], references: [id], onDelete: Cascade)
+}
