@@ -358,7 +358,13 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     } else if (field === "correctOption") {
       updated[index].correctOption = value;
     } else if (field === "option" && optIndex !== undefined) {
+      const oldText = updated[index].options[optIndex];
       updated[index].options[optIndex] = value;
+      // If the correct answer was pointing at this option, clear it so the stale
+      // value doesn't silently block form submission via HTML5 required validation
+      if (updated[index].correctOption === oldText) {
+        updated[index].correctOption = "";
+      }
     }
     setQuizQuestions(updated);
   };
@@ -1776,13 +1782,16 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         </div>
                         <div>
                           <label className={lbl}>Correct Option</label>
-                          <select required value={q.correctOption} onChange={(e) => handleQuizQuestionChange(qIdx, "correctOption", e.target.value)} className="form-input">
+                          <select value={q.correctOption} onChange={(e) => handleQuizQuestionChange(qIdx, "correctOption", e.target.value)} className={`form-input ${!q.correctOption ? "border-amber-400 dark:border-amber-600" : ""}`}>
                             <option value="">-- Select correct answer --</option>
                             {q.options.map((opt, oIdx) => {
                               const optLabel = ["A","B","C","D"][oIdx];
                               return <option key={oIdx} value={opt}>{optLabel}: {opt || `(Option ${optLabel} empty)`}</option>;
                             })}
                           </select>
+                          {!q.correctOption && (
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">Select the correct answer</p>
+                          )}
                         </div>
                       </div>
                     ))}
