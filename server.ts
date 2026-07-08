@@ -1043,6 +1043,24 @@ app.get("/api/student/attempts", authenticateToken, async (req: any, res) => {
   }
 });
 
+// All exam submissions for the authenticated student
+app.get("/api/student/exam-submissions", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
+  try {
+    const submissions = await prisma.examSubmission.findMany({
+      where: { studentId: req.user.id },
+      include: {
+        exam: { select: { title: true, course: { select: { code: true, title: true } } } },
+      },
+      orderBy: { submittedAt: "desc" },
+    });
+    return res.json(submissions);
+  } catch (err) {
+    console.error("Error fetching student exam submissions:", err);
+    return res.status(500).json({ error: "Failed to fetch submissions" });
+  }
+});
+
 // -------------------------------------------------------------
 // LIVE LECTURING & STUDY CHANNELS API
 // -------------------------------------------------------------

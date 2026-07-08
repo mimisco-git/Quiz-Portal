@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import MarkdownView from "./MarkdownView";
 import UserAvatar from "./UserAvatar";
@@ -39,7 +39,7 @@ function formatCountdown(target: Date): string {
 }
 
 export default function StudentDashboard({ token, user, theme, onToggleTheme, onLogout }: StudentDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams">("notes");
+  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "history">("notes");
   const [periodTick, setPeriodTick] = useState(0);
   const [currentYear, setCurrentYear] = useState(user.year);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -47,6 +47,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [selectedNote, setSelectedNote] = useState<LectureNote | null>(null);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [attempts, setAttempts] = useState<Record<string, StudentAttempt>>({});
+  const [attemptsList, setAttemptsList] = useState<any[]>([]);
+  const [examSubmissions, setExamSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
@@ -152,6 +154,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   useEffect(() => {
     if (activeTab === "exams") fetchExams();
+    if (activeTab === "history") { fetchAttempts(); fetchExamSubmissions(); }
   }, [activeTab]);
 
   useEffect(() => {
@@ -304,13 +307,25 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const data: StudentAttempt[] = await res.json();
+        const data: any[] = await res.json();
         const attemptMap: Record<string, StudentAttempt> = {};
         data.forEach((a) => { attemptMap[a.quizId] = a; });
         setAttempts(attemptMap);
+        setAttemptsList(data);
       }
     } catch (err) {
       console.error("Error fetching student attempts:", err);
+    }
+  };
+
+  const fetchExamSubmissions = async () => {
+    try {
+      const res = await fetch("/api/student/exam-submissions", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setExamSubmissions(await res.json());
+    } catch (err) {
+      console.error("Error fetching exam submissions:", err);
     }
   };
 
@@ -966,10 +981,11 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
           {/* Main nav tabs */}
           {[
-            { id: "notes",          icon: FileText, label: "Materials",  live: false },
-            { id: "quizzes",        icon: Award,    label: "Quizzes",    live: false },
-            { id: "exams",          icon: Upload,   label: "Exams",      live: false },
-            { id: "live-classroom", icon: Radio,    label: "Live Class", live: true  },
+            { id: "notes",          icon: FileText,      label: "Materials",  live: false },
+            { id: "quizzes",        icon: Award,         label: "Quizzes",    live: false },
+            { id: "exams",          icon: Upload,        label: "Exams",      live: false },
+            { id: "history",        icon: ClipboardList, label: "My Results", live: false },
+            { id: "live-classroom", icon: Radio,         label: "Live Class", live: true  },
           ].map((item) => {
             const isActive = activeTab === (item.id as typeof activeTab);
             return (
@@ -1082,6 +1098,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             {activeTab === "notes" ? "Lecture Materials"
               : activeTab === "quizzes" ? "Academic Quizzes"
               : activeTab === "exams" ? "Written Examinations"
+              : activeTab === "history" ? "My Results"
               : "Virtual Classroom"}
           </h1>
           <div className="flex items-center gap-1">
@@ -1225,6 +1242,28 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   <p className="apple-subtitle">Secure timed assessments for your enrolled courses.</p>
                 </div>
                 <div className="p-5 space-y-4">
+                  {/* Mobile-only course selector — sidebar handles this on desktop */}
+                  {courses.length > 0 && (
+                    <div className="sm:hidden -mx-5 px-5 pb-1">
+                      <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+                        {courses.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => fetchCourseDetail(c.id)}
+                            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11.5px] font-semibold border transition-colors cursor-pointer ${
+                              selectedCourse?.id === c.id
+                                ? "bg-emerald-600 border-emerald-600 text-white"
+                                : "border-black/[0.10] dark:border-white/[0.12] text-[#3a3a3c] dark:text-white/55 hover:border-emerald-400 dark:hover:border-emerald-700"
+                            }`}
+                          >
+                            {c.code}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {submitError && !activeQuiz && (
                     <div className="flex items-center gap-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-red-800 dark:text-red-300 rounded-[10px] p-3.5 text-[12.5px]">
                       <ShieldAlert className="h-4 w-4 shrink-0 text-red-500" />
@@ -1656,6 +1695,113 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             </div>
           )}
 
+          {/* ── HISTORY TAB ── */}
+          {activeTab === "history" && (
+            <div className="space-y-5">
+              {/* Quiz Attempts */}
+              <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
+                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center gap-3">
+                  <Award className="h-4 w-4 text-emerald-500 flex-shrink-0" strokeWidth={1.8} />
+                  <div>
+                    <h2 className="apple-title">Quiz Attempts</h2>
+                    <p className="apple-subtitle">All completed quiz sessions and your scores.</p>
+                  </div>
+                </div>
+                <div className="p-5">
+                  {attemptsList.filter(a => a.isCompleted).length === 0 ? (
+                    <div className="apple-empty-state">
+                      <div className="apple-empty-state__icon"><Award className="h-6 w-6 text-[#8e8e93] dark:text-white/30" /></div>
+                      <p className="apple-empty-state__title">No completed quizzes yet</p>
+                      <p className="apple-empty-state__body">Once you complete a quiz, your score and date will appear here.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {attemptsList.filter(a => a.isCompleted).map((attempt) => (
+                        <div key={attempt.id} className="flex items-center justify-between p-4 border border-black/[0.07] dark:border-white/[0.07] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{attempt.quiz?.title || "Quiz"}</p>
+                            <div className="flex items-center gap-3 text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40 mt-0.5 flex-wrap">
+                              {attempt.quiz?.course?.code && (
+                                <span className="font-bold uppercase text-emerald-600 dark:text-emerald-400">{attempt.quiz.course.code}</span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                              </span>
+                            </div>
+                          </div>
+                          <span className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border ${
+                            (attempt.score ?? 0) >= 50
+                              ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
+                              : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30"
+                          }`}>
+                            {attempt.score?.toFixed(1) ?? "0.0"}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+
+              {/* Exam Submissions */}
+              <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0.06 }}>
+                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center gap-3">
+                  <FileText className="h-4 w-4 text-emerald-500 flex-shrink-0" strokeWidth={1.8} />
+                  <div>
+                    <h2 className="apple-title">Written Exams</h2>
+                    <p className="apple-subtitle">Your submitted exam papers and AI-generated grades.</p>
+                  </div>
+                </div>
+                <div className="p-5">
+                  {examSubmissions.length === 0 ? (
+                    <div className="apple-empty-state">
+                      <div className="apple-empty-state__icon"><Upload className="h-6 w-6 text-[#8e8e93] dark:text-white/30" /></div>
+                      <p className="apple-empty-state__title">No exam submissions yet</p>
+                      <p className="apple-empty-state__body">Your written exam submissions and AI grades will appear here.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {examSubmissions.map((sub) => (
+                        <div key={sub.id} className="flex items-center justify-between p-4 border border-black/[0.07] dark:border-white/[0.07] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{sub.exam?.title || "Exam"}</p>
+                            <div className="flex items-center gap-3 text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40 mt-0.5 flex-wrap">
+                              {sub.exam?.course?.code && (
+                                <span className="font-bold uppercase text-emerald-600 dark:text-emerald-400">{sub.exam.course.code}</span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {new Date(sub.submittedAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                              </span>
+                            </div>
+                            {sub.isGraded && sub.feedback && (
+                              <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-1 line-clamp-1 italic">{sub.feedback}</p>
+                            )}
+                          </div>
+                          {sub.isGraded ? (
+                            <span className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border ${
+                              (sub.score ?? 0) >= 50
+                                ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
+                                : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30"
+                            }`}>
+                              {sub.score?.toFixed(1) ?? "0.0"}%
+                            </span>
+                          ) : (
+                            <span className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/30 flex items-center gap-1.5">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Pending
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          )}
+
           </div>{/* /max-w-5xl */}
         </main>
       </div>
@@ -1664,10 +1810,11 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 px-5 pb-7 pt-2" aria-label="Main navigation">
         <div className="apple-bottom-dock flex items-center justify-around h-[60px] px-3">
           {([
-            { id: "notes",          icon: FileText, label: "Materials"  },
-            { id: "quizzes",        icon: Award,    label: "Quizzes"    },
-            { id: "exams",          icon: Upload,   label: "Exams"      },
-            { id: "live-classroom", icon: Radio,    label: "Live"       },
+            { id: "notes",          icon: FileText,      label: "Materials" },
+            { id: "quizzes",        icon: Award,         label: "Quizzes"   },
+            { id: "exams",          icon: Upload,        label: "Exams"     },
+            { id: "history",        icon: ClipboardList, label: "Results"   },
+            { id: "live-classroom", icon: Radio,         label: "Live"      },
           ] as const).map((item) => {
             const isActive = activeTab === item.id;
             return (
