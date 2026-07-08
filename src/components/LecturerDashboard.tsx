@@ -106,6 +106,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [attachLiveFile, setAttachLiveFile] = useState<File | null>(null);
   const [pptxFile, setPptxFile] = useState<File | null>(null);
   const [isUploadingPptx, setIsUploadingPptx] = useState(false);
+  const [preLaunchPptxFile, setPreLaunchPptxFile] = useState<File | null>(null);
+  const [isParsingPptx, setIsParsingPptx] = useState(false);
+  const [parsedSlideCount, setParsedSlideCount] = useState<number | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [sessionSummary, setSessionSummary] = useState<string | null>(null);
 
@@ -731,6 +734,35 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
+  const handlePreLaunchPptx = async (file: File) => {
+    setPreLaunchPptxFile(file);
+    setIsParsingPptx(true);
+    setParsedSlideCount(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/lectures/parse-pptx", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLiveContent(data.content);
+        setParsedSlideCount(data.slideCount);
+        showSuccess(`Extracted ${data.slideCount} slides from ${file.name}`);
+      } else {
+        showError(data.error || "Failed to parse PPT file");
+        setPreLaunchPptxFile(null);
+      }
+    } catch (err: any) {
+      showError(err.message);
+      setPreLaunchPptxFile(null);
+    } finally {
+      setIsParsingPptx(false);
+    }
+  };
+
   const handleUpdateLiveLecture = async () => {
     if (!broadcastingSession || !liveContent.trim()) return;
     try {
@@ -1240,9 +1272,6 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
                 {!broadcastingSession ? (
                   <form onSubmit={handleLaunchLiveLecture} className="space-y-4">
-                    <div className="bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-[12px] p-4 text-[12.5px] text-emerald-800 dark:text-emerald-300 leading-relaxed">
-                      <strong>Tip:</strong> Separate slides with <code className="bg-emerald-100 dark:bg-emerald-900/40 px-1 rounded">---</code> on its own line. Use audio/video via Jitsi. Students join automatically.
-                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className={lbl}>Target Course</label>
@@ -1255,10 +1284,58 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         <input type="text" required value={liveTopic} onChange={(e) => setLiveTopic(e.target.value)} placeholder="e.g. Lecture 4: Relational Algebra" className="form-input" />
                       </div>
                     </div>
+
+                    {/* PPT Upload */}
                     <div>
-                      <label className={lbl}>Slides / Board Content (Markdown: separate slides with ---)</label>
-                      <textarea required rows={7} value={liveContent} onChange={(e) => setLiveContent(e.target.value)} placeholder={"# Slide 1\nYour first slide content here\n\n---\n\n# Slide 2\nSecond slide…"} className="form-input" />
+                      <label className={lbl}>Upload PowerPoint Slides (.pptx)</label>
+                      <label className={`flex items-center gap-3 cursor-pointer border-2 border-dashed rounded-[12px] px-4 py-5 transition
+                        ${preLaunchPptxFile ? "border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-black/[0.10] dark:border-white/[0.10] hover:border-emerald-300 dark:hover:border-emerald-700"}`}>
+                        <input type="file" accept=".pptx" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePreLaunchPptx(f); e.target.value = ""; }} />
+                        {isParsingPptx ? (
+                          <><Loader2 className="h-5 w-5 animate-spin text-emerald-500 flex-shrink-0" /><span className="text-[13px] text-[#6e6e73] dark:text-white/50">Extracting slides…</span></>
+                        ) : preLaunchPptxFile && parsedSlideCount ? (
+                          <>
+                            <div className="flex items-center justify-center w-9 h-9 rounded-[10px] bg-emerald-100 dark:bg-emerald-900/30 flex-shrink-0">
+                              <Layers className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-400 truncate">{preLaunchPptxFile.name}</p>
+                              <p className="text-[11.5px] text-emerald-600/70 dark:text-emerald-400/60">{parsedSlideCount} slides extracted — tap to replace</p>
+                            </div>
+                            <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-center w-9 h-9 rounded-[10px] bg-black/[0.04] dark:bg-white/[0.05] flex-shrink-0">
+                              <Upload className="h-4 w-4 text-[#6e6e73] dark:text-white/40" />
+                            </div>
+                            <div>
+                              <p className="text-[13px] font-semibold text-[#3a3a3c] dark:text-white/70">Choose a .pptx file</p>
+                              <p className="text-[11.5px] text-[#6e6e73] dark:text-white/40">AI extracts each slide into a live board — or type content below</p>
+                            </div>
+                          </>
+                        )}
+                      </label>
                     </div>
+
+                    {/* Manual content — shown collapsed when PPT loaded, expanded when typing manually */}
+                    <div>
+                      <label className={lbl}>
+                        {parsedSlideCount ? "Extracted Slide Content (editable)" : "Or Type Slides Manually (separate with ---)"}
+                      </label>
+                      <textarea
+                        required
+                        rows={parsedSlideCount ? 5 : 7}
+                        value={liveContent}
+                        onChange={(e) => setLiveContent(e.target.value)}
+                        placeholder={"# Slide 1\nYour first slide content here\n\n---\n\n# Slide 2\nSecond slide…"}
+                        className="form-input font-mono text-[12px]"
+                      />
+                      {parsedSlideCount && (
+                        <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-1">You can edit the extracted content before launching.</p>
+                      )}
+                    </div>
+
                     <button type="submit" className="btn-gradient flex items-center gap-2">
                       <Radio className="h-4 w-4" /> Launch Broadcast
                     </button>

@@ -1492,6 +1492,19 @@ async function extractPptxSlides(buffer: Buffer): Promise<string[]> {
   return slides;
 }
 
+app.post("/api/lectures/parse-pptx", authenticateToken, upload.single("file"), async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  if (!req.file) return res.status(400).json({ error: "File required" });
+  try {
+    const slides = await extractPptxSlides(req.file.buffer);
+    if (slides.length === 0) return res.status(400).json({ error: "No slide content found in file" });
+    return res.json({ ok: true, slideCount: slides.length, content: slides.join("\n\n---\n\n") });
+  } catch (e: any) {
+    console.error("PPTX parse error:", e);
+    return res.status(500).json({ error: "Failed to parse PPTX file" });
+  }
+});
+
 app.post("/api/lectures/:id/pptx", authenticateToken, upload.single("file"), async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   const ownership = await requireLectureOwner(req.params.id, req.user.id).catch(() => "error");
