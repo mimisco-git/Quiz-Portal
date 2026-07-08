@@ -1214,7 +1214,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
         {/* Scrollable content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="px-6 py-5 pb-[96px] sm:pb-5 max-w-5xl mx-auto w-full space-y-5">
+          <div className={`py-5 pb-[96px] sm:pb-5 max-w-5xl mx-auto w-full space-y-5 ${activeTab === "live-classroom" ? "px-2 sm:px-6" : "px-6"}`}>
 
           {/* ── ANNOUNCEMENTS BANNER ── */}
           {announcements.filter(a => !dismissedAnns.has(a.id)).slice(0, 3).map(ann => (
@@ -1565,7 +1565,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   </div>
                 </div>
 
-                <div className="p-5">
+                <div className="p-2 sm:p-5">
                   {!activeLiveSession ? (
                     <div className="space-y-4">
                       {allLiveSessions.length === 0 ? (
@@ -1615,7 +1615,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                     const activePoll: any = (activeLiveSession.polls ?? [])[0] ?? null;
 
                     return (
-                      <div className="space-y-3">
+                      <div className="space-y-2 sm:space-y-3">
                         {activeLiveSession.attachmentName && activeLiveSession.attachmentData && (
                           <div className="flex items-center justify-between gap-3 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-[12px]">
                             <div className="flex items-center gap-2">
