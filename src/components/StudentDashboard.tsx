@@ -69,7 +69,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   // Live classroom sub-features
-  const [liveStudentTab, setLiveStudentTab] = useState<"jitsi" | "slides" | "poll" | "chat">("jitsi");
+  const [liveStudentTab, setLiveStudentTab] = useState<"slides" | "poll" | "chat">("slides");
+  const [audioOpen, setAudioOpen] = useState(true);
   const [handRaised, setHandRaised] = useState(false);
   const [myPollAnswer, setMyPollAnswer] = useState<string | null>(null);
 
@@ -1626,49 +1627,58 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           </div>
                         )}
 
-                        {/* Sub-tabs */}
-                        <div className="flex gap-1 bg-black/[0.04] dark:bg-white/[0.04] rounded-[12px] p-1 border border-black/[0.06] dark:border-white/[0.05] overflow-x-auto">
+                        {/* Audio bar — Jitsi always mounted for persistent audio, shown/hidden */}
+                        <div className={`rounded-[12px] overflow-hidden border border-black/[0.07] dark:border-white/[0.07] transition-all duration-300 ${audioOpen ? "opacity-100" : "opacity-0 h-0 border-0 pointer-events-none"}`}
+                          style={{ height: audioOpen ? 110 : 0 }}>
+                          <iframe
+                            src={`https://meet.jit.si/${activeLiveSession.jitsiRoom ?? activeLiveSession.id}#userInfo.displayName=${encodeURIComponent(user.fullName)}&config.startWithVideoMuted=true&config.startWithAudioMuted=false&config.prejoinPageEnabled=false&config.disableDeepLinking=true&config.filmStripOnly=false`}
+                            allow="camera; microphone; autoplay"
+                            className="w-full border-0"
+                            style={{ height: 110 }}
+                            title="Audio"
+                          />
+                        </div>
+
+                        {/* Audio toggle bar */}
+                        <div className="flex items-center justify-between px-3.5 py-2 bg-slate-900 dark:bg-black/40 rounded-[10px]">
+                          <div className="flex items-center gap-2">
+                            <span className="flex h-2 w-2"><span className="animate-ping absolute h-2 w-2 rounded-full bg-emerald-400 opacity-75" /><span className="relative h-2 w-2 rounded-full bg-emerald-500" /></span>
+                            <span className="text-[11.5px] font-semibold text-slate-200">Audio Connected</span>
+                            <span className="text-[10px] font-mono text-slate-500">{activeLiveSession.course?.code ?? ""}</span>
+                          </div>
+                          <button onClick={() => setAudioOpen(o => !o)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-slate-400 hover:text-white border border-white/10 hover:border-white/20 rounded-[7px] transition cursor-pointer">
+                            <Mic className="h-3 w-3" /> {audioOpen ? "Hide Mic" : "Show Mic"}
+                          </button>
+                        </div>
+
+                        {/* Slides always visible as primary content */}
+                        <div className="space-y-2">
+                          <SlideView
+                            content={slide}
+                            slideNumber={Math.min(currentSlide, slides.length - 1) + 1}
+                            totalSlides={slides.length}
+                            topic={activeLiveSession.topic}
+                            courseCode={activeLiveSession.course?.code}
+                          />
+                          <p className="text-center text-[10.5px] font-mono text-[#6e6e73] dark:text-white/30">
+                            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />Slides advance automatically</span>
+                          </p>
+                        </div>
+
+                        {/* Sub-tabs: Chat + Poll only */}
+                        <div className="flex gap-1 bg-black/[0.04] dark:bg-white/[0.04] rounded-[12px] p-1 border border-black/[0.06] dark:border-white/[0.05]">
                           {([
-                            { id: "jitsi",  icon: Mic,           label: "Audio/Video" },
-                            { id: "slides", icon: Layers,        label: `Slides${slides.length > 1 ? ` (${Math.min(currentSlide, slides.length - 1) + 1}/${slides.length})` : ""}` },
                             { id: "poll",   icon: BarChart2,     label: `Poll${activePoll ? " •" : ""}` },
                             { id: "chat",   icon: MessageSquare, label: `Chat (${liveChats.length})` },
-                          ] as { id: "jitsi" | "slides" | "poll" | "chat"; icon: React.ElementType; label: string }[]).map(tab => (
+                          ] as { id: "slides" | "poll" | "chat"; icon: React.ElementType; label: string }[]).map(tab => (
                             <button key={tab.id} onClick={() => setLiveStudentTab(tab.id)}
-                              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveStudentTab === tab.id ? "bg-[#ffffff] dark:bg-white/[0.10] text-[#1d1d1f] dark:text-white/90 shadow-sm border border-black/[0.07] dark:border-white/[0.08]" : "text-[#6e6e73] dark:text-white/50 hover:text-[#1d1d1f] dark:hover:text-white/75"}`}>
+                              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveStudentTab === tab.id ? "bg-[#ffffff] dark:bg-white/[0.10] text-[#1d1d1f] dark:text-white/90 shadow-sm border border-black/[0.07] dark:border-white/[0.08]" : "text-[#6e6e73] dark:text-white/50 hover:text-[#1d1d1f] dark:hover:text-white/75"}`}>
                               <tab.icon className="h-3.5 w-3.5 flex-shrink-0" />
                               {tab.label}
                             </button>
                           ))}
                         </div>
-
-                        {/* Jitsi */}
-                        {liveStudentTab === "jitsi" && (
-                          <div className="rounded-[12px] overflow-hidden border border-black/[0.07] dark:border-white/[0.07]" style={{ height: 420 }}>
-                            <iframe
-                              src={`https://meet.jit.si/${activeLiveSession.jitsiRoom ?? activeLiveSession.id}#userInfo.displayName=${encodeURIComponent(user.fullName)}&config.prejoinPageEnabled=false`}
-                              allow="camera; microphone; fullscreen; display-capture; autoplay"
-                              className="w-full h-full border-0"
-                              title="Jitsi Meet"
-                            />
-                          </div>
-                        )}
-
-                        {/* Slides */}
-                        {liveStudentTab === "slides" && (
-                          <div className="space-y-2">
-                            <SlideView
-                              content={slide}
-                              slideNumber={Math.min(currentSlide, slides.length - 1) + 1}
-                              totalSlides={slides.length}
-                              topic={activeLiveSession.topic}
-                              courseCode={selectedCourse?.code}
-                            />
-                            <p className="text-center text-[10.5px] font-mono text-[#6e6e73] dark:text-white/30">
-                              <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />Live — slides advance automatically</span>
-                            </p>
-                          </div>
-                        )}
 
                         {/* Poll */}
                         {liveStudentTab === "poll" && (

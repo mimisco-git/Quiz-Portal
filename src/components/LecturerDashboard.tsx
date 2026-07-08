@@ -101,7 +101,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [isGrading, setIsGrading] = useState(false);
   const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null);
 
-  const [liveSubTab, setLiveSubTab] = useState<"jitsi" | "slides" | "poll" | "attendance" | "chat">("jitsi");
+  const [liveSubTab, setLiveSubTab] = useState<"jitsi" | "slides" | "poll" | "attendance" | "chat">("slides");
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["Option A", "Option B", "Option C", "Option D"]);
   const [attachLiveFile, setAttachLiveFile] = useState<File | null>(null);
@@ -1415,12 +1415,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         ))}
                       </div>
 
-                      {/* Jitsi */}
-                      {liveSubTab === "jitsi" && (
+                      {/* Jitsi — always mounted so audio stays alive when switching tabs */}
+                      <div style={{ display: liveSubTab === "jitsi" ? "block" : "none" }}>
                         <div className="space-y-4">
                           <div className="rounded-[12px] overflow-hidden border border-black/[0.07] dark:border-white/[0.07]" style={{ height: 420 }}>
                             <iframe
-                              src={`https://meet.jit.si/${broadcastingSession.jitsiRoom ?? broadcastingSession.id}#userInfo.displayName=${encodeURIComponent(user.name)}&config.startWithVideoMuted=false&config.prejoinPageEnabled=false`}
+                              src={`https://meet.jit.si/${broadcastingSession.jitsiRoom ?? broadcastingSession.id}#userInfo.displayName=${encodeURIComponent(user.name)}&config.startWithVideoMuted=true&config.startWithAudioMuted=false&config.prejoinPageEnabled=false&config.disableDeepLinking=true`}
                               allow="camera; microphone; fullscreen; display-capture; autoplay"
                               className="w-full h-full border-0"
                               title="Jitsi Meet"
@@ -1446,11 +1446,34 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                             )}
                           </div>
                         </div>
-                      )}
+                      </div>
 
                       {/* Slides */}
                       {liveSubTab === "slides" && (
                         <div className="space-y-4">
+                          {/* Hand raise alerts — shown directly in slides view */}
+                          {handRaises.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                                <ThumbsUp className="h-3.5 w-3.5" /> {handRaises.length} student{handRaises.length !== 1 ? "s" : ""} raised hand
+                              </p>
+                              {handRaises.map((h: any) => (
+                                <div key={h.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/30 rounded-[10px]">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-amber-500 text-[15px]">✋</span>
+                                    <div>
+                                      <p className="text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/90">{h.studentName}</p>
+                                      <p className="text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40">{new Date(h.raisedAt).toLocaleTimeString()}</p>
+                                    </div>
+                                  </div>
+                                  <button onClick={() => handleDismissHandRaise(h.id)}
+                                    className="flex-shrink-0 px-3 py-1 text-[11px] font-semibold border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/20 rounded-[8px] transition cursor-pointer">
+                                    Lower ✓
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           {slides.length > 0 && (
                             <div className="space-y-3">
                               <SlideView
