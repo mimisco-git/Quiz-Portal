@@ -633,18 +633,28 @@ app.post("/api/quizzes/parse-questions", authenticateToken, upload.single("file"
     const prompt = `You are an MCQ question parser. Extract ALL multiple-choice questions from the text below and return them as a JSON array.
 
 Rules:
-- Each question must have exactly 4 options (A, B, C, D).
-- "options" array must contain the FULL option text (not just the letter).
-- "correctOption" must be the EXACT string from the options array that is correct.
-- If the document marks an answer (e.g. "Ans: B", "Answer: C", "*", underlining cues in text), use it.
-- If no answer is marked, pick the most plausible one.
-- Strip option prefixes like "A)", "A.", "(A)" from the stored option text — store only the content.
-- Return ONLY valid JSON, no markdown fences, no extra text.
+- Each question must have exactly 4 options.
+- "options" array must contain the FULL option text with the letter prefix REMOVED. Strip any prefix of the form: "a." "b." "c." "d." or "A." "B." "C." "D." or "a)" "b)" "c)" "d)" or "A)" "B)" "C)" "D)" or "(a)" "(b)" "(A)" "(B)" etc. Store only the content after the prefix.
+- "correctOption" must be the EXACT string from the options array that is correct (after prefix removal, matching the cleaned option text).
+- Detect the correct answer from any marker below the question, including: "Answer: a", "Answer: b", "Ans: A", "Ans: B", "Correct: c", "Key: d", or a letter on its own line after the options. Both uppercase and lowercase letters are valid answer markers.
+- If no answer is marked, pick the most plausible option.
+- Return ONLY valid JSON array, no markdown fences, no explanation, no extra text.
 
 Format:
 [{"text":"...","options":["...","...","...","..."],"correctOption":"..."}]
 
-TEXT:
+Example input:
+1. What is the powerhouse of the cell?
+a. Nucleus
+b. Mitochondria
+c. Ribosome
+d. Golgi body
+Answer: b
+
+Example output for that question:
+{"text":"What is the powerhouse of the cell?","options":["Nucleus","Mitochondria","Ribosome","Golgi body"],"correctOption":"Mitochondria"}
+
+TEXT TO PARSE:
 ${text.slice(0, 12000)}`;
 
     const response = await nvidia.chat.completions.create({
