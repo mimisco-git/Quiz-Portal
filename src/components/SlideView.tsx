@@ -62,58 +62,57 @@ export default function SlideView({ content, slideNumber, totalSlides, topic, co
           sm+   : 16:9 aspect-ratio trick with absolute overlay
         */}
 
-        {/* ── MOBILE LAYOUT ── */}
-        <div className="flex sm:hidden flex-col" style={{ height: 300 }}>
+        {/* ── MOBILE LAYOUT — auto height, all content visible, no scroll ── */}
+        <div className="flex sm:hidden flex-col w-full overflow-x-hidden">
           {/* header */}
-          <div className="flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-2">
-            <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-[0.15em] truncate mr-2 max-w-[65%]">
+          <div className="flex items-center justify-between px-3 pt-3 pb-1.5">
+            <span className="text-[8px] font-mono font-bold text-slate-500 uppercase tracking-[0.12em] truncate mr-2 max-w-[65%]">
               {courseCode && <>{courseCode} · </>}{topic}
             </span>
-            <span className="text-[9px] font-mono text-slate-600 tabular-nums flex-shrink-0">
+            <span className="text-[8px] font-mono text-slate-600 tabular-nums flex-shrink-0">
               {slideNumber}/{totalSlides}
             </span>
           </div>
 
-          {/* scrollable content */}
-          <div className={`flex-1 overflow-y-auto overflow-x-hidden px-4 ${isTitleSlide ? "flex flex-col items-center justify-center text-center" : "flex flex-col justify-center"}`}
-            style={{ WebkitOverflowScrolling: "touch" }}>
+          {/* content — grows to fit everything */}
+          <div className={`overflow-x-hidden px-3 pb-1 w-full ${isTitleSlide ? "flex flex-col items-center justify-center text-center py-6" : "py-2"}`}>
             {title && (
-              <h1 className={`font-black leading-tight text-white tracking-tight break-words ${isTitleSlide ? "text-[20px]" : "text-[16px] mb-1.5"}`}>
+              <h1 className={`font-bold leading-tight text-white tracking-tight break-words w-full ${isTitleSlide ? "text-[18px]" : "text-[13px] mb-1"}`}>
                 {title}
               </h1>
             )}
             {subtitle && (
-              <p className={`font-semibold text-emerald-400 leading-snug break-words ${isTitleSlide ? "text-[13px] mt-2" : "text-[12px] mb-2"}`}>
+              <p className={`font-semibold text-emerald-400 leading-snug break-words w-full ${isTitleSlide ? "text-[12px] mt-1.5" : "text-[11px] mb-1"}`}>
                 {subtitle}
               </p>
             )}
             {title && !isTitleSlide && (
-              <div className="w-7 h-[3px] bg-emerald-500 rounded-full mb-2 flex-shrink-0" />
+              <div className="w-6 h-[2px] bg-emerald-500 rounded-full mb-1.5" />
             )}
             {bullets.length > 0 && (
-              <ul className="space-y-2 mt-1 w-full">
+              <ul className="space-y-[5px] mt-1 w-full">
                 {bullets.map((b, i) => (
-                  <li key={i} className="flex items-start gap-2 min-w-0">
-                    <span className="flex-shrink-0 mt-[5px] w-[5px] h-[5px] rounded-full bg-emerald-500" />
-                    <span className="text-slate-200 text-[13px] leading-snug break-words min-w-0 flex-1">{b}</span>
+                  <li key={i} className="flex items-start gap-1.5 min-w-0 w-full">
+                    <span className="flex-shrink-0 mt-[4px] w-[4px] h-[4px] rounded-full bg-emerald-500" />
+                    <span className="text-slate-200 text-[11.5px] leading-snug break-words min-w-0 flex-1">{b}</span>
                   </li>
                 ))}
               </ul>
             )}
             {body.length > 0 && (
-              <div className="mt-2 space-y-1 w-full">
+              <div className="mt-1.5 space-y-[4px] w-full">
                 {body.map((line, i) => (
-                  <p key={i} className="text-slate-300 text-[12px] leading-relaxed break-words">{line}</p>
+                  <p key={i} className="text-slate-300 text-[11px] leading-relaxed break-words w-full">{line}</p>
                 ))}
               </div>
             )}
           </div>
 
           {/* footer */}
-          <div className="flex-shrink-0 flex items-center justify-between px-4 pb-3 pt-2 border-t border-white/[0.07]">
-            <div className="flex gap-[3px] flex-wrap max-w-[80%]">
+          <div className="flex items-center px-3 pb-2.5 pt-1.5 border-t border-white/[0.07] mt-1">
+            <div className="flex gap-[3px] flex-wrap">
               {Array.from({ length: dots }).map((_, i) => (
-                <div key={i} className={`h-[2px] rounded-full transition-all duration-300 ${i === slideNumber - 1 ? "bg-emerald-500 w-3" : "bg-white/20 w-[5px]"}`} />
+                <div key={i} className={`h-[2px] rounded-full transition-all duration-300 ${i === slideNumber - 1 ? "bg-emerald-500 w-3" : "bg-white/20 w-[4px]"}`} />
               ))}
             </div>
           </div>
