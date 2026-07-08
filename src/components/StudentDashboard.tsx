@@ -1523,7 +1523,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
           {/* ── LIVE CLASSROOM TAB ── */}
           {activeTab === "live-classroom" && (
-            <div id="live-classroom-view-container">
+            <div id="live-classroom-view-container" className="w-full overflow-x-hidden">
               <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
                 <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between gap-3">
                   <div>

@@ -21,7 +21,7 @@ function parseSlide(raw: string) {
     } else if (!subtitle && line.startsWith("## ")) {
       subtitle = line.replace(/^## /, "").trim();
     } else if (line.match(/^[-•*]\s+/) || line.match(/^\d+\.\s+/)) {
-      bullets.push(line.replace(/^[-•*\d.]\s+/, "").trim());
+      bullets.push(line.replace(/^([-•*]|\d+\.)\s+/, "").trim());
     } else if (line.startsWith("### ")) {
       body.push(line.replace(/^### /, "").trim());
     } else {
@@ -29,9 +29,12 @@ function parseSlide(raw: string) {
     }
   }
 
+  // If no markdown heading found, first line becomes the title
   if (!title && lines.length > 0) {
     title = lines[0];
-    body.shift();
+    // Remove it from body if it got added there
+    const idx = body.indexOf(title);
+    if (idx !== -1) body.splice(idx, 1);
   }
 
   return { title, subtitle, bullets, body };
@@ -39,111 +42,140 @@ function parseSlide(raw: string) {
 
 export default function SlideView({ content, slideNumber, totalSlides, topic, courseCode }: Props) {
   const { title, subtitle, bullets, body } = parseSlide(content);
-  const isTitleSlide = !bullets.length && !body.length;
-  const dots = Math.min(totalSlides, 24);
+  const isTitleSlide = bullets.length === 0 && body.length === 0;
+  const dots = Math.min(totalSlides, 20);
 
   return (
     <AnimatePresence mode="wait">
       <motion.div
         key={slideNumber}
-        initial={{ opacity: 0, x: 20 }}
+        initial={{ opacity: 0, x: 16 }}
         animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -20 }}
+        exit={{ opacity: 0, x: -16 }}
         transition={{ duration: 0.2, ease: "easeInOut" }}
-        className="relative w-full rounded-[14px] overflow-hidden select-none"
-        style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 65%, #0f172a 100%)" }}
+        // max-w-full + overflow-hidden are the hard guards against blowout
+        className="w-full max-w-full overflow-hidden rounded-2xl"
+        style={{ background: "linear-gradient(135deg,#0f172a 0%,#1e293b 65%,#0f172a 100%)" }}
       >
         {/*
-          Aspect ratio spacer:
-          Mobile  → 4:3  (paddingTop 75%)  — gives ~255px tall on a 340px-wide phone
-          sm+     → 16:9 (paddingTop 56.25%) — standard landscape presentation
+          Mobile  (default): static flex column, fixed height 300px, scrollable content
+          sm+   : 16:9 aspect-ratio trick with absolute overlay
         */}
-        <div className="block sm:hidden" style={{ paddingTop: "75%" }} />
-        <div className="hidden sm:block" style={{ paddingTop: "56.25%" }} />
 
-        {/* Content — absolutely fills the spacer */}
-        <div className="absolute inset-0 flex flex-col p-4 sm:p-8 lg:p-12">
-
-          {/* Header */}
-          <div className="flex items-center justify-between mb-2 sm:mb-5 flex-shrink-0">
-            <span className="text-[9px] sm:text-[10px] font-mono font-bold text-slate-500 uppercase tracking-[0.15em] truncate mr-2">
+        {/* ── MOBILE LAYOUT ── */}
+        <div className="flex sm:hidden flex-col" style={{ height: 300 }}>
+          {/* header */}
+          <div className="flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-2">
+            <span className="text-[9px] font-mono font-bold text-slate-500 uppercase tracking-[0.15em] truncate mr-2 max-w-[65%]">
               {courseCode && <>{courseCode} · </>}{topic}
             </span>
-            <span className="text-[9px] sm:text-[11px] font-mono text-slate-600 tabular-nums flex-shrink-0">
+            <span className="text-[9px] font-mono text-slate-600 tabular-nums flex-shrink-0">
               {slideNumber}/{totalSlides}
             </span>
           </div>
 
-          {/* Main content */}
-          <div className={`flex-1 flex flex-col min-h-0 ${isTitleSlide ? "items-center justify-center text-center" : "justify-center"}`}>
-
-            {/* Title */}
+          {/* scrollable content */}
+          <div className={`flex-1 overflow-y-auto overflow-x-hidden px-4 ${isTitleSlide ? "flex flex-col items-center justify-center text-center" : "flex flex-col justify-center"}`}
+            style={{ WebkitOverflowScrolling: "touch" }}>
             {title && (
-              <h1 className={`font-black leading-tight text-white tracking-tight
-                ${isTitleSlide
-                  ? "text-[22px] sm:text-[32px] lg:text-[46px] max-w-[92%]"
-                  : "text-[17px] sm:text-[26px] lg:text-[38px] mb-1.5 sm:mb-3"}`}>
+              <h1 className={`font-black leading-tight text-white tracking-tight break-words ${isTitleSlide ? "text-[20px]" : "text-[16px] mb-1.5"}`}>
                 {title}
               </h1>
             )}
-
-            {/* Subtitle */}
             {subtitle && (
-              <p className={`font-semibold text-emerald-400 leading-snug
-                ${isTitleSlide
-                  ? "text-[13px] sm:text-[18px] lg:text-[24px] mt-2 sm:mt-4 max-w-[82%]"
-                  : "text-[12px] sm:text-[15px] lg:text-[19px] mb-2 sm:mb-3"}`}>
+              <p className={`font-semibold text-emerald-400 leading-snug break-words ${isTitleSlide ? "text-[13px] mt-2" : "text-[12px] mb-2"}`}>
                 {subtitle}
               </p>
             )}
-
-            {/* Accent line */}
             {title && !isTitleSlide && (
-              <div className="w-7 sm:w-14 h-[3px] bg-emerald-500 rounded-full mb-2 sm:mb-5 flex-shrink-0" />
+              <div className="w-7 h-[3px] bg-emerald-500 rounded-full mb-2 flex-shrink-0" />
             )}
-
-            {/* Bullets */}
             {bullets.length > 0 && (
-              <ul className="space-y-[6px] sm:space-y-3 mt-0.5">
+              <ul className="space-y-2 mt-1 w-full">
                 {bullets.map((b, i) => (
-                  <li key={i} className="flex items-start gap-2 sm:gap-3">
-                    <span className="flex-shrink-0 mt-[0.38em] w-[6px] h-[6px] sm:w-2 sm:h-2 rounded-full bg-emerald-500" />
-                    <span className="text-slate-200 leading-snug text-[13px] sm:text-[15px] lg:text-[17px]">
-                      {b}
-                    </span>
+                  <li key={i} className="flex items-start gap-2 min-w-0">
+                    <span className="flex-shrink-0 mt-[5px] w-[5px] h-[5px] rounded-full bg-emerald-500" />
+                    <span className="text-slate-200 text-[13px] leading-snug break-words min-w-0 flex-1">{b}</span>
                   </li>
                 ))}
               </ul>
             )}
-
-            {/* Body paragraphs */}
             {body.length > 0 && (
-              <div className="mt-2 sm:mt-3 space-y-1 sm:space-y-2">
+              <div className="mt-2 space-y-1 w-full">
                 {body.map((line, i) => (
-                  <p key={i} className="text-slate-300 leading-relaxed text-[12px] sm:text-[14px] lg:text-[16px]">
-                    {line}
-                  </p>
+                  <p key={i} className="text-slate-300 text-[12px] leading-relaxed break-words">{line}</p>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between mt-2 sm:mt-4 pt-2 sm:pt-3 border-t border-white/[0.07] flex-shrink-0">
-            <div className="flex gap-[3px] sm:gap-1 flex-wrap max-w-[75%]">
+          {/* footer */}
+          <div className="flex-shrink-0 flex items-center justify-between px-4 pb-3 pt-2 border-t border-white/[0.07]">
+            <div className="flex gap-[3px] flex-wrap max-w-[80%]">
               {Array.from({ length: dots }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`h-[2px] sm:h-[3px] rounded-full transition-all duration-300
-                    ${i === slideNumber - 1
-                      ? "bg-emerald-500 w-3 sm:w-6"
-                      : "bg-white/20 w-[5px] sm:w-2"}`}
-                />
+                <div key={i} className={`h-[2px] rounded-full transition-all duration-300 ${i === slideNumber - 1 ? "bg-emerald-500 w-3" : "bg-white/20 w-[5px]"}`} />
               ))}
             </div>
-            <span className="hidden sm:block text-[9px] font-mono text-slate-600 uppercase tracking-widest">
-              Quiz Portal
-            </span>
+          </div>
+        </div>
+
+        {/* ── DESKTOP LAYOUT (sm+): 16:9 aspect ratio with absolute overlay ── */}
+        <div className="hidden sm:block relative w-full">
+          <div style={{ paddingTop: "56.25%" }} />
+          <div className="absolute inset-0 overflow-hidden flex flex-col p-8 lg:p-12">
+            {/* header */}
+            <div className="flex-shrink-0 flex items-center justify-between mb-5">
+              <span className="text-[11px] font-mono font-bold text-slate-500 uppercase tracking-[0.15em] truncate mr-2">
+                {courseCode && <>{courseCode} · </>}{topic}
+              </span>
+              <span className="text-[11px] font-mono text-slate-600 tabular-nums flex-shrink-0">
+                {slideNumber}/{totalSlides}
+              </span>
+            </div>
+
+            {/* content */}
+            <div className={`flex-1 flex flex-col min-h-0 overflow-hidden ${isTitleSlide ? "items-center justify-center text-center" : "justify-center"}`}>
+              {title && (
+                <h1 className={`font-black leading-tight text-white tracking-tight break-words ${isTitleSlide ? "text-[36px] lg:text-[48px] max-w-[90%]" : "text-[26px] lg:text-[38px] mb-3"}`}>
+                  {title}
+                </h1>
+              )}
+              {subtitle && (
+                <p className={`font-semibold text-emerald-400 leading-snug break-words ${isTitleSlide ? "text-[18px] lg:text-[24px] mt-4 max-w-[80%]" : "text-[15px] lg:text-[19px] mb-3"}`}>
+                  {subtitle}
+                </p>
+              )}
+              {title && !isTitleSlide && (
+                <div className="w-14 h-[3px] bg-emerald-500 rounded-full mb-5 flex-shrink-0" />
+              )}
+              {bullets.length > 0 && (
+                <ul className="space-y-3 mt-1">
+                  {bullets.map((b, i) => (
+                    <li key={i} className="flex items-start gap-3 min-w-0">
+                      <span className="flex-shrink-0 mt-[7px] w-2 h-2 rounded-full bg-emerald-500" />
+                      <span className="text-slate-200 text-[16px] lg:text-[18px] leading-snug break-words min-w-0 flex-1">{b}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {body.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {body.map((line, i) => (
+                    <p key={i} className="text-slate-300 text-[14px] lg:text-[16px] leading-relaxed break-words">{line}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* footer */}
+            <div className="flex-shrink-0 flex items-center justify-between mt-4 pt-3 border-t border-white/[0.07]">
+              <div className="flex gap-1 flex-wrap max-w-[70%]">
+                {Array.from({ length: dots }).map((_, i) => (
+                  <div key={i} className={`h-[3px] rounded-full transition-all duration-300 ${i === slideNumber - 1 ? "bg-emerald-500 w-6" : "bg-white/20 w-2"}`} />
+                ))}
+              </div>
+              <span className="text-[9px] font-mono text-slate-600 uppercase tracking-widest">Quiz Portal</span>
+            </div>
           </div>
         </div>
       </motion.div>
