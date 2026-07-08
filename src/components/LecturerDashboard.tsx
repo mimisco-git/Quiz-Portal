@@ -19,7 +19,7 @@ interface LecturerDashboardProps {
 }
 
 export default function LecturerDashboard({ token, user, theme, onToggleTheme, onLogout }: LecturerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture" | "exams" | "announcements">("gradebook");
+  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture" | "exams" | "assignments" | "announcements">("gradebook");
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [attempts, setAttempts] = useState<StudentAttempt[]>([]);
@@ -101,6 +101,21 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [isGrading, setIsGrading] = useState(false);
   const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null);
 
+  // Assignment state
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [assignmentTitle, setAssignmentTitle] = useState("");
+  const [assignmentCourseId, setAssignmentCourseId] = useState("");
+  const [assignmentDescription, setAssignmentDescription] = useState("");
+  const [assignmentDueDate, setAssignmentDueDate] = useState("");
+  const [assignmentFile, setAssignmentFile] = useState<File | null>(null);
+  const [assignmentQText, setAssignmentQText] = useState("");
+  const [selectedAssignment, setSelectedAssignment] = useState<any | null>(null);
+  const [assignmentSubmissions, setAssignmentSubmissions] = useState<any[]>([]);
+  const [assignmentKeyFile, setAssignmentKeyFile] = useState<File | null>(null);
+  const [assignmentKeyText, setAssignmentKeyText] = useState("");
+  const [isGradingAssignment, setIsGradingAssignment] = useState(false);
+  const [expandedAssignmentSub, setExpandedAssignmentSub] = useState<string | null>(null);
+
   const [liveSubTab, setLiveSubTab] = useState<"jitsi" | "slides" | "poll" | "attendance" | "chat">("slides");
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["Option A", "Option B", "Option C", "Option D"]);
@@ -160,6 +175,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   useEffect(() => {
     if (activeTab === "quizzes") fetchQuizList();
     if (activeTab === "exams") fetchExams();
+    if (activeTab === "assignments") fetchAssignments();
     if (activeTab === "announcements") fetchAnnouncements();
   }, [activeTab]);
 
@@ -198,6 +214,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           setQuizCourseId(data[0].id);
           setLiveCourseId(data[0].id);
           setExamCourseId(data[0].id);
+          setAssignmentCourseId(data[0].id);
           checkActiveLectureOnLoad(data);
         }
       }
@@ -250,6 +267,94 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     } catch (err) {
       console.error("Error fetching submissions:", err);
     }
+  };
+
+  const fetchAssignments = async () => {
+    try {
+      const res = await fetch("/api/assignments", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setAssignments(await res.json());
+    } catch (err) {
+      console.error("Error fetching assignments:", err);
+    }
+  };
+
+  const fetchAssignmentSubmissions = async (assignmentId: string) => {
+    try {
+      const res = await fetch(`/api/assignments/${assignmentId}/submissions`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setAssignmentSubmissions(await res.json());
+    } catch (err) {
+      console.error("Error fetching assignment submissions:", err);
+    }
+  };
+
+  const handleCreateAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignmentTitle.trim() || !assignmentCourseId) { showError("Title and course are required"); return; }
+    if (!assignmentFile && !assignmentQText.trim()) { showError("Upload a file or paste the assignment questions"); return; }
+    try {
+      const fd = new FormData();
+      fd.append("title", assignmentTitle);
+      fd.append("courseId", assignmentCourseId);
+      if (assignmentDescription.trim()) fd.append("description", assignmentDescription);
+      if (assignmentFile) fd.append("file", assignmentFile);
+      else fd.append("questionsText", assignmentQText);
+      if (assignmentDueDate) fd.append("dueDate", new Date(assignmentDueDate).toISOString());
+      const res = await fetch("/api/assignments", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      if (res.ok) {
+        showSuccess("Assignment created successfully!");
+        setAssignmentTitle(""); setAssignmentFile(null); setAssignmentQText(""); setAssignmentDescription(""); setAssignmentDueDate("");
+        fetchAssignments();
+      } else {
+        const d = await res.json(); showError(d.error || "Failed to create assignment");
+      }
+    } catch (err) {
+      showError("Failed to create assignment");
+    }
+  };
+
+  const handleUploadAssignmentKey = async (assignmentId: string) => {
+    if (!assignmentKeyFile && !assignmentKeyText.trim()) { showError("Upload or paste an answer key"); return; }
+    try {
+      const fd = new FormData();
+      if (assignmentKeyFile) fd.append("file", assignmentKeyFile);
+      else fd.append("answerKeyText", assignmentKeyText);
+      const res = await fetch(`/api/assignments/${assignmentId}/answer-key`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      if (res.ok) {
+        showSuccess("Answer key uploaded!");
+        const updated = await res.json();
+        setSelectedAssignment(updated);
+        setAssignmentKeyFile(null); setAssignmentKeyText("");
+        fetchAssignments();
+      } else {
+        const d = await res.json(); showError(d.error || "Failed to upload answer key");
+      }
+    } catch { showError("Failed to upload answer key"); }
+  };
+
+  const handleGradeAssignments = async (assignmentId: string) => {
+    setIsGradingAssignment(true);
+    try {
+      const res = await fetch(`/api/assignments/${assignmentId}/grade`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const d = await res.json();
+      if (res.ok) { showSuccess(`Graded ${d.graded} submission(s).`); fetchAssignmentSubmissions(assignmentId); }
+      else showError(d.error || "Grading failed");
+    } catch { showError("Grading failed"); }
+    finally { setIsGradingAssignment(false); }
+  };
+
+  const handleToggleAssignment = async (assignmentId: string) => {
+    try {
+      const res = await fetch(`/api/assignments/${assignmentId}/toggle`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { fetchAssignments(); if (selectedAssignment?.id === assignmentId) setSelectedAssignment(await res.json()); }
+    } catch { showError("Failed to toggle assignment"); }
+  };
+
+  const handleDeleteAssignment = async (assignmentId: string) => {
+    if (!confirm("Delete this assignment and all submissions?")) return;
+    try {
+      const res = await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { showSuccess("Assignment deleted."); setSelectedAssignment(null); setAssignmentSubmissions([]); fetchAssignments(); }
+    } catch { showError("Failed to delete assignment"); }
   };
 
   const checkActiveLectureOnLoad = async (allCourses: Course[]) => {
@@ -964,6 +1069,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     notes: "Publish Study Notes",
     quizzes: "Deploy MCQ Quiz",
     exams: "Written Exams (AI)",
+    assignments: "Assignments",
     courses: "Course Registry",
     announcements: "Announcements",
     departments: "Departments",
@@ -1032,6 +1138,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {navBtn("notes",        "Publish Notes",  <PlusCircle className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("quizzes",      "Deploy Quiz",    <Award className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("exams",        "Written Exams",  <FileText className="h-4 w-4" strokeWidth={1.6} />)}
+          {navBtn("assignments",  "Assignments",    <Pencil className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("courses",       "Courses",        <BookOpen className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("announcements","Announcements",  <Megaphone className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("departments",  "Departments",    <Users className="h-4 w-4" strokeWidth={1.6} />)}
@@ -2338,6 +2445,207 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
             </div>
           )}
 
+          {/* ── 8. ASSIGNMENTS ── */}
+          {activeTab === "assignments" && (
+            <div className="space-y-5">
+              {!selectedAssignment ? (
+                <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
+                  <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                    <h2 className="apple-title">Assignments</h2>
+                    <p className="apple-subtitle">Post take-home assignments. Students type and submit their answers. Upload an answer key to enable AI grading.</p>
+                  </div>
+                  <div className="p-5 space-y-5">
+                    <form onSubmit={handleCreateAssignment} className="space-y-4 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-1">Create New Assignment</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className={lbl}>Assignment Title</label>
+                          <input type="text" required value={assignmentTitle} onChange={e => setAssignmentTitle(e.target.value)} placeholder="e.g. CSC301 Week 5 Assignment" className="form-input" />
+                        </div>
+                        <div>
+                          <label className={lbl}>Course</label>
+                          <select value={assignmentCourseId} onChange={e => setAssignmentCourseId(e.target.value)} className="form-input">
+                            {courses.map(c => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className={lbl}>Description <span className="normal-case font-normal text-[#6e6e73] dark:text-white/30">(optional)</span></label>
+                        <input type="text" value={assignmentDescription} onChange={e => setAssignmentDescription(e.target.value)} placeholder="Brief instructions for students..." className="form-input" />
+                      </div>
+                      <div>
+                        <label className={lbl}>Due Date <span className="normal-case font-normal text-[#6e6e73] dark:text-white/30">(optional — blocks submissions after this)</span></label>
+                        <input type="datetime-local" value={assignmentDueDate} onChange={e => setAssignmentDueDate(e.target.value)} className="form-input" />
+                      </div>
+                      <div>
+                        <label className={lbl}>Upload Questions Document (.docx or .txt)</label>
+                        <label className="flex items-center gap-3 p-3 border-2 border-dashed border-black/[0.10] dark:border-white/[0.12] rounded-[10px] cursor-pointer hover:border-emerald-400 transition-colors">
+                          <Upload className="h-5 w-5 text-[#6e6e73] dark:text-white/40 shrink-0" />
+                          <span className="text-[12.5px] text-[#6e6e73] dark:text-white/50">{assignmentFile ? assignmentFile.name : "Click to choose file"}</span>
+                          <input type="file" accept=".docx,.doc,.txt" className="hidden" onChange={e => { setAssignmentFile(e.target.files?.[0] ?? null); setAssignmentQText(""); }} />
+                        </label>
+                      </div>
+                      <div className="relative flex items-center gap-3">
+                        <div className="flex-1 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
+                        <span className="text-[11px] font-semibold text-[#6e6e73] dark:text-white/40 uppercase tracking-wider">or paste text</span>
+                        <div className="flex-1 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
+                      </div>
+                      <div>
+                        <label className={lbl}>Questions Text</label>
+                        <textarea rows={5} value={assignmentQText} onChange={e => { setAssignmentQText(e.target.value); setAssignmentFile(null); }} placeholder="Paste assignment questions here..." className="form-input resize-none" />
+                      </div>
+                      <button type="submit" className="btn-gradient w-full">Post Assignment</button>
+                    </form>
+
+                    <div className="space-y-3">
+                      <p className={lbl}>All Assignments ({assignments.length})</p>
+                      {assignments.length === 0 ? (
+                        <div className="py-10 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
+                          <Pencil className="h-7 w-7 text-black/20 dark:text-white/20 mx-auto mb-2" />
+                          <p className="text-[12px] text-[#6e6e73] dark:text-white/40">No assignments created yet.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {assignments.map(a => (
+                            <button key={a.id} onClick={() => { setSelectedAssignment(a); fetchAssignmentSubmissions(a.id); }}
+                              className="w-full text-left p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 hover:shadow-sm transition-all duration-200 flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{a.title}</p>
+                                <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">
+                                  {a.course?.code} · {a._count?.submissions ?? 0} submission{a._count?.submissions !== 1 ? "s" : ""} · {a.answerKeyText ? "Answer key uploaded" : "No answer key"}
+                                  {a.dueDate && <> · Due {new Date(a.dueDate).toLocaleString()}</>}
+                                </p>
+                              </div>
+                              <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border flex-shrink-0 ${a.isOpen ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30" : "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"}`}>
+                                {a.isOpen ? "Open" : "Closed"}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="space-y-4">
+                  <button onClick={() => { setSelectedAssignment(null); setAssignmentSubmissions([]); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer">
+                    <ArrowLeft className="h-3.5 w-3.5" /> Back to Assignments
+                  </button>
+
+                  <div className="apple-card">
+                    <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <h2 className="apple-title">{selectedAssignment.title}</h2>
+                        <p className="text-[12px] text-[#6e6e73] dark:text-white/40 mt-0.5">{selectedAssignment.course?.code} · {assignmentSubmissions.length} submissions{selectedAssignment.dueDate && ` · Due ${new Date(selectedAssignment.dueDate).toLocaleString()}`}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => handleToggleAssignment(selectedAssignment.id)}
+                          className="text-[11px] font-semibold px-3 py-1.5 rounded-[8px] border transition-colors border-black/[0.09] dark:border-white/[0.10] hover:border-emerald-300 text-[#3a3a3c] dark:text-white/60">
+                          {selectedAssignment.isOpen ? "Close" : "Reopen"}
+                        </button>
+                        <button onClick={() => handleDeleteAssignment(selectedAssignment.id)}
+                          className="text-[11px] font-semibold px-3 py-1.5 rounded-[8px] border border-red-200 dark:border-red-900/40 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    <div className="p-5 space-y-5">
+                      {selectedAssignment.description && (
+                        <div>
+                          <p className={lbl}>Description</p>
+                          <p className="text-[13px] text-[#3a3a3c] dark:text-white/70">{selectedAssignment.description}</p>
+                        </div>
+                      )}
+                      <div>
+                        <p className={lbl}>Assignment Questions</p>
+                        <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{selectedAssignment.questionsText}</pre>
+                      </div>
+                      <div className="space-y-3 border-t border-black/[0.06] dark:border-white/[0.05] pt-4">
+                        <p className={lbl + " flex items-center gap-1.5"}>{selectedAssignment.answerKeyText ? <><CheckCircle className="h-3.5 w-3.5 text-emerald-500" /> Answer Key (Replace)</> : "Upload Answer Key"}</p>
+                        {selectedAssignment.answerKeyText && (
+                          <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/20 rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">{selectedAssignment.answerKeyText}</pre>
+                        )}
+                        <label className="flex items-center gap-3 p-3 border-2 border-dashed border-black/[0.10] dark:border-white/[0.12] rounded-[10px] cursor-pointer hover:border-emerald-400 transition-colors">
+                          <Upload className="h-4 w-4 text-[#6e6e73] dark:text-white/40 shrink-0" />
+                          <span className="text-[12px] text-[#6e6e73] dark:text-white/50">{assignmentKeyFile ? assignmentKeyFile.name : "Upload answer key (.docx or .txt)"}</span>
+                          <input type="file" accept=".docx,.doc,.txt" className="hidden" onChange={e => { setAssignmentKeyFile(e.target.files?.[0] ?? null); setAssignmentKeyText(""); }} />
+                        </label>
+                        <textarea rows={4} value={assignmentKeyText} onChange={e => { setAssignmentKeyText(e.target.value); setAssignmentKeyFile(null); }} placeholder="Or paste answer key text..." className="form-input resize-none" />
+                        <button onClick={() => handleUploadAssignmentKey(selectedAssignment.id)} className="btn-gradient w-full">
+                          {selectedAssignment.answerKeyText ? "Replace Answer Key" : "Upload Answer Key"}
+                        </button>
+                      </div>
+                      {selectedAssignment.answerKeyText && assignmentSubmissions.length > 0 && (
+                        <div className="border-t border-black/[0.06] dark:border-white/[0.05] pt-4">
+                          <button onClick={() => handleGradeAssignments(selectedAssignment.id)} disabled={isGradingAssignment}
+                            className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
+                            {isGradingAssignment ? <><Loader2 className="h-4 w-4 animate-spin" />Grading with AI…</> : <><Star className="h-4 w-4" />Grade All Submissions with AI</>}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="apple-card">
+                    <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                      <h3 className="apple-title">Student Submissions ({assignmentSubmissions.length})</h3>
+                    </div>
+                    <div className="p-5">
+                      {assignmentSubmissions.length === 0 ? (
+                        <div className="py-10 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
+                          <p className="text-[12px] text-[#6e6e73] dark:text-white/40">No submissions yet.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {assignmentSubmissions.map(sub => (
+                            <div key={sub.id} className="border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] overflow-hidden">
+                              <button onClick={() => setExpandedAssignmentSub(expandedAssignmentSub === sub.id ? null : sub.id)}
+                                className="w-full flex items-center justify-between p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
+                                <div className="flex items-center gap-3 text-left">
+                                  <div className="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
+                                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">{sub.student?.fullName?.[0] ?? "?"}</span>
+                                  </div>
+                                  <div>
+                                    <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{sub.student?.fullName}</p>
+                                    <p className="text-[11px] text-[#6e6e73] dark:text-white/40">{sub.student?.regNumber} · {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  {sub.isGraded ? (
+                                    <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${sub.score >= 50 ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" : "bg-red-100 dark:bg-red-950/40 text-red-500"}`}>
+                                      {sub.score?.toFixed(1)}%
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1 rounded-full border border-amber-100 dark:border-amber-900/30">Pending</span>
+                                  )}
+                                  {expandedAssignmentSub === sub.id ? <ChevronUp className="h-4 w-4 text-[#6e6e73] dark:text-white/40" /> : <ChevronDown className="h-4 w-4 text-[#6e6e73] dark:text-white/40" />}
+                                </div>
+                              </button>
+                              {expandedAssignmentSub === sub.id && (
+                                <div className="border-t border-black/[0.06] dark:border-white/[0.05] p-4 space-y-3 bg-black/[0.01] dark:bg-white/[0.01]">
+                                  <div>
+                                    <p className={lbl}>Student's Answers</p>
+                                    <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-3 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{sub.answersText}</pre>
+                                  </div>
+                                  {sub.isGraded && sub.feedback && (
+                                    <div>
+                                      <p className={lbl}>AI Feedback</p>
+                                      <p className="text-[12.5px] text-[#3a3a3c] dark:text-white/70 leading-relaxed bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-3">{sub.feedback}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           </div>{/* /max-w-5xl */}
         </main>
       </div>
@@ -2346,17 +2654,17 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 px-5 pb-7 pt-2" aria-label="Main navigation">
         <div className="apple-bottom-dock flex items-center justify-around h-[60px] px-3">
           {([
-            { id: "gradebook",    icon: "gradebook",    label: "Grades"    },
-            { id: "live-lecture", icon: "live",         label: "Live"      },
-            { id: "notes",        icon: "notes",        label: "Notes"     },
-            { id: "quizzes",      icon: "quizzes",      label: "Quizzes"   },
-            { id: "exams",        icon: "exams",        label: "Exams"     },
+            { id: "gradebook",    label: "Grades"      },
+            { id: "live-lecture", label: "Live"        },
+            { id: "quizzes",      label: "Quizzes"     },
+            { id: "exams",        label: "Exams"       },
+            { id: "assignments",  label: "Tasks"       },
           ] as const).map((item) => {
             const isActive = activeTab === item.id;
             const Icon = item.id === "gradebook" ? ClipboardList
               : item.id === "live-lecture" ? Radio
-              : item.id === "notes" ? PlusCircle
               : item.id === "quizzes" ? Award
+              : item.id === "assignments" ? Pencil
               : FileText;
             return (
               <button

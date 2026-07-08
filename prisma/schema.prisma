@@ -28,8 +28,9 @@ model Student {
   securityQuestion String           @default("What is your favorite academic course?")
   securityAnswer   String           @default("Computer Science")
   avatarData       String?
-  attempts         StudentAttempt[]
-  examSubmissions  ExamSubmission[]
+  attempts               StudentAttempt[]
+  examSubmissions        ExamSubmission[]
+  assignmentSubmissions  AssignmentSubmission[]
 }
 
 model Department {
@@ -48,6 +49,7 @@ model Course {
   quizzes       Quiz[]
   liveSessions  LectureSession[]
   exams         Exam[]
+  assignments   Assignment[]
   announcements Announcement[]
 }
 
@@ -193,6 +195,35 @@ model LectureChat {
   createdAt        DateTime       @default(now())
   lectureSessionId String
   lectureSession   LectureSession @relation(fields: [lectureSessionId], references: [id], onDelete: Cascade)
+}
+
+model Assignment {
+  id            String                 @id @default(uuid())
+  title         String
+  courseId      String
+  course        Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  description   String?
+  questionsText String
+  answerKeyText String?
+  dueDate       DateTime?
+  isOpen        Boolean                @default(true)
+  createdAt     DateTime               @default(now())
+  submissions   AssignmentSubmission[]
+}
+
+model AssignmentSubmission {
+  id           String     @id @default(uuid())
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answersText  String
+  score        Float?
+  feedback     String?
+  isGraded     Boolean    @default(false)
+  submittedAt  DateTime   @default(now())
+
+  @@unique([assignmentId, studentId])
 }
 
 model Announcement {

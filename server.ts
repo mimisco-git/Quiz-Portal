@@ -1886,6 +1886,204 @@ app.delete("/api/exams/:id", authenticateToken, async (req: any, res) => {
 });
 
 // -------------------------------------------------------------
+// ASSIGNMENTS API
+// -------------------------------------------------------------
+
+app.post("/api/assignments", authenticateToken, upload.single("file"), async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { title, courseId, description, dueDate } = req.body;
+  if (!title || !courseId) return res.status(400).json({ error: "Title and courseId are required" });
+  if (!req.file && !req.body.questionsText) return res.status(400).json({ error: "Questions file or text is required" });
+  try {
+    const questionsText = req.file ? await extractTextFromFile(req.file) : req.body.questionsText;
+    const assignment = await prisma.assignment.create({
+      data: {
+        title,
+        courseId,
+        description: description || null,
+        questionsText,
+        dueDate: dueDate ? new Date(dueDate) : null,
+      },
+    });
+    sendPushToAll("student", "New Assignment", `A new assignment "${title}" has been posted. Open the app to view it.`, "/").catch(() => {});
+    return res.status(201).json(assignment);
+  } catch (err: any) {
+    console.error("Error creating assignment:", err);
+    return res.status(500).json({ error: "Failed to create assignment", detail: err?.message ?? String(err) });
+  }
+});
+
+app.get("/api/assignments", authenticateToken, async (req: any, res) => {
+  const { courseId } = req.query;
+  try {
+    const assignments = await prisma.assignment.findMany({
+      where: courseId ? { courseId: String(courseId) } : undefined,
+      include: { course: { select: { code: true, title: true } }, _count: { select: { submissions: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.json(assignments);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch assignments" });
+  }
+});
+
+app.get("/api/assignments/:id", authenticateToken, async (req: any, res) => {
+  try {
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: req.params.id },
+      include: { course: { select: { code: true, title: true, lecturerId: true } } },
+    });
+    if (!assignment) return res.status(404).json({ error: "Assignment not found" });
+    if (req.user.role === "student") {
+      const { answerKeyText: _omit, ...safe } = assignment as any;
+      return res.json(safe);
+    }
+    return res.json(assignment);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch assignment" });
+  }
+});
+
+app.post("/api/assignments/:id/answer-key", authenticateToken, upload.single("file"), async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const assignment = await prisma.assignment.findUnique({ where: { id: req.params.id }, include: { course: { select: { lecturerId: true } } } });
+    if (!assignment) return res.status(404).json({ error: "Assignment not found" });
+    if (assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
+    const answerKeyText = req.file ? await extractTextFromFile(req.file) : req.body.answerKeyText;
+    if (!answerKeyText) return res.status(400).json({ error: "Answer key file or text is required" });
+    const updated = await prisma.assignment.update({ where: { id: req.params.id }, data: { answerKeyText } });
+    return res.json(updated);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to upload answer key" });
+  }
+});
+
+app.post("/api/assignments/:id/toggle", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const assignment = await prisma.assignment.findUnique({ where: { id: req.params.id }, include: { course: { select: { lecturerId: true } } } });
+    if (!assignment) return res.status(404).json({ error: "Assignment not found" });
+    if (assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
+    const updated = await prisma.assignment.update({ where: { id: req.params.id }, data: { isOpen: !assignment.isOpen } });
+    return res.json(updated);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to toggle assignment" });
+  }
+});
+
+app.delete("/api/assignments/:id", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const assignment = await prisma.assignment.findUnique({ where: { id: req.params.id }, include: { course: { select: { lecturerId: true } } } });
+    if (!assignment) return res.status(404).json({ error: "Assignment not found" });
+    if (assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
+    await prisma.assignment.delete({ where: { id: req.params.id } });
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to delete assignment" });
+  }
+});
+
+app.post("/api/assignments/:id/submit", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
+  const { answersText } = req.body;
+  if (!answersText?.trim()) return res.status(400).json({ error: "Answers cannot be empty" });
+  try {
+    const assignment = await prisma.assignment.findUnique({ where: { id: req.params.id } });
+    if (!assignment) return res.status(404).json({ error: "Assignment not found" });
+    if (!assignment.isOpen) return res.status(403).json({ error: "This assignment is closed for submissions." });
+    if (assignment.dueDate && new Date() > new Date(assignment.dueDate)) {
+      return res.status(403).json({ error: "The due date for this assignment has passed." });
+    }
+    const existing = await prisma.assignmentSubmission.findUnique({
+      where: { assignmentId_studentId: { assignmentId: req.params.id, studentId: req.user.id } },
+    });
+    if (existing) return res.status(409).json({ error: "You have already submitted this assignment." });
+    const submission = await prisma.assignmentSubmission.create({
+      data: { assignmentId: req.params.id, studentId: req.user.id, answersText },
+    });
+    return res.status(201).json(submission);
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to submit assignment", detail: err?.message });
+  }
+});
+
+app.get("/api/assignments/:id/my-submission", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
+  try {
+    const sub = await prisma.assignmentSubmission.findUnique({
+      where: { assignmentId_studentId: { assignmentId: req.params.id, studentId: req.user.id } },
+    });
+    return res.json(sub ?? null);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch submission" });
+  }
+});
+
+app.get("/api/assignments/:id/submissions", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const subs = await prisma.assignmentSubmission.findMany({
+      where: { assignmentId: req.params.id },
+      include: { student: { select: { fullName: true, regNumber: true } } },
+      orderBy: { submittedAt: "desc" },
+    });
+    return res.json(subs);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch submissions" });
+  }
+});
+
+app.post("/api/assignments/:id/grade", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: req.params.id },
+      include: { submissions: { include: { student: { select: { fullName: true } } } }, course: { select: { lecturerId: true } } },
+    });
+    if (!assignment) return res.status(404).json({ error: "Assignment not found" });
+    if (assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
+    if (!assignment.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
+    if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
+    const ungraded = assignment.submissions.filter((s) => !s.isGraded);
+    if (ungraded.length === 0) return res.json({ graded: 0, message: "All submissions already graded" });
+    const results = [];
+    for (const submission of ungraded) {
+      try {
+        const { score, feedback } = await gradeSubmission(
+          assignment.questionsText,
+          assignment.answerKeyText,
+          submission.answersText,
+          (submission as any).student.fullName
+        );
+        await prisma.assignmentSubmission.update({ where: { id: submission.id }, data: { score, feedback, isGraded: true } });
+        results.push({ studentId: submission.studentId, score });
+      } catch (err) {
+        results.push({ studentId: submission.studentId, error: "Grading failed" });
+      }
+    }
+    return res.json({ graded: results.filter((r) => !r.error).length, results });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to grade assignment" });
+  }
+});
+
+app.get("/api/student/assignment-submissions", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
+  try {
+    const subs = await prisma.assignmentSubmission.findMany({
+      where: { studentId: req.user.id },
+      include: { assignment: { include: { course: { select: { code: true } } } } },
+      orderBy: { submittedAt: "desc" },
+    });
+    return res.json(subs);
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch submissions" });
+  }
+});
+
+// -------------------------------------------------------------
 // USER AVATAR / PROFILE PHOTO API
 // -------------------------------------------------------------
 // AVATAR — stored in DB (Turso), not filesystem (read-only on Vercel)

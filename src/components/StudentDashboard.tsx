@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import MarkdownView from "./MarkdownView";
 import UserAvatar from "./UserAvatar";
@@ -40,7 +40,7 @@ function formatCountdown(target: Date): string {
 }
 
 export default function StudentDashboard({ token, user, theme, onToggleTheme, onLogout }: StudentDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "history">("notes");
+  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "assignments" | "history">("notes");
   const [periodTick, setPeriodTick] = useState(0);
   const [currentYear, setCurrentYear] = useState(user.year);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -81,6 +81,15 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [examAnswers, setExamAnswers] = useState("");
   const [isSubmittingExam, setIsSubmittingExam] = useState(false);
   const [examError, setExamError] = useState<string | null>(null);
+
+  // Assignment state
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [activeAssignment, setActiveAssignment] = useState<any | null>(null);
+  const [myAssignmentSubmission, setMyAssignmentSubmission] = useState<any | null>(null);
+  const [assignmentAnswers, setAssignmentAnswers] = useState("");
+  const [isSubmittingAssignment, setIsSubmittingAssignment] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [assignmentSubmissionHistory, setAssignmentSubmissionHistory] = useState<any[]>([]);
 
   const fetchAllLiveSessions = async () => {
     try {
@@ -151,6 +160,52 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     } catch (e) { console.error("Error fetching exams:", e); }
   };
 
+  const fetchAssignments = async () => {
+    try {
+      const res = await fetch("/api/assignments", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setAssignments(await res.json());
+    } catch (e) { console.error("Error fetching assignments:", e); }
+  };
+
+  const fetchMyAssignmentSubmission = async (assignmentId: string) => {
+    try {
+      const res = await fetch(`/api/assignments/${assignmentId}/my-submission`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setMyAssignmentSubmission(await res.json());
+    } catch (e) { console.error("Error fetching assignment submission:", e); }
+  };
+
+  const handleAssignmentSubmit = async () => {
+    if (!assignmentAnswers.trim()) { setAssignmentError("Please write your answers before submitting."); return; }
+    if (!activeAssignment) return;
+    setIsSubmittingAssignment(true);
+    setAssignmentError(null);
+    try {
+      const res = await fetch(`/api/assignments/${activeAssignment.id}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ answersText: assignmentAnswers }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setMyAssignmentSubmission(d);
+        setAssignmentAnswers("");
+      } else {
+        setAssignmentError(d.error || "Submission failed");
+      }
+    } catch (e: any) {
+      setAssignmentError(e.message);
+    } finally {
+      setIsSubmittingAssignment(false);
+    }
+  };
+
+  const fetchAssignmentSubmissionHistory = async () => {
+    try {
+      const res = await fetch("/api/student/assignment-submissions", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setAssignmentSubmissionHistory(await res.json());
+    } catch (e) { console.error("Error fetching assignment history:", e); }
+  };
+
   const fetchMySubmission = async (examId: string) => {
     try {
       const res = await fetch(`/api/exams/${examId}/my-submission`, { headers: { Authorization: `Bearer ${token}` } });
@@ -185,7 +240,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   useEffect(() => {
     if (activeTab === "exams") fetchExams();
-    if (activeTab === "history") { fetchAttempts(); fetchExamSubmissions(); }
+    if (activeTab === "assignments") fetchAssignments();
+    if (activeTab === "history") { fetchAttempts(); fetchExamSubmissions(); fetchAssignmentSubmissionHistory(); }
   }, [activeTab]);
 
   useEffect(() => {
@@ -1061,11 +1117,12 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
           {/* Main nav tabs */}
           {[
-            { id: "notes",          icon: FileText,      label: "Materials",  live: false },
-            { id: "quizzes",        icon: Award,         label: "Quizzes",    live: false },
-            { id: "exams",          icon: Upload,        label: "Exams",      live: false },
-            { id: "history",        icon: ClipboardList, label: "My Results", live: false },
-            { id: "live-classroom", icon: Radio,         label: "Live Class", live: true  },
+            { id: "notes",          icon: FileText,      label: "Materials",    live: false },
+            { id: "quizzes",        icon: Award,         label: "Quizzes",      live: false },
+            { id: "exams",          icon: Upload,        label: "Exams",        live: false },
+            { id: "assignments",    icon: Pencil,        label: "Assignments",  live: false },
+            { id: "history",        icon: ClipboardList, label: "My Results",   live: false },
+            { id: "live-classroom", icon: Radio,         label: "Live Class",   live: true  },
           ].map((item) => {
             const isActive = activeTab === (item.id as typeof activeTab);
             return (
@@ -1178,6 +1235,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             {activeTab === "notes" ? "Lecture Materials"
               : activeTab === "quizzes" ? "Academic Quizzes"
               : activeTab === "exams" ? "Written Examinations"
+              : activeTab === "assignments" ? "Assignments"
               : activeTab === "history" ? "My Results"
               : "Virtual Classroom"}
           </h1>
@@ -1902,6 +1960,131 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             </div>
           )}
 
+          {/* ── ASSIGNMENTS TAB ── */}
+          {activeTab === "assignments" && (
+            <div className="space-y-5">
+              {!activeAssignment ? (
+                <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
+                  <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                    <h2 className="apple-title">Assignments</h2>
+                    <p className="apple-subtitle">Read each assignment carefully and type your answers before the due date.</p>
+                  </div>
+                  <div className="p-5">
+                    {assignments.length === 0 ? (
+                      <div className="apple-empty-state">
+                        <div className="apple-empty-state__icon"><Pencil className="h-6 w-6 text-[#8e8e93] dark:text-white/30" /></div>
+                        <p className="apple-empty-state__title">No assignments yet</p>
+                        <p className="apple-empty-state__body">Assignments from your lecturers will appear here.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {assignments.map(a => {
+                          const isOverdue = a.dueDate && new Date() > new Date(a.dueDate);
+                          const blocked = !a.isOpen || isOverdue;
+                          return (
+                            <button key={a.id}
+                              onClick={blocked ? undefined : async () => { setActiveAssignment(a); setMyAssignmentSubmission(null); await fetchMyAssignmentSubmission(a.id); }}
+                              disabled={blocked}
+                              className={`w-full text-left p-4 border rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] transition-all duration-200 flex items-center justify-between gap-3 ${blocked ? "border-black/[0.07] dark:border-white/[0.07] opacity-70 cursor-not-allowed" : "border-black/[0.07] dark:border-white/[0.07] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 hover:shadow-sm cursor-pointer"}`}>
+                              <div className="min-w-0">
+                                <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{a.title}</p>
+                                <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">{a.course?.code} / {a.course?.title}</p>
+                                {a.description && <p className="text-[11px] text-[#6e6e73] dark:text-white/50 mt-0.5 italic">{a.description}</p>}
+                                {a.dueDate && (
+                                  <div className={`flex items-center gap-1 text-[10.5px] font-mono font-semibold mt-1 ${isOverdue ? "text-red-500" : "text-amber-600 dark:text-amber-400"}`}>
+                                    <Clock className="h-3 w-3" />
+                                    {isOverdue ? "Past due" : `Due ${new Date(a.dueDate).toLocaleString()}`}
+                                  </div>
+                                )}
+                              </div>
+                              <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border flex-shrink-0 ${
+                                isOverdue
+                                  ? "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"
+                                  : a.isOpen
+                                  ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
+                                  : "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"
+                              }`}>
+                                {isOverdue ? "Overdue" : a.isOpen ? "Open" : "Closed"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ) : myAssignmentSubmission ? (
+                <div className="apple-card">
+                  <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                    <button onClick={() => { setActiveAssignment(null); setMyAssignmentSubmission(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 mb-1.5 cursor-pointer"><ArrowLeft className="h-3.5 w-3.5" /> Back to Assignments</button>
+                    <h2 className="apple-title">{activeAssignment.title}: Submitted</h2>
+                  </div>
+                  <div className="p-5 space-y-5">
+                    {myAssignmentSubmission.isGraded ? (
+                      <div className="space-y-4">
+                        <div className={`rounded-[12px] p-6 text-center border ${myAssignmentSubmission.score >= 50 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30" : "bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30"}`}>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-1">Your Score</p>
+                          <p className={`text-5xl font-black ${myAssignmentSubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{myAssignmentSubmission.score?.toFixed(1)}%</p>
+                          <p className={`text-[13px] font-semibold mt-2 ${myAssignmentSubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{myAssignmentSubmission.score >= 50 ? "Passed" : "Failed"}</p>
+                        </div>
+                        {myAssignmentSubmission.feedback && (
+                          <div>
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">AI Feedback</p>
+                            <p className="text-[13px] text-[#1d1d1f] dark:text-white/80 leading-relaxed bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4">{myAssignmentSubmission.feedback}</p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">Your Submitted Answers</p>
+                          <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{myAssignmentSubmission.answersText}</pre>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="py-10 text-center">
+                        <CheckCircle className="h-10 w-10 text-emerald-400 mx-auto mb-3" />
+                        <p className="text-[13px] font-semibold text-[#3a3a3c] dark:text-white/70">Assignment submitted — awaiting grading</p>
+                        <p className="text-[12px] text-[#6e6e73] dark:text-white/40 mt-1">Your lecturer will grade your submission with AI.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="apple-card">
+                  <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                    <button onClick={() => { setActiveAssignment(null); setAssignmentAnswers(""); setAssignmentError(null); }} className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 mb-1.5 cursor-pointer"><ArrowLeft className="h-3.5 w-3.5" /> Back to Assignments</button>
+                    <h2 className="apple-title">{activeAssignment.title}</h2>
+                    <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">
+                      {activeAssignment.course?.code}{activeAssignment.dueDate && ` · Due ${new Date(activeAssignment.dueDate).toLocaleString()}`}
+                    </p>
+                  </div>
+                  <div className="p-5 space-y-5">
+                    {activeAssignment.description && (
+                      <p className="text-[13px] text-[#3a3a3c] dark:text-white/70 italic">{activeAssignment.description}</p>
+                    )}
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">Assignment Questions</p>
+                      <pre className="text-[13px] text-[#1d1d1f] dark:text-white/80 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto">{activeAssignment.questionsText}</pre>
+                    </div>
+                    <div className="space-y-3">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">Your Answers</p>
+                      <textarea
+                        rows={12}
+                        value={assignmentAnswers}
+                        onChange={e => setAssignmentAnswers(e.target.value)}
+                        placeholder={"Type your answers here. For example:\n\n1. [Your answer to question 1]\n\n2. [Your answer to question 2]\n\netc."}
+                        className="w-full px-3.5 py-2.5 rounded-[10px] text-[13.5px] bg-black/[0.04] dark:bg-white/[0.07] border border-black/[0.09] dark:border-white/[0.10] text-[#1d1d1f] dark:text-white/90 placeholder-[#6e6e73] dark:placeholder-white/30 outline-none focus:border-emerald-500/60 dark:focus:border-emerald-500/50 transition resize-none leading-relaxed"
+                      />
+                      {assignmentError && <p className="text-[12px] text-red-500 font-medium">{assignmentError}</p>}
+                      <button onClick={handleAssignmentSubmit} disabled={isSubmittingAssignment} className="btn-gradient disabled:opacity-60 flex items-center justify-center gap-2">
+                        {isSubmittingAssignment ? <><Loader2 className="h-4 w-4 animate-spin" />Submitting…</> : "Submit Assignment"}
+                      </button>
+                      <p className="text-[11px] text-[#6e6e73] dark:text-white/40 text-center">Once submitted you cannot change your answers.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── HISTORY TAB ── */}
           {activeTab === "history" && (
             <div className="space-y-5">
@@ -2006,6 +2189,56 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   )}
                 </div>
               </motion.div>
+
+              {/* Assignment Submissions in history */}
+              {assignmentSubmissionHistory.length > 0 && (
+                <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0.12 }}>
+                  <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center gap-3">
+                    <Pencil className="h-4 w-4 text-emerald-500 flex-shrink-0" strokeWidth={1.8} />
+                    <div>
+                      <h2 className="apple-title">Assignments</h2>
+                      <p className="apple-subtitle">Your submitted assignments and grades.</p>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <div className="space-y-2">
+                      {assignmentSubmissionHistory.map((sub) => (
+                        <div key={sub.id} className="flex items-center justify-between p-4 border border-black/[0.07] dark:border-white/[0.07] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{sub.assignment?.title || "Assignment"}</p>
+                            <div className="flex items-center gap-3 text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40 mt-0.5 flex-wrap">
+                              {sub.assignment?.course?.code && (
+                                <span className="font-bold uppercase text-emerald-600 dark:text-emerald-400">{sub.assignment.course.code}</span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {new Date(sub.submittedAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                              </span>
+                            </div>
+                            {sub.isGraded && sub.feedback && (
+                              <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-1 line-clamp-1 italic">{sub.feedback}</p>
+                            )}
+                          </div>
+                          {sub.isGraded ? (
+                            <span className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border ${
+                              (sub.score ?? 0) >= 50
+                                ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
+                                : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30"
+                            }`}>
+                              {sub.score?.toFixed(1) ?? "0.0"}%
+                            </span>
+                          ) : (
+                            <span className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/30 flex items-center gap-1.5">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Pending
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </div>
           )}
 
@@ -2020,7 +2253,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             { id: "notes",          icon: FileText,      label: "Materials" },
             { id: "quizzes",        icon: Award,         label: "Quizzes"   },
             { id: "exams",          icon: Upload,        label: "Exams"     },
-            { id: "history",        icon: ClipboardList, label: "Results"   },
+            { id: "assignments",    icon: Pencil,        label: "Tasks"     },
             { id: "live-classroom", icon: Radio,         label: "Live"      },
           ] as const).map((item) => {
             const isActive = activeTab === item.id;
