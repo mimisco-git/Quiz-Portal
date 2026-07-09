@@ -14,6 +14,7 @@ model Lecturer {
   email         String         @unique
   password      String
   avatarData    String?
+  departments   String         @default("[]") // JSON array of dept names this lecturer teaches
   courses       Course[]
   announcements Announcement[]
 }
@@ -49,6 +50,7 @@ model Course {
   lecturer      Lecturer         @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
   departmentId  String?
   department    Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  targetYear    String?          // null = all years, "Year 1", "Year 2", etc.
   notes         LectureNote[]
   quizzes       Quiz[]
   liveSessions  LectureSession[]

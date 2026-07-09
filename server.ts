@@ -52,6 +52,14 @@ async function getStudentDepts(studentId: string): Promise<string[]> {
   catch { return [s.department]; }
 }
 
+// Returns dept list + year for building combined course/exam/assignment filters
+async function getStudentFilter(studentId: string): Promise<{ depts: string[]; year: string }> {
+  const s = await prisma.student.findUnique({ where: { id: studentId }, select: { department: true, additionalDepartments: true, year: true } });
+  if (!s) return { depts: [], year: "" };
+  try { return { depts: [s.department, ...JSON.parse(s.additionalDepartments || "[]")], year: s.year }; }
+  catch { return { depts: [s.department], year: s.year }; }
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -486,11 +494,16 @@ app.post("/api/auth/lecturer-login", authLimiter, async (req, res) => {
 // Fetch all courses with basic info
 app.get("/api/courses", optionalAuth, async (req: any, res) => {
   try {
-    // Students only see courses for their departments (primary + additional) or unassigned courses
+    // Students only see courses matching their department(s) AND year level (or null = all)
     let where: any = {};
     if (req.user?.role === "student") {
-      const depts = await getStudentDepts(req.user.id);
-      where = { OR: [{ departmentId: null }, { department: { name: { in: depts } } }] };
+      const { depts, year } = await getStudentFilter(req.user.id);
+      where = {
+        AND: [
+          { OR: [{ departmentId: null }, { department: { name: { in: depts } } }] },
+          { OR: [{ targetYear: null }, { targetYear: year }] },
+        ],
+      };
     }
     const courses = await prisma.course.findMany({
       where,
@@ -569,7 +582,7 @@ app.post("/api/courses", authenticateToken, async (req: any, res) => {
     return res.status(403).json({ error: "Only Lecturers can perform this action" });
   }
 
-  const { code, title, departmentId } = req.body;
+  const { code, title, departmentId, targetYear } = req.body;
   if (!code || !title) {
     return res.status(400).json({ error: "Course code and title are required" });
   }
@@ -581,6 +594,7 @@ app.post("/api/courses", authenticateToken, async (req: any, res) => {
         title,
         lecturerId: req.user.id,
         ...(departmentId ? { departmentId } : {}),
+        ...(targetYear ? { targetYear } : {}),
       },
       include: { department: { select: { id: true, name: true } } },
     });
@@ -1055,6 +1069,34 @@ app.post("/api/quiz/submit", authenticateToken, async (req: any, res) => {
   } catch (error: any) {
     console.error("Error submitting quiz:", error);
     return res.status(500).json({ error: "An error occurred during submission" });
+  }
+});
+
+// -------------------------------------------------------------
+// LECTURER PROFILE API
+// -------------------------------------------------------------
+app.get("/api/lecturer/profile", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Unauthorized" });
+  try {
+    const lecturer = await prisma.lecturer.findUnique({ where: { id: req.user.id }, select: { id: true, name: true, email: true, departments: true } });
+    if (!lecturer) return res.status(404).json({ error: "Not found" });
+    let depts: string[] = [];
+    try { depts = JSON.parse(lecturer.departments || "[]"); } catch { depts = []; }
+    return res.json({ ...lecturer, departments: depts });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch lecturer profile" });
+  }
+});
+
+app.patch("/api/lecturer/departments", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Unauthorized" });
+  const { departments } = req.body;
+  if (!Array.isArray(departments)) return res.status(400).json({ error: "departments must be an array" });
+  try {
+    await prisma.lecturer.update({ where: { id: req.user.id }, data: { departments: JSON.stringify(departments) } });
+    return res.json({ departments });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to update departments" });
   }
 });
 
@@ -2183,15 +2225,20 @@ app.post("/api/exams", authenticateToken, upload.single("file"), async (req: any
 app.get("/api/exams", authenticateToken, async (req: any, res) => {
   const { courseId } = req.query;
   try {
-    let deptFilter: any = {};
+    let courseFilter: any = {};
     if (req.user.role === "student") {
-      const depts = await getStudentDepts(req.user.id);
-      deptFilter = { OR: [{ departmentId: null }, { department: { name: { in: depts } } }] };
+      const { depts, year } = await getStudentFilter(req.user.id);
+      courseFilter = {
+        AND: [
+          { OR: [{ departmentId: null }, { department: { name: { in: depts } } }] },
+          { OR: [{ targetYear: null }, { targetYear: year }] },
+        ],
+      };
     }
     const exams = await prisma.exam.findMany({
       where: {
         ...(courseId ? { courseId: String(courseId) } : {}),
-        course: deptFilter,
+        course: courseFilter,
       },
       include: { course: { select: { code: true, title: true } }, _count: { select: { submissions: true } } },
       orderBy: { createdAt: "desc" },
@@ -2446,15 +2493,20 @@ app.post("/api/assignments", authenticateToken, upload.single("file"), async (re
 app.get("/api/assignments", authenticateToken, async (req: any, res) => {
   const { courseId } = req.query;
   try {
-    let deptFilter: any = {};
+    let courseFilter: any = {};
     if (req.user.role === "student") {
-      const depts = await getStudentDepts(req.user.id);
-      deptFilter = { OR: [{ departmentId: null }, { department: { name: { in: depts } } }] };
+      const { depts, year } = await getStudentFilter(req.user.id);
+      courseFilter = {
+        AND: [
+          { OR: [{ departmentId: null }, { department: { name: { in: depts } } }] },
+          { OR: [{ targetYear: null }, { targetYear: year }] },
+        ],
+      };
     }
     const assignments = await prisma.assignment.findMany({
       where: {
         ...(courseId ? { courseId: String(courseId) } : {}),
-        course: deptFilter,
+        course: courseFilter,
       },
       include: { course: { select: { code: true, title: true } }, _count: { select: { submissions: true } } },
       orderBy: { createdAt: "desc" },

@@ -31,9 +31,13 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [lecturerDepts, setLecturerDepts] = useState<string[]>([]);
+  const [mobileLecturerOpen, setMobileLecturerOpen] = useState(false);
+
   const [courseCode, setCourseCode] = useState("");
   const [courseTitle, setCourseTitle] = useState("");
   const [courseDepId, setCourseDepId] = useState("");
+  const [courseTargetYear, setCourseTargetYear] = useState("");
   const [deptStats, setDeptStats] = useState<any[]>([]);
 
   const [noteCourseId, setNoteCourseId] = useState("");
@@ -158,6 +162,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     fetchCourses();
     fetchGradebook();
     fetchDepartments();
+    fetch("/api/lecturer/profile", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setLecturerDepts(d.departments || []); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -581,6 +589,20 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
+  const handleToggleLecturerDept = async (deptName: string) => {
+    const updated = lecturerDepts.includes(deptName)
+      ? lecturerDepts.filter(d => d !== deptName)
+      : [...lecturerDepts, deptName];
+    setLecturerDepts(updated);
+    try {
+      await fetch("/api/lecturer/departments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ departments: updated }),
+      });
+    } catch { setLecturerDepts(lecturerDepts); }
+  };
+
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!courseCode || !courseTitle) return;
@@ -588,13 +610,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       const res = await fetch("/api/courses", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ code: courseCode, title: courseTitle, departmentId: courseDepId || undefined }),
+        body: JSON.stringify({ code: courseCode, title: courseTitle, departmentId: courseDepId || undefined, targetYear: courseTargetYear || undefined }),
       });
       if (res.ok) {
         showSuccess(`Course module ${courseCode} successfully registered.`);
         setCourseCode("");
         setCourseTitle("");
         setCourseDepId("");
+        setCourseTargetYear("");
         fetchCourses();
       } else {
         const d = await res.json();
@@ -1294,6 +1317,25 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     departments: "Departments",
   };
 
+  // Badge showing which dept/year students will receive a piece of content
+  const audienceBadge = (courseId: string) => {
+    const c = courses.find((x: any) => x.id === courseId);
+    if (!c || !courseId) return null;
+    const deptName = (c as any).department?.name;
+    const yr = (c as any).targetYear;
+    return (
+      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] font-medium text-[#6e6e73] dark:text-white/35">For:</span>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${deptName ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30" : "bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/30"}`}>
+          {deptName ?? "All Departments"}
+        </span>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${yr ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-900/30" : "bg-slate-50 dark:bg-white/[0.04] text-slate-500 dark:text-white/30 border-slate-100 dark:border-white/[0.06]"}`}>
+          {yr ?? "All Years"}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-screen overflow-hidden apple-window-bg dark:bg-[#141416] font-sans relative">
 
@@ -1351,7 +1393,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         </div>
 
         {/* Nav (scrollable) */}
-        <nav className="flex-1 px-2 space-y-0.5 overflow-y-auto min-h-0">
+        <nav className="flex-1 px-2 space-y-0.5 overflow-y-auto min-h-0 pb-2">
           {navBtn("gradebook",    "Gradebook",      <ClipboardList className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("live-lecture", "Live Lecture",   <Radio className={`h-4 w-4 ${broadcastingSession ? "text-red-500 animate-pulse" : ""}`} strokeWidth={1.6} />, true)}
           {navBtn("notes",        "Publish Notes",  <PlusCircle className="h-4 w-4" strokeWidth={1.6} />)}
@@ -1361,6 +1403,31 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {navBtn("courses",       "Courses",        <BookOpen className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("announcements","Announcements",  <Megaphone className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("departments",  "Departments",    <Users className="h-4 w-4" strokeWidth={1.6} />)}
+
+          {/* Departments I Teach */}
+          {departments.length > 0 && (
+            <div className="pt-3 pb-1">
+              <p className="px-3 text-[9.5px] font-bold text-[#6e6e73] dark:text-white/30 uppercase tracking-widest mb-1.5">Departments I Teach</p>
+              <div className="space-y-0.5">
+                {departments.map((d: any) => (
+                  <button
+                    key={d.id}
+                    onClick={() => handleToggleLecturerDept(d.name)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[12px] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition text-left"
+                  >
+                    <span className={`h-3.5 w-3.5 rounded flex-shrink-0 border-[1.5px] flex items-center justify-center transition ${
+                      lecturerDepts.includes(d.name)
+                        ? "bg-emerald-500 border-emerald-500"
+                        : "border-[#8e8e93] dark:border-white/30 bg-transparent"
+                    }`}>
+                      {lecturerDepts.includes(d.name) && <Check className="h-2 w-2 text-white" strokeWidth={3} />}
+                    </span>
+                    <span className="text-[#3a3a3c] dark:text-white/65 truncate leading-tight">{d.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </nav>
 
         {/* Bottom: theme + logout */}
@@ -1390,10 +1457,23 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
 
         {/* Top toolbar */}
-        <header className="apple-header-bar flex-shrink-0 flex items-center justify-between px-6 h-[44px] border-b border-black/[0.05] dark:border-white/[0.04] backdrop-blur-xl">
-          <h1 className="text-[13.5px] font-semibold text-[#1d1d1f] dark:text-white/88 tracking-[-0.01em]">
-            {sectionTitle[activeTab] ?? "Dashboard"}
-          </h1>
+        <header className="apple-header-bar flex-shrink-0 flex items-center justify-between px-4 sm:px-6 h-[44px] border-b border-black/[0.05] dark:border-white/[0.04] backdrop-blur-xl">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMobileLecturerOpen(true)}
+              className="sm:hidden flex items-center justify-center w-9 h-9 rounded-[10px] text-[#6e6e73] dark:text-white/50 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition"
+              aria-label="Menu"
+            >
+              <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
+                <rect y="0" width="18" height="2" rx="1" fill="currentColor"/>
+                <rect y="6" width="14" height="2" rx="1" fill="currentColor"/>
+                <rect y="12" width="10" height="2" rx="1" fill="currentColor"/>
+              </svg>
+            </button>
+            <h1 className="text-[13.5px] font-semibold text-[#1d1d1f] dark:text-white/88 tracking-[-0.01em]">
+              {sectionTitle[activeTab] ?? "Dashboard"}
+            </h1>
+          </div>
           <div className="flex items-center gap-1">
             {broadcastingSession && (
               <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10 dark:bg-red-500/15 text-[11px] font-semibold text-red-600 dark:text-red-400">
@@ -1681,6 +1761,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         <select value={liveCourseId} onChange={(e) => setLiveCourseId(e.target.value)} className="form-input">
                           {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
                         </select>
+                        {audienceBadge(liveCourseId)}
                       </div>
                       <div>
                         <label className={lbl}>Lecture Topic</label>
@@ -2070,6 +2151,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       <select value={noteCourseId} onChange={(e) => setNoteCourseId(e.target.value)} className="form-input">
                         {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
                       </select>
+                      {audienceBadge(noteCourseId)}
                     </div>
                     <div>
                       <label className={lbl}>Lecture Note Title</label>
@@ -2104,6 +2186,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       <select value={quizCourseId} onChange={(e) => setQuizCourseId(e.target.value)} className="form-input">
                         {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
                       </select>
+                      {audienceBadge(quizCourseId)}
                     </div>
                     <div>
                       <label className={lbl}>Quiz Title</label>
@@ -2447,7 +2530,28 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </select>
                   </div>
-                  <button type="submit" className="btn-gradient md:col-span-4" style={{ marginTop: "4px" }}>
+                  <div className="md:col-span-1">
+                    <label className={lbl}>Target Year Level</label>
+                    <select value={courseTargetYear} onChange={(e) => setCourseTargetYear(e.target.value)} className="form-input">
+                      <option value="">All Years</option>
+                      <option value="Year 1">Year 1</option>
+                      <option value="Year 2">Year 2</option>
+                      <option value="Year 3">Year 3</option>
+                      <option value="Year 4">Year 4</option>
+                      <option value="Year 5">Year 5</option>
+                    </select>
+                  </div>
+                  {(courseDepId || courseTargetYear) && (
+                    <div className="md:col-span-3 flex items-center gap-2 px-3 py-2 rounded-[10px] bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40">
+                      <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
+                        Visible to:{" "}
+                        <span className="font-bold">{courseDepId ? departments.find(d => d.id === courseDepId)?.name ?? "selected dept" : "all departments"}</span>
+                        {" · "}
+                        <span className="font-bold">{courseTargetYear || "all year levels"}</span>
+                      </span>
+                    </div>
+                  )}
+                  <button type="submit" className={`btn-gradient ${courseDepId || courseTargetYear ? "" : "md:col-span-4"}`} style={{ marginTop: "4px" }}>
                     Register Course
                   </button>
                 </form>
@@ -2473,14 +2577,18 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           <div className="min-w-0">
                             <span className="block font-mono text-[12px] font-bold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">{c.code}</span>
                             <span className="block text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/85 leading-tight mt-0.5 truncate">{c.title}</span>
-                            {c.department && (
-                              <span className="block text-[11px] font-medium text-[#6e6e73] dark:text-white/35 mt-0.5 truncate">{c.department.name}</span>
-                            )}
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              {c.department
+                                ? <span className="text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 border border-emerald-100 dark:border-emerald-900/30 rounded-full">{c.department.name}</span>
+                                : <span className="text-[10px] font-bold bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 border border-blue-100 dark:border-blue-900/30 rounded-full">All Depts</span>
+                              }
+                              {(c as any).targetYear
+                                ? <span className="text-[10px] font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 border border-amber-100 dark:border-amber-900/30 rounded-full">{(c as any).targetYear}</span>
+                                : <span className="text-[10px] font-bold bg-slate-50 dark:bg-white/[0.04] text-slate-500 dark:text-white/30 px-2 py-0.5 border border-slate-100 dark:border-white/[0.06] rounded-full">All Years</span>
+                              }
+                            </div>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {!c.department && (
-                              <span className="text-[10px] font-bold bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 border border-blue-100 dark:border-blue-900/30 rounded-full">All Depts</span>
-                            )}
                             <span className="text-[11px] font-mono font-bold bg-black/[0.04] dark:bg-white/[0.05] text-[#6e6e73] dark:text-white/40 px-2.5 py-1 border border-black/[0.07] dark:border-white/[0.07] rounded-full">
                               {c._count?.notes || 0} notes
                             </span>
@@ -2597,6 +2705,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           <select value={examCourseId} onChange={e => setExamCourseId(e.target.value)} className="form-input">
                             {courses.map(c => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
                           </select>
+                          {audienceBadge(examCourseId)}
                         </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2889,6 +2998,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           <select value={assignmentCourseId} onChange={e => setAssignmentCourseId(e.target.value)} className="form-input">
                             {courses.map(c => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
                           </select>
+                          {audienceBadge(assignmentCourseId)}
                         </div>
                       </div>
                       <div>
@@ -3203,6 +3313,117 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           })}
         </div>
       </nav>
+
+      {/* ── MOBILE HAMBURGER DRAWER (lecturer) ── */}
+      <AnimatePresence>
+        {mobileLecturerOpen && (
+          <>
+            <motion.div
+              className="sm:hidden fixed inset-0 z-[200] bg-black/40 backdrop-blur-[2px]"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setMobileLecturerOpen(false)}
+            />
+            <motion.div
+              className="sm:hidden fixed top-0 left-0 bottom-0 z-[201] w-[280px] flex flex-col apple-sidebar shadow-2xl"
+              initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }}
+              transition={{ type: "spring", stiffness: 340, damping: 32 }}
+            >
+              {/* Close + logo */}
+              <div className="flex items-center justify-between px-4 pt-5 pb-3 flex-shrink-0">
+                <div className="flex items-center gap-[6px]">
+                  <span className="h-[13px] w-[13px] rounded-full bg-[#ff5f57] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)] cursor-pointer" onClick={() => setMobileLecturerOpen(false)} />
+                  <span className="h-[13px] w-[13px] rounded-full bg-[#ffbd2e] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)]" />
+                  <span className="h-[13px] w-[13px] rounded-full bg-[#28c840] shadow-[0_0_0_0.5px_rgba(0,0,0,0.14)]" />
+                </div>
+                <button onClick={() => setMobileLecturerOpen(false)} className="p-1.5 rounded-[8px] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition">
+                  <X className="h-4 w-4 text-[#6e6e73] dark:text-white/50" />
+                </button>
+              </div>
+
+              {/* Avatar */}
+              <div className="px-3 pb-3 flex-shrink-0">
+                <button onClick={() => { setIsAvatarModalOpen(true); setMobileLecturerOpen(false); }}
+                  className="group w-full flex items-center gap-3 p-2.5 rounded-[12px] hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition cursor-pointer text-left">
+                  <div className="relative flex-shrink-0">
+                    <UserAvatar userId={user.id} role="lecturer" size={34} initials={user.name} refreshTrigger={avatarRefreshTrigger} className="rounded-full ring-[1.5px] ring-black/10 dark:ring-white/15 shadow-sm" />
+                    <div className="absolute inset-0 bg-black/45 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <Camera className="h-3 w-3 text-white" />
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 leading-tight truncate">{user.name}</p>
+                    <p className="text-[11px] text-[#6e6e73] dark:text-white/38 truncate mt-0.5">{user.email}</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Nav items */}
+              <div className="flex-1 px-2 overflow-y-auto min-h-0 space-y-0.5 pb-2">
+                {([
+                  { id: "gradebook",     label: "Gradebook",      icon: <ClipboardList className="h-4 w-4" strokeWidth={1.6} /> },
+                  { id: "live-lecture",  label: "Live Lecture",   icon: <Radio className={`h-4 w-4 ${broadcastingSession ? "text-red-500 animate-pulse" : ""}`} strokeWidth={1.6} /> },
+                  { id: "notes",         label: "Publish Notes",  icon: <PlusCircle className="h-4 w-4" strokeWidth={1.6} /> },
+                  { id: "quizzes",       label: "Deploy Quiz",    icon: <Award className="h-4 w-4" strokeWidth={1.6} /> },
+                  { id: "exams",         label: "Written Exams",  icon: <FileText className="h-4 w-4" strokeWidth={1.6} /> },
+                  { id: "assignments",   label: "Assignments",    icon: <Pencil className="h-4 w-4" strokeWidth={1.6} /> },
+                  { id: "courses",       label: "Courses",        icon: <BookOpen className="h-4 w-4" strokeWidth={1.6} /> },
+                  { id: "announcements", label: "Announcements",  icon: <Megaphone className="h-4 w-4" strokeWidth={1.6} /> },
+                  { id: "departments",   label: "Departments",    icon: <Users className="h-4 w-4" strokeWidth={1.6} /> },
+                ] as const).map(item => {
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button key={item.id}
+                      onClick={() => { setActiveTab(item.id as any); setMobileLecturerOpen(false); if (item.id === "gradebook") fetchGradebook(); }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[13px] font-medium transition ${
+                        isActive
+                          ? "bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                          : "text-[#3a3a3c] dark:text-white/55 hover:bg-black/[0.05] dark:hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+
+                {/* Departments I Teach */}
+                {departments.length > 0 && (
+                  <div className="pt-3 pb-1">
+                    <p className="px-3 text-[9.5px] font-bold text-[#6e6e73] dark:text-white/30 uppercase tracking-widest mb-1.5">Departments I Teach</p>
+                    <div className="space-y-0.5">
+                      {departments.map((d: any) => (
+                        <button key={d.id} onClick={() => handleToggleLecturerDept(d.name)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[12px] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition text-left">
+                          <span className={`h-3.5 w-3.5 rounded flex-shrink-0 border-[1.5px] flex items-center justify-center transition ${
+                            lecturerDepts.includes(d.name) ? "bg-emerald-500 border-emerald-500" : "border-[#8e8e93] dark:border-white/30 bg-transparent"
+                          }`}>
+                            {lecturerDepts.includes(d.name) && <Check className="h-2 w-2 text-white" strokeWidth={3} />}
+                          </span>
+                          <span className="text-[#3a3a3c] dark:text-white/65 truncate leading-tight">{d.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom: theme + logout */}
+              <div className="flex-shrink-0 px-2 pb-8 pt-3 space-y-0.5 border-t border-black/[0.06] dark:border-white/[0.06]">
+                <button onClick={onToggleTheme}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[13px] font-medium text-[#3a3a3c] dark:text-white/55 hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition">
+                  {theme === "dark" ? <Sun className="h-4 w-4 flex-shrink-0" strokeWidth={1.6} /> : <Moon className="h-4 w-4 flex-shrink-0" strokeWidth={1.6} />}
+                  <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+                </button>
+                <button onClick={onLogout}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[13px] font-medium text-red-500 dark:text-red-400 hover:bg-red-500/[0.08] transition">
+                  <LogOut className="h-4 w-4 flex-shrink-0" strokeWidth={1.6} />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <AvatarModal
         isOpen={isAvatarModalOpen}
