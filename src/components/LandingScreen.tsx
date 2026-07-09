@@ -287,43 +287,67 @@ export default function LandingScreen({
             animate={{ opacity: 1 }}
             transition={{ duration: 0.9, delay: 0.15, ease: [0.25, 0, 0.25, 1] }}
           >
-            {/* ── top bar: clock + theme ── */}
+            {/* ── top bar: clock ── */}
             <div className="absolute top-0 inset-x-0 flex items-start justify-between px-8 sm:px-12 pt-8 pointer-events-none z-30">
-              {/* Clock */}
-              <div className="pointer-events-auto select-none">
-                <p className="text-white/90 font-light leading-none" style={{ fontSize: "clamp(26px,3.6vw,42px)", letterSpacing: "-0.02em" }}>
-                  {timeStr}
-                </p>
+              <motion.div
+                className="pointer-events-auto select-none"
+                initial={{ opacity: 0, y: -10, filter: "blur(8px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                transition={{ delay: 0.2, type: "spring", stiffness: 380, damping: 28 }}
+              >
+                <motion.p
+                  className="text-white/90 font-light leading-none"
+                  style={{ fontSize: "clamp(26px,3.6vw,42px)", letterSpacing: "-0.02em" }}
+                  key={timeStr}
+                  animate={{ opacity: [0.7, 1] }}
+                  transition={{ duration: 0.3 }}
+                >{timeStr}</motion.p>
                 <p className="text-white/40 text-[12.5px] font-medium mt-3">{dateStr}</p>
-              </div>
-
-              {/* spacer — logo and theme toggle removed */}
+              </motion.div>
               <div />
             </div>
 
             {/* ── main content ── */}
             <div className="absolute inset-0 flex flex-col items-center justify-center px-4 gap-[52px]">
 
-              {/* Logo — always visible, shrinks slightly when form is open */}
+              {/* Logo — floats gently at rest, shrinks when form opens */}
               <motion.div
                 className="flex flex-col items-center gap-4 pointer-events-none select-none"
                 animate={{
-                  scale: selectedUser !== null ? 0.72 : 1,
-                  opacity: selectedUser !== null ? 0.55 : 1,
-                  y: selectedUser !== null ? -8 : 0,
+                  scale:   selectedUser !== null ? 0.70 : 1,
+                  opacity: selectedUser !== null ? 0.45 : 1,
+                  y:       selectedUser !== null ? -10 : [0, -8, 0],
+                  filter:  selectedUser !== null ? "blur(2px)" : "blur(0px)",
                 }}
-                transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+                transition={selectedUser !== null ? {
+                  duration: 0.55, ease: [0.16, 1, 0.3, 1],
+                } : {
+                  y:      { duration: 4.4, repeat: Infinity, ease: "easeInOut" },
+                  scale:  { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
+                  opacity:{ duration: 0.55, ease: [0.16, 1, 0.3, 1] },
+                  filter: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
+                }}
               >
                 <div className="relative flex items-center justify-center">
-                  <motion.div className="absolute pointer-events-none" animate={{ opacity: [0.7, 0.38, 0.7] }} transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
-                    style={{ width: 440, height: 440, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(10,148,99,0.16) 0%, rgba(4,120,87,0.06) 50%, transparent 75%)", transform: "translateY(12px)", filter: "blur(28px)" }} />
-                  <motion.div className="absolute pointer-events-none" animate={{ opacity: [0.8, 0.45, 0.8] }} transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
-                    style={{ width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(18,184,122,0.13) 0%, rgba(4,120,87,0.05) 55%, transparent 75%)", filter: "blur(14px)" }} />
+                  <motion.div className="absolute pointer-events-none"
+                    animate={{ opacity: [0.7, 0.32, 0.7], scale: [1, 1.08, 1] }}
+                    transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+                    style={{ width: 460, height: 460, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(10,148,99,0.16) 0%, rgba(4,120,87,0.06) 50%, transparent 75%)", transform: "translateY(12px)", filter: "blur(28px)" }} />
+                  <motion.div className="absolute pointer-events-none"
+                    animate={{ opacity: [0.8, 0.40, 0.8], scale: [1, 1.12, 1] }}
+                    transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+                    style={{ width: 290, height: 290, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(18,184,122,0.13) 0%, rgba(4,120,87,0.05) 55%, transparent 75%)", filter: "blur(14px)" }} />
                   <div className="absolute pointer-events-none" style={{ width: 160, height: 160, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(52,211,153,0.09) 0%, transparent 70%)", filter: "blur(6px)" }} />
-                  <img src="/logo-dark.png" alt="QuizOS" draggable={false} className="relative rounded-[22px]"
+                  <motion.img src="/logo-dark.png" alt="QuizOS" draggable={false} className="relative rounded-[22px]"
+                    whileHover={{ scale: 1.04 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
                     style={{ height: 152, width: "auto", filter: "drop-shadow(0 2px 24px rgba(4,120,87,0.32)) drop-shadow(0 1px 5px rgba(0,0,0,0.60)) brightness(1.06) contrast(1.02)" }} />
                 </div>
-                <p className="text-white/35 text-[11px] font-mono tracking-[0.27em] uppercase">FUTO Academic Portal</p>
+                <motion.p
+                  className="text-white/35 text-[11px] font-mono tracking-[0.27em] uppercase"
+                  animate={{ opacity: selectedUser !== null ? 0 : [0.35, 0.55, 0.35] }}
+                  transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+                >FUTO Academic Portal</motion.p>
               </motion.div>
 
               {/* Interactive zone — circles or inline form */}
@@ -333,10 +357,10 @@ export default function LandingScreen({
                 {selectedUser === null && (
                   <motion.div
                     key="user-select"
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -12, scale: 0.96 }}
-                    transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+                    initial={{ opacity: 0, y: 20, filter: "blur(12px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, scale: 0.88, y: -14, filter: "blur(14px)" }}
+                    transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
                     className="flex items-start gap-10 sm:gap-16"
                   >
                     {USERS.map((u, idx) => {
@@ -345,16 +369,16 @@ export default function LandingScreen({
                         <motion.button
                           key={u.id}
                           onClick={() => handleSelectUser(u.id)}
-                          initial={{ opacity: 0, y: 18 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          whileHover={{ scale: 1.06, y: -3 }}
-                          whileTap={{ scale: 0.97 }}
-                          transition={{ type: "spring", stiffness: 400, damping: 24, delay: 0.08 + idx * 0.07 }}
+                          initial={{ opacity: 0, y: 22, scale: 0.88 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          whileHover={{ scale: 1.09, y: -5 }}
+                          whileTap={{ scale: 0.93 }}
+                          transition={{ type: "spring", stiffness: 420, damping: 22, delay: 0.06 + idx * 0.09 }}
                           className="flex flex-col items-center gap-4 cursor-pointer outline-none"
                         >
                           <div className="relative h-[108px] w-[108px] rounded-full flex items-center justify-center"
-                            style={{ background: u.gradient, boxShadow: `0 2px 4px rgba(0,0,0,0.40), 0 8px 32px rgba(0,0,0,0.55), 0 24px 60px rgba(0,0,0,0.26), 0 0 0 1px rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`, transition: "box-shadow 0.28s cubic-bezier(0.34,1.56,0.64,1)" }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 4px rgba(0,0,0,0.40), 0 14px 48px rgba(0,0,0,0.62), 0 36px 80px rgba(0,0,0,0.32), 0 0 0 2px ${u.ring} inset, 0 0 0 1px rgba(255,255,255,0.16) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`; }}
+                            style={{ background: u.gradient, boxShadow: `0 2px 4px rgba(0,0,0,0.40), 0 8px 32px rgba(0,0,0,0.55), 0 24px 60px rgba(0,0,0,0.26), 0 0 0 1px rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`, transition: "box-shadow 0.3s cubic-bezier(0.34,1.56,0.64,1)" }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 4px rgba(0,0,0,0.40), 0 18px 52px rgba(0,0,0,0.65), 0 40px 80px rgba(0,0,0,0.32), 0 0 0 2.5px ${u.ring} inset, 0 0 0 1px rgba(255,255,255,0.18) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 4px rgba(0,0,0,0.40), 0 8px 32px rgba(0,0,0,0.55), 0 24px 60px rgba(0,0,0,0.26), 0 0 0 1px rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`; }}
                           >
                             <div className="absolute inset-0 rounded-full pointer-events-none overflow-hidden">
@@ -365,52 +389,74 @@ export default function LandingScreen({
                             </div>
                             <Icon className="h-12 w-12 text-white relative z-10 drop-shadow-sm" strokeWidth={1.4} />
                           </div>
-                          <div className="text-center">
+                          <motion.div className="text-center"
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.14 + idx * 0.09, duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+                          >
                             <p className="text-white text-[15px] font-semibold leading-tight select-none">{u.label}</p>
                             <p className="text-white/30 text-[11px] mt-0.5 select-none">{u.sub}</p>
-                          </div>
+                          </motion.div>
                         </motion.button>
                       );
                     })}
                   </motion.div>
                 )}
 
-                {/* INLINE FORM — appears where the circles were */}
+                {/* INLINE FORM — springs in where the circles were */}
                 {selectedUser !== null && (
                   <motion.div
                     key="form-view"
-                    initial={{ opacity: 0, y: 20, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.97 }}
-                    transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+                    initial={{ opacity: 0, y: 28, scale: 0.93, filter: "blur(16px)" }}
+                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, y: 14, scale: 0.95, filter: "blur(10px)" }}
+                    transition={{ type: "spring", stiffness: 480, damping: 32 }}
                     className="w-full max-w-[340px]"
                   >
                     {/* Glass panel */}
-                    <div className="rounded-[22px] overflow-hidden" style={{ background: "rgba(8,13,10,0.76)", backdropFilter: "blur(52px) saturate(180%)", WebkitBackdropFilter: "blur(52px) saturate(180%)", border: "1px solid rgba(255,255,255,0.10)", boxShadow: "0 24px 64px rgba(0,0,0,0.72), 0 1px 0 rgba(255,255,255,0.08) inset" }}>
+                    <div className="rounded-[22px] overflow-hidden" style={{ background: "rgba(8,13,10,0.78)", backdropFilter: "blur(56px) saturate(200%)", WebkitBackdropFilter: "blur(56px) saturate(200%)", border: "1px solid rgba(255,255,255,0.11)", boxShadow: "0 32px 72px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.10) inset, 0 -1px 0 rgba(0,0,0,0.20) inset" }}>
 
-                      {/* Panel header — role badge + back */}
-                      <div className="flex items-center justify-between px-6 pt-5 pb-0">
+                      {/* Panel header — pulsing dot + back */}
+                      <motion.div
+                        className="flex items-center justify-between px-6 pt-5 pb-0"
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.08, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                      >
                         <div className="flex items-center gap-2">
-                          <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: activeUser?.id === "student" ? "#10b981" : "#3b82f6", boxShadow: activeUser?.id === "student" ? "0 0 6px rgba(16,185,129,0.7)" : "0 0 6px rgba(59,130,246,0.7)" }} />
+                          <motion.div
+                            className="h-2 w-2 rounded-full flex-shrink-0"
+                            animate={{ scale: [1, 1.4, 1], opacity: [1, 0.6, 1] }}
+                            transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                            style={{ background: activeUser?.id === "student" ? "#10b981" : "#3b82f6", boxShadow: activeUser?.id === "student" ? "0 0 8px rgba(16,185,129,0.8)" : "0 0 8px rgba(59,130,246,0.8)" }}
+                          />
                           <span className="text-white/60 text-[11px] font-bold uppercase tracking-[0.14em]">{activeUser?.label} Sign In</span>
                         </div>
-                        <button onClick={handleBack} className="flex items-center gap-1 text-white/30 hover:text-white/60 text-[12px] transition cursor-pointer">
+                        <motion.button
+                          onClick={handleBack}
+                          whileHover={{ x: -3 }}
+                          whileTap={{ scale: 0.92 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                          className="flex items-center gap-1 text-white/30 hover:text-white/65 text-[12px] transition-colors cursor-pointer"
+                        >
                           <ArrowLeft className="h-3 w-3" /> Back
-                        </button>
-                      </div>
+                        </motion.button>
+                      </motion.div>
 
                       <div className="px-6 py-5 space-y-4">
                         {/* Alerts */}
                         <AnimatePresence>
                           {error && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                            <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
                               className="flex items-start gap-2.5 bg-red-500/15 border border-red-400/25 rounded-xl p-3 text-red-300">
                               <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
                               <p className="text-[12.5px] leading-relaxed">{error}</p>
                             </motion.div>
                           )}
                           {success && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                            <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
                               className="flex items-start gap-2.5 bg-emerald-500/15 border border-emerald-400/25 rounded-xl p-3 text-emerald-300">
                               <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
                               <p className="text-[12.5px] leading-relaxed">{success}</p>
@@ -468,22 +514,28 @@ export default function LandingScreen({
 
                           {/* STUDENT LOGIN */}
                           {selectedUser === "student" && mode === "login" && (
-                            <motion.form key="s-login" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} onSubmit={handleStudentLogin} className="space-y-4">
-                              <div><label className={lbl}>Registration Number</label>
-                                <input id="login-student-reg" type="text" required value={studentRegNumber} onChange={e => setStudentRegNumber(e.target.value.toUpperCase())} placeholder="FUTO/2026/10423" className={inp + " font-mono"} autoFocus /></div>
-                              <div><label className={lbl}>Year of Study</label>
+                            <motion.form key="s-login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }} onSubmit={handleStudentLogin} className="space-y-4">
+                              <motion.div initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ delay: 0.05, type: "spring", stiffness: 500, damping: 32 }}>
+                                <label className={lbl}>Registration Number</label>
+                                <input id="login-student-reg" type="text" required value={studentRegNumber} onChange={e => setStudentRegNumber(e.target.value.toUpperCase())} placeholder="FUTO/2026/10423" className={inp + " font-mono"} autoFocus />
+                              </motion.div>
+                              <motion.div initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ delay: 0.10, type: "spring", stiffness: 500, damping: 32 }}>
+                                <label className={lbl}>Year of Study</label>
                                 <select id="login-student-year" value={studentYear} onChange={e => setStudentYear(e.target.value)} className={inp + " [&>option]:bg-slate-900"}>
                                   {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                                </select></div>
-                              <button id="student-submit-btn" type="submit" disabled={loading} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${USERS[0].btn}`}>
-                                {loading ? "Signing in…" : "Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
-                              </button>
-                              <div className="flex items-center justify-between pt-0.5">
+                                </select>
+                              </motion.div>
+                              <motion.div initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ delay: 0.16, type: "spring", stiffness: 500, damping: 32 }}>
+                                <motion.button id="student-submit-btn" type="submit" disabled={loading} whileTap={{ scale: 0.96 }} transition={{ type: "spring", stiffness: 500, damping: 20 }} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${USERS[0].btn}`}>
+                                  {loading ? "Signing in…" : "Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
+                                </motion.button>
+                              </motion.div>
+                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.22, duration: 0.3 }} className="flex items-center justify-between pt-0.5">
                                 <button type="button" onClick={() => { setMode("register"); setError(null); }} className={link}>New student?</button>
                                 <button type="button" onClick={() => { setMode("security-fix"); setError(null); setFixRegNumber(studentRegNumber); }} className="flex items-center gap-1 text-[12px] text-white/35 hover:text-white/60 transition cursor-pointer">
                                   <KeyRound className="h-3 w-3" /> Fix year
                                 </button>
-                              </div>
+                              </motion.div>
                             </motion.form>
                           )}
 
@@ -529,15 +581,23 @@ export default function LandingScreen({
 
                           {/* LECTURER LOGIN */}
                           {selectedUser === "lecturer" && mode === "login" && (
-                            <motion.form key="l-login" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} onSubmit={handleLecturerLogin} className="space-y-4">
-                              <div><label className={lbl}>Email Address</label>
-                                <input id="login-lecturer-email" type="email" required value={lecturerEmail} onChange={e => setLecturerEmail(e.target.value)} placeholder="xavier@futo.edu.ng" className={inp} autoFocus /></div>
-                              <div><label className={lbl}>Password</label>
-                                <input id="login-lecturer-pwd" type="password" required value={lecturerPassword} onChange={e => setLecturerPassword(e.target.value)} placeholder="••••••••••" className={inp} /></div>
-                              <button id="lecturer-submit-btn" type="submit" disabled={loading} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${USERS[1].btn}`}>
-                                {loading ? "Signing in…" : "Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
-                              </button>
-                              <button type="button" onClick={() => { setMode("register"); setError(null); }} className={link}>New staff? Register</button>
+                            <motion.form key="l-login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }} onSubmit={handleLecturerLogin} className="space-y-4">
+                              <motion.div initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ delay: 0.05, type: "spring", stiffness: 500, damping: 32 }}>
+                                <label className={lbl}>Email Address</label>
+                                <input id="login-lecturer-email" type="email" required value={lecturerEmail} onChange={e => setLecturerEmail(e.target.value)} placeholder="xavier@futo.edu.ng" className={inp} autoFocus />
+                              </motion.div>
+                              <motion.div initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ delay: 0.10, type: "spring", stiffness: 500, damping: 32 }}>
+                                <label className={lbl}>Password</label>
+                                <input id="login-lecturer-pwd" type="password" required value={lecturerPassword} onChange={e => setLecturerPassword(e.target.value)} placeholder="••••••••••" className={inp} />
+                              </motion.div>
+                              <motion.div initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ delay: 0.16, type: "spring", stiffness: 500, damping: 32 }}>
+                                <motion.button id="lecturer-submit-btn" type="submit" disabled={loading} whileTap={{ scale: 0.96 }} transition={{ type: "spring", stiffness: 500, damping: 20 }} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${USERS[1].btn}`}>
+                                  {loading ? "Signing in…" : "Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
+                                </motion.button>
+                              </motion.div>
+                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.22, duration: 0.3 }}>
+                                <button type="button" onClick={() => { setMode("register"); setError(null); }} className={link}>New staff? Register</button>
+                              </motion.div>
                             </motion.form>
                           )}
 
