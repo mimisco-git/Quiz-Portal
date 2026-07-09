@@ -4,6 +4,7 @@ import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import NotificationBell from "./NotificationBell";
 import CalendarView from "./CalendarView";
+import MarkdownView from "./MarkdownView";
 import AvatarModal from "./AvatarModal";
 import { motion, AnimatePresence } from "motion/react";
 import SlideView from "./SlideView";
@@ -2195,7 +2196,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
             <motion.div id="notes-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
               <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
                 <h2 className="apple-title">Publish Course Study Notes</h2>
-                <p className="apple-subtitle">Upload comprehensive module details for students to study.</p>
+                <p className="apple-subtitle">Write in Markdown — live preview shown on the right.</p>
               </div>
               <div className="p-5">
                 <form onSubmit={handlePublishNote} className="space-y-4">
@@ -2212,10 +2213,58 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       <input type="text" required value={noteTitle} onChange={(e) => setNoteTitle(e.target.value)} placeholder="e.g. Chapter 3: Normalization…" className="form-input" />
                     </div>
                   </div>
+
+                  {/* Markdown toolbar */}
                   <div>
-                    <label className={lbl}>Markdown Body Content</label>
-                    <textarea required rows={12} value={noteContent} onChange={(e) => setNoteContent(e.target.value)} placeholder="Provide full academic notes with markdown support…" className="form-input" />
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className={lbl}>Content <span className="normal-case font-normal text-[#6e6e73] dark:text-white/30">— Markdown supported</span></label>
+                      <div className="flex items-center gap-0.5">
+                        {([
+                          { label: "B",  insert: "**bold**",      title: "Bold" },
+                          { label: "I",  insert: "_italic_",      title: "Italic" },
+                          { label: "H2", insert: "\n## Heading\n",title: "Heading 2" },
+                          { label: "H3", insert: "\n### Heading\n",title: "Heading 3" },
+                          { label: "• ", insert: "\n- item\n",    title: "Bullet list" },
+                          { label: "1.", insert: "\n1. item\n",   title: "Numbered list" },
+                          { label: "`",  insert: "`code`",        title: "Inline code" },
+                          { label: "```",insert: "\n```\ncode\n```\n", title: "Code block" },
+                        ] as const).map(btn => (
+                          <button key={btn.label} type="button" title={btn.title}
+                            onClick={() => setNoteContent(prev => prev + btn.insert)}
+                            className="px-2 py-1 text-[10.5px] font-bold text-[#3a3a3c] dark:text-white/60 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] rounded-[6px] transition font-mono">
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Split pane */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-[9.5px] font-bold uppercase tracking-widest text-[#8e8e93] dark:text-white/30 mb-1.5">Editor</p>
+                        <textarea
+                          required
+                          rows={18}
+                          value={noteContent}
+                          onChange={(e) => setNoteContent(e.target.value)}
+                          placeholder={"# Introduction\n\nWrite your lecture notes here using **Markdown**.\n\n## Key Concepts\n\n- Point one\n- Point two\n\n## Code Example\n\n```\ncode here\n```"}
+                          className="form-input font-mono text-[12.5px] leading-relaxed resize-none"
+                          style={{ minHeight: "360px" }}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[9.5px] font-bold uppercase tracking-widest text-[#8e8e93] dark:text-white/30 mb-1.5">Preview</p>
+                        <div className="rounded-[10px] border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#1c1c1e] p-4 overflow-y-auto" style={{ minHeight: "360px" }}>
+                          {noteContent.trim() ? (
+                            <MarkdownView content={noteContent} />
+                          ) : (
+                            <p className="text-[12.5px] text-[#c7c7cc] dark:text-white/20 italic">Preview will appear here as you type…</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
+
                   <button type="submit" className="btn-gradient flex items-center gap-2">
                     <PlusCircle className="h-4 w-4" />
                     Publish Note
@@ -3552,10 +3601,26 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                               </button>
                               {expandedAssignmentSub === sub.id && (
                                 <div className="border-t border-black/[0.06] dark:border-white/[0.05] p-4 space-y-3 bg-black/[0.01] dark:bg-white/[0.01]">
-                                  <div>
-                                    <p className={lbl}>Student's Answers</p>
-                                    <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-3 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{sub.answersText}</pre>
-                                  </div>
+                                  {sub.answersText && (
+                                    <div>
+                                      <p className={lbl}>Student's Answers</p>
+                                      <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-3 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{sub.answersText}</pre>
+                                    </div>
+                                  )}
+                                  {sub.attachmentName && (
+                                    <div>
+                                      <p className={lbl}>Attached File</p>
+                                      {sub.attachmentData ? (
+                                        <a href={sub.attachmentData} download={sub.attachmentName}
+                                          className="inline-flex items-center gap-2 px-3 py-2 rounded-[10px] bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 text-blue-700 dark:text-blue-400 text-[12.5px] font-semibold hover:bg-blue-100 dark:hover:bg-blue-950/30 transition">
+                                          <Download className="h-3.5 w-3.5" />
+                                          {sub.attachmentName}
+                                        </a>
+                                      ) : (
+                                        <span className="text-[12px] text-[#6e6e73] dark:text-white/40">{sub.attachmentName}</span>
+                                      )}
+                                    </div>
+                                  )}
                                   <div className="flex items-center gap-2 pt-1 border-t border-black/[0.06] dark:border-white/[0.05]">
                                     {sub.isGraded && sub.score != null && (
                                       <span className="text-[12px] text-[#6e6e73] dark:text-white/50 shrink-0">

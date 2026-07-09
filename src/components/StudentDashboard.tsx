@@ -96,6 +96,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [activeAssignment, setActiveAssignment] = useState<any | null>(null);
   const [myAssignmentSubmission, setMyAssignmentSubmission] = useState<any | null>(null);
   const [assignmentAnswers, setAssignmentAnswers] = useState("");
+  const [assignmentFile, setAssignmentFile] = useState<File | null>(null);
+  const [assignmentFileData, setAssignmentFileData] = useState<string | null>(null);
   const [isSubmittingAssignment, setIsSubmittingAssignment] = useState(false);
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [assignmentSubmissionHistory, setAssignmentSubmissionHistory] = useState<any[]>([]);
@@ -196,20 +198,27 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   };
 
   const handleAssignmentSubmit = async () => {
-    if (!assignmentAnswers.trim()) { setAssignmentError("Please write your answers before submitting."); return; }
+    if (!assignmentAnswers.trim() && !assignmentFileData) { setAssignmentError("Please write your answers or attach a file before submitting."); return; }
     if (!activeAssignment) return;
     setIsSubmittingAssignment(true);
     setAssignmentError(null);
     try {
+      const body: Record<string, string> = { answersText: assignmentAnswers };
+      if (assignmentFile && assignmentFileData) {
+        body.attachmentName = assignmentFile.name;
+        body.attachmentData = assignmentFileData;
+      }
       const res = await fetch(`/api/assignments/${activeAssignment.id}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ answersText: assignmentAnswers }),
+        body: JSON.stringify(body),
       });
       const d = await res.json();
       if (res.ok) {
         setMyAssignmentSubmission(d);
         setAssignmentAnswers("");
+        setAssignmentFile(null);
+        setAssignmentFileData(null);
       } else {
         setAssignmentError(d.error || "Submission failed");
       }
@@ -1619,13 +1628,22 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 <div className="p-4 space-y-2">
                   {leaderboard.length === 0 ? <p className="text-center text-[12px] text-[#6e6e73] py-6">No completed attempts yet.</p> :
                     leaderboard.map(entry => (
-                      <div key={entry.rank} className={`flex items-center gap-3 p-3 rounded-[10px] ${entry.rank <= 3 ? "bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/30" : "border border-black/[0.06] dark:border-white/[0.06]"}`}>
+                      <div key={entry.rank} className={`flex items-center gap-3 p-3 rounded-[10px] border ${
+                        entry.isCurrentUser
+                          ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200/70 dark:border-emerald-800/40"
+                          : entry.rank <= 3
+                            ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200/60 dark:border-amber-800/30"
+                            : "border-black/[0.06] dark:border-white/[0.06]"
+                      }`}>
                         <span className={`text-[13px] font-black w-6 text-center flex-shrink-0 ${entry.rank === 1 ? "text-amber-500" : entry.rank === 2 ? "text-slate-400" : entry.rank === 3 ? "text-orange-400" : "text-[#6e6e73]"}`}>
                           {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : `#${entry.rank}`}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{entry.fullName}</p>
-                          <p className="text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40">{entry.regNumber}</p>
+                          <p className="text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">
+                            {entry.displayName}
+                            {entry.isCurrentUser && <span className="ml-1.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded-full">You</span>}
+                          </p>
+                          <p className="text-[10.5px] text-[#6e6e73] dark:text-white/40">{entry.department}</p>
                         </div>
                         <span className={`flex-shrink-0 text-[12px] font-bold ${entry.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{entry.score.toFixed(1)}%</span>
                       </div>
@@ -2376,10 +2394,28 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                         </div>
                       </div>
                     ) : (
-                      <div className="py-10 text-center">
+                      <div className="py-8 text-center">
                         <CheckCircle className="h-10 w-10 text-emerald-400 mx-auto mb-3" />
                         <p className="text-[13px] font-semibold text-[#3a3a3c] dark:text-white/70">Assignment submitted — awaiting grading</p>
                         <p className="text-[12px] text-[#6e6e73] dark:text-white/40 mt-1">Your lecturer will grade your submission with AI.</p>
+                      </div>
+                    )}
+                    {/* Attachment badge */}
+                    {myAssignmentSubmission.attachmentName && (
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">Attached File</p>
+                        {myAssignmentSubmission.attachmentData ? (
+                          <a href={myAssignmentSubmission.attachmentData} download={myAssignmentSubmission.attachmentName}
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-[10px] bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 text-blue-700 dark:text-blue-400 text-[12.5px] font-semibold hover:bg-blue-100 dark:hover:bg-blue-950/30 transition">
+                            <Download className="h-3.5 w-3.5" />
+                            {myAssignmentSubmission.attachmentName}
+                          </a>
+                        ) : (
+                          <span className="inline-flex items-center gap-2 px-3 py-2 rounded-[10px] bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.07] dark:border-white/[0.07] text-[#3a3a3c] dark:text-white/60 text-[12.5px] font-medium">
+                            <FileText className="h-3.5 w-3.5" strokeWidth={1.6} />
+                            {myAssignmentSubmission.attachmentName}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2404,12 +2440,53 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                     <div className="space-y-3">
                       <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">Your Answers</p>
                       <textarea
-                        rows={12}
+                        rows={10}
                         value={assignmentAnswers}
                         onChange={e => setAssignmentAnswers(e.target.value)}
                         placeholder={"Type your answers here. For example:\n\n1. [Your answer to question 1]\n\n2. [Your answer to question 2]\n\netc."}
                         className="w-full px-3.5 py-2.5 rounded-[10px] text-[13.5px] bg-black/[0.04] dark:bg-white/[0.07] border border-black/[0.09] dark:border-white/[0.10] text-[#1d1d1f] dark:text-white/90 placeholder-[#6e6e73] dark:placeholder-white/30 outline-none focus:border-emerald-500/60 dark:focus:border-emerald-500/50 transition resize-none leading-relaxed"
                       />
+
+                      {/* File attachment */}
+                      <div className="border-2 border-dashed border-black/[0.09] dark:border-white/[0.09] rounded-[12px] p-4">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-3">Attach a File <span className="normal-case font-normal text-[#8e8e93] dark:text-white/30">(optional — PDF, images, Word, max 8 MB)</span></p>
+                        {assignmentFile ? (
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-[10px] bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40">
+                              <FileText className="h-4 w-4 text-emerald-500 flex-shrink-0" strokeWidth={1.6} />
+                              <span className="text-[12.5px] font-semibold text-emerald-700 dark:text-emerald-400 truncate">{assignmentFile.name}</span>
+                              <span className="text-[10.5px] text-[#6e6e73] dark:text-white/40 flex-shrink-0">({(assignmentFile.size / 1024).toFixed(0)} KB)</span>
+                            </div>
+                            <button type="button" onClick={() => { setAssignmentFile(null); setAssignmentFileData(null); }}
+                              className="p-2 rounded-[8px] hover:bg-red-50 dark:hover:bg-red-950/20 text-[#8e8e93] hover:text-red-500 transition cursor-pointer">
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center gap-2 cursor-pointer">
+                            <div className="w-10 h-10 rounded-full bg-black/[0.04] dark:bg-white/[0.06] flex items-center justify-center">
+                              <Upload className="h-4 w-4 text-[#6e6e73] dark:text-white/40" strokeWidth={1.6} />
+                            </div>
+                            <span className="text-[12.5px] text-[#3a3a3c] dark:text-white/65 font-medium">Click to choose a file</span>
+                            <input
+                              type="file"
+                              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.txt"
+                              className="hidden"
+                              onChange={e => {
+                                const f = e.target.files?.[0];
+                                if (!f) return;
+                                if (f.size > 8 * 1024 * 1024) { setAssignmentError("File exceeds 8 MB limit."); return; }
+                                setAssignmentFile(f);
+                                const reader = new FileReader();
+                                reader.onload = ev => setAssignmentFileData(ev.target?.result as string ?? null);
+                                reader.readAsDataURL(f);
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+
                       {assignmentError && <p className="text-[12px] text-red-500 font-medium">{assignmentError}</p>}
                       <button onClick={handleAssignmentSubmit} disabled={isSubmittingAssignment} className="btn-gradient disabled:opacity-60 flex items-center justify-center gap-2">
                         {isSubmittingAssignment ? <><Loader2 className="h-4 w-4 animate-spin" />Submitting…</> : "Submit Assignment"}

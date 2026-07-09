@@ -226,17 +226,19 @@ model Assignment {
 }
 
 model AssignmentSubmission {
-  id           String     @id @default(uuid())
-  assignmentId String
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  studentId    String
-  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  answersText  String
-  score        Float?     // Actual marks if totalMarks set, else 0–100 percentage
-  totalMarks   Float?     // Maximum possible marks (null = legacy percentage mode)
-  feedback     String?
-  isGraded     Boolean    @default(false)
-  submittedAt  DateTime   @default(now())
+  id             String     @id @default(uuid())
+  assignmentId   String
+  assignment     Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answersText    String
+  attachmentName String?    // Optional uploaded file name
+  attachmentData String?    // Optional base64 data URI of uploaded file
+  score          Float?     // Actual marks if totalMarks set, else 0–100 percentage
+  totalMarks     Float?     // Maximum possible marks (null = legacy percentage mode)
+  feedback       String?
+  isGraded       Boolean    @default(false)
+  submittedAt    DateTime   @default(now())
 
   @@unique([assignmentId, studentId])
 }

@@ -2578,8 +2578,10 @@ app.delete("/api/assignments/:id", authenticateToken, async (req: any, res) => {
 
 app.post("/api/assignments/:id/submit", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
-  const { answersText } = req.body;
-  if (!answersText?.trim()) return res.status(400).json({ error: "Answers cannot be empty" });
+  const { answersText, attachmentName, attachmentData } = req.body;
+  if (!answersText?.trim() && !attachmentData) return res.status(400).json({ error: "Please provide answers or a file attachment." });
+  const MAX_ATTACH = 8 * 1024 * 1024; // 8 MB base64 limit
+  if (attachmentData && attachmentData.length > MAX_ATTACH) return res.status(413).json({ error: "Attachment exceeds 8 MB limit." });
   try {
     const assignment = await prisma.assignment.findUnique({ where: { id: req.params.id } });
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
@@ -2592,7 +2594,13 @@ app.post("/api/assignments/:id/submit", authenticateToken, async (req: any, res)
     });
     if (existing) return res.status(409).json({ error: "You have already submitted this assignment." });
     const submission = await prisma.assignmentSubmission.create({
-      data: { assignmentId: req.params.id, studentId: req.user.id, answersText },
+      data: {
+        assignmentId: req.params.id,
+        studentId: req.user.id,
+        answersText: answersText || "",
+        ...(attachmentName ? { attachmentName } : {}),
+        ...(attachmentData ? { attachmentData } : {}),
+      },
     });
     return res.status(201).json(submission);
   } catch (err: any) {
@@ -2988,14 +2996,15 @@ app.get("/api/quizzes/:id/leaderboard", authenticateToken, async (req: any, res)
   try {
     const attempts = await prisma.studentAttempt.findMany({
       where: { quizId: req.params.id, isCompleted: true },
-      include: { student: { select: { fullName: true, regNumber: true, department: true } } },
+      include: { student: { select: { id: true, department: true } } },
       orderBy: { score: "desc" },
       take: 20,
     });
+    const viewerId = req.user.role === "student" ? req.user.id : null;
     const board = attempts.map((a, i) => ({
       rank: i + 1,
-      fullName: a.student.fullName,
-      regNumber: a.student.regNumber,
+      displayName: `Scholar #${i + 1}`,
+      isCurrentUser: a.student.id === viewerId,
       department: a.student.department,
       score: a.score ?? 0,
       submittedAt: a.submittedAt,
