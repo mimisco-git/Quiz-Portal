@@ -1062,10 +1062,14 @@ app.post("/api/quiz/submit", authenticateToken, async (req: any, res) => {
       });
     }
 
+    const correctAnswers: Record<string, string> = {};
+    questions.forEach((q) => { correctAnswers[q.id] = q.correctOption; });
+
     return res.json({
       message: "Quiz submitted successfully",
       attempt: updatedAttempt,
       score: finalScore,
+      correctAnswers,
       timedOut: false,
     });
   } catch (error: any) {
@@ -2964,10 +2968,17 @@ app.get("/api/quizzes/:id/analytics", authenticateToken, async (req: any, res) =
 
     const questionStats = quiz.questions.map((q) => {
       let correct = 0, attempted = 0;
+      const options: string[] = JSON.parse(q.optionsJson ?? "[]");
+      const optionCounts: Record<string, number> = {};
+      options.forEach(o => { optionCounts[o] = 0; });
       for (const att of quiz.attempts) {
         try {
           const ans = JSON.parse(att.answersJson ?? "{}");
-          if (ans[q.id] !== undefined) { attempted++; if (ans[q.id] === q.correctOption) correct++; }
+          if (ans[q.id] !== undefined) {
+            attempted++;
+            if (ans[q.id] === q.correctOption) correct++;
+            optionCounts[ans[q.id]] = (optionCounts[ans[q.id]] ?? 0) + 1;
+          }
         } catch { /* skip */ }
       }
       return {
@@ -2976,6 +2987,9 @@ app.get("/api/quizzes/:id/analytics", authenticateToken, async (req: any, res) =
         correct,
         attempted,
         correctRate: attempted > 0 ? Math.round((correct / attempted) * 100) : 0,
+        options,
+        optionCounts,
+        correctOption: q.correctOption,
       };
     });
 
@@ -2987,6 +3001,7 @@ app.get("/api/quizzes/:id/analytics", authenticateToken, async (req: any, res) =
       passRate: total > 0 ? Math.round((passCount / total) * 100) : 0,
       passCount,
       failCount: total - passCount,
+      scores,
       questionStats,
     });
   } catch (err) {

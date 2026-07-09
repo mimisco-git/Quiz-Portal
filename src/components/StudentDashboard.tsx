@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap, Star } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import CalendarView from "./CalendarView";
 import DiscussionBoard from "./DiscussionBoard";
@@ -458,6 +458,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     answers: Record<string, string>;
     questions: Question[];
     title: string;
+    correctAnswers?: Record<string, string>;
   } | null>(null);
 
   const [showExamExpiredModal, setShowExamExpiredModal] = useState(false);
@@ -473,6 +474,10 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   const [allNotes, setAllNotes] = useState<(LectureNote & { course?: { code: string; title: string } })[]>([]);
   const [notesFilterCourseId, setNotesFilterCourseId] = useState<string>("");
+  const [bookmarkedNotes, setBookmarkedNotes] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("bookmarked_notes") || "[]")); } catch { return new Set(); }
+  });
+  const [showOnlyBookmarked, setShowOnlyBookmarked] = useState(false);
 
   useEffect(() => {
     fetchCourses();
@@ -521,6 +526,15 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     } catch (err) {
       console.error("Error fetching all notes for materials section:", err);
     }
+  };
+
+  const toggleBookmark = (noteId: string) => {
+    setBookmarkedNotes(prev => {
+      const next = new Set(prev);
+      if (next.has(noteId)) next.delete(noteId); else next.add(noteId);
+      try { localStorage.setItem("bookmarked_notes", JSON.stringify([...next])); } catch { /* noop */ }
+      return next;
+    });
   };
 
   const fetchCourses = async () => {
@@ -867,7 +881,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
         setSubmitError(data.error || "Submission failed. Please try again.");
         return;
       } else {
-        setExamResult({ score: data.score, timedOut: false, answers: selectedAnswers, questions: quizQuestions, title: activeQuiz?.title || "Academic Assessment" });
+        setExamResult({ score: data.score, timedOut: false, answers: selectedAnswers, questions: quizQuestions, title: activeQuiz?.title || "Academic Assessment", correctAnswers: data.correctAnswers });
       }
 
       stopTimerSystem();
@@ -978,31 +992,48 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
               <div className="space-y-2">
                 <h3 className="text-[12px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Question & Response Audit</h3>
-                <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
                   {examResult.questions.map((q, idx) => {
                     const studentAns = examResult.answers[q.id];
+                    const correctAns = examResult.correctAnswers?.[q.id];
+                    const isCorrect = correctAns ? studentAns === correctAns : undefined;
                     const options: string[] = JSON.parse(q.optionsJson);
                     return (
-                      <div key={q.id} className="p-4 bg-slate-50 dark:bg-white/[0.04] border border-slate-100 dark:border-white/[0.06] rounded-xl space-y-2">
-                        <p className="text-[12.5px] font-semibold text-slate-800 dark:text-slate-200">
-                          {idx + 1}. {q.text}
-                        </p>
+                      <div key={q.id} className={`p-4 border rounded-xl space-y-2 ${
+                        isCorrect === true ? "bg-emerald-50/80 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/30"
+                        : isCorrect === false ? "bg-red-50/80 dark:bg-red-950/20 border-red-200 dark:border-red-800/30"
+                        : "bg-slate-50 dark:bg-white/[0.04] border-slate-100 dark:border-white/[0.06]"
+                      }`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-[12.5px] font-semibold text-slate-800 dark:text-slate-200">
+                            {idx + 1}. {q.text}
+                          </p>
+                          {isCorrect !== undefined && (
+                            <span className={`flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isCorrect ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400" : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400"}`}>
+                              {isCorrect ? "✓ Correct" : "✗ Wrong"}
+                            </span>
+                          )}
+                        </div>
                         <div className="space-y-1 pl-2">
-                          {options.map((opt) => (
-                            <div
-                              key={opt}
-                              className={`text-[11.5px] px-3 py-1.5 rounded-lg flex items-center justify-between ${
-                                studentAns === opt
-                                  ? "bg-emerald-50 dark:bg-emerald-950/40 font-semibold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/30"
+                          {options.map((opt) => {
+                            const isStudentPick = studentAns === opt;
+                            const isAnswer = correctAns === opt;
+                            return (
+                              <div key={opt}
+                                className={`text-[11.5px] px-3 py-1.5 rounded-lg flex items-center justify-between gap-2 ${
+                                  isAnswer ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-900 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/50 font-semibold"
+                                  : isStudentPick && !isAnswer ? "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800/30 line-through opacity-75"
                                   : "text-slate-500 dark:text-slate-500"
-                              }`}
-                            >
-                              <span>{opt}</span>
-                              {studentAns === opt && (
-                                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Your pick</span>
-                              )}
-                            </div>
-                          ))}
+                                }`}
+                              >
+                                <span>{opt}</span>
+                                <span className="flex-shrink-0 text-[10px] font-bold uppercase">
+                                  {isAnswer && "✓ Answer"}
+                                  {isStudentPick && !isAnswer && "Your pick"}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -1293,6 +1324,26 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   }
 
   /* ─── MAIN DASHBOARD ─── */
+
+  // Per-course stats from already-loaded state — used for sidebar completion bars
+  const courseStatsByCode: Record<string, { attempted: number; avgPct: number | null }> = {};
+  const _addRow = (code: string, pct: number | null) => {
+    if (!code) return;
+    if (!courseStatsByCode[code]) courseStatsByCode[code] = { attempted: 0, avgPct: null };
+    const s = courseStatsByCode[code];
+    s.attempted += 1;
+    if (pct !== null) s.avgPct = s.avgPct === null ? pct : (s.avgPct * (s.attempted - 1) + pct) / s.attempted;
+  };
+  attemptsList.filter(a => a.isCompleted).forEach(a => _addRow(a.quiz?.course?.code || "", a.score ?? 0));
+  examSubmissions.forEach(s => {
+    const pct = s.totalMarks ? (s.score / s.totalMarks) * 100 : (s.score ?? null);
+    _addRow(s.exam?.course?.code || "", s.isGraded ? pct : null);
+  });
+  assignmentSubmissionHistory.forEach(s => {
+    const pct = s.totalMarks ? (s.score / s.totalMarks) * 100 : (s.score ?? null);
+    _addRow(s.assignment?.course?.code || "", s.isGraded ? pct : null);
+  });
+
   return (
     <div className="flex h-screen overflow-hidden apple-window-bg dark:bg-[#141416] font-sans relative">
 
@@ -1412,21 +1463,32 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             <div className="space-y-0.5">
               {courses.map((c) => {
                 const isSelected = selectedCourse?.id === c.id;
+                const cStats = courseStatsByCode[c.code];
+                const avgPct = cStats?.avgPct ?? null;
+                const barColor = avgPct === null ? "bg-emerald-400/40" : avgPct >= 70 ? "bg-emerald-500" : avgPct >= 50 ? "bg-amber-400" : "bg-red-400";
                 return (
                   <button
                     key={c.id}
                     onClick={() => { fetchCourseDetail(c.id); setSelectedNote(null); setNotesFilterCourseId(c.id); }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-[10px] text-left transition-all ${
+                    className={`w-full flex flex-col gap-1 px-3 py-2 rounded-[10px] text-left transition-all ${
                       isSelected
                         ? "bg-emerald-500/[0.12] dark:bg-emerald-500/[0.10] text-emerald-700 dark:text-emerald-400"
                         : "text-[#3a3a3c] dark:text-white/50 hover:bg-black/[0.04] dark:hover:bg-white/[0.05] hover:text-[#1d1d1f] dark:hover:text-white/75"
                     }`}
                   >
-                    <span className={`font-mono text-[10.5px] font-bold uppercase tracking-wide flex-shrink-0 w-[52px] truncate ${isSelected ? "text-emerald-600 dark:text-emerald-400" : "text-[#6e6e73] dark:text-white/35"}`}>
-                      {c.code}
-                    </span>
-                    <span className="text-[11px] font-medium truncate flex-1 leading-tight">{c.title}</span>
-                    {isSelected && <ChevronRight className="h-3 w-3 flex-shrink-0 text-emerald-500" />}
+                    <div className="flex items-center gap-2 w-full">
+                      <span className={`font-mono text-[10.5px] font-bold uppercase tracking-wide flex-shrink-0 w-[52px] truncate ${isSelected ? "text-emerald-600 dark:text-emerald-400" : "text-[#6e6e73] dark:text-white/35"}`}>
+                        {c.code}
+                      </span>
+                      <span className="text-[11px] font-medium truncate flex-1 leading-tight">{c.title}</span>
+                      {isSelected && <ChevronRight className="h-3 w-3 flex-shrink-0 text-emerald-500" />}
+                    </div>
+                    {cStats && (
+                      <div className="h-[3px] rounded-full bg-black/[0.06] dark:bg-white/[0.07] overflow-hidden ml-[60px]">
+                        <div className={`h-full rounded-full transition-all ${barColor}`}
+                          style={{ width: `${avgPct !== null ? Math.min(avgPct, 100) : 30}%` }} />
+                      </div>
+                    )}
                   </button>
                 );
               })}
@@ -1811,7 +1873,18 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       <h2 className="apple-title">Lecture Materials</h2>
                       <p className="apple-subtitle">Browse and study uploaded lecture notes.</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => setShowOnlyBookmarked(b => !b)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11.5px] font-semibold border transition cursor-pointer ${
+                          showOnlyBookmarked
+                            ? "bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700/50 text-amber-700 dark:text-amber-400"
+                            : "border-black/[0.09] dark:border-white/[0.10] text-[#6e6e73] dark:text-white/40 hover:border-amber-300 hover:text-amber-600"
+                        }`}
+                      >
+                        <Star className="h-3.5 w-3.5" fill={showOnlyBookmarked ? "currentColor" : "none"} />
+                        Saved
+                      </button>
                       <Filter className="h-3.5 w-3.5 text-[#6e6e73] dark:text-white/40 flex-shrink-0" />
                       <select
                         id="notes-course-filter"
@@ -1840,10 +1913,16 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           </div>
                         ))}
                       </div>
-                    ) : allNotes.filter(n => !notesFilterCourseId || n.courseId === notesFilterCourseId).length > 0 ? (
+                    ) : (() => {
+                      const visibleNotes = allNotes.filter(n =>
+                        (!notesFilterCourseId || n.courseId === notesFilterCourseId) &&
+                        (!showOnlyBookmarked || bookmarkedNotes.has(n.id))
+                      );
+                      return visibleNotes.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {allNotes.filter(n => !notesFilterCourseId || n.courseId === notesFilterCourseId).map((note) => {
+                        {visibleNotes.map((note) => {
                           const noteCourse = courses.find((c) => c.id === note.courseId) || note.course;
+                          const isBookmarked = bookmarkedNotes.has(note.id);
                           return (
                             <div key={note.id} className="group p-5 border border-black/[0.07] dark:border-white/[0.07] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 rounded-[12px] transition-all duration-200 flex flex-col justify-between bg-black/[0.01] dark:bg-white/[0.02] hover:shadow-md">
                               <div className="space-y-2">
@@ -1851,10 +1930,19 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                                   <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
                                     {noteCourse?.code || "COURSE"}
                                   </span>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); toggleBookmark(note.id); }}
+                                      title={isBookmarked ? "Remove bookmark" : "Bookmark note"}
+                                      className={`transition cursor-pointer ${isBookmarked ? "text-amber-500" : "text-[#c7c7cc] dark:text-white/20 hover:text-amber-400"}`}
+                                    >
+                                      <Star className="h-3.5 w-3.5" fill={isBookmarked ? "currentColor" : "none"} strokeWidth={isBookmarked ? 0 : 1.8} />
+                                    </button>
                                   <span className="flex items-center gap-1 text-[11px] font-mono text-[#6e6e73] dark:text-white/35">
                                     <Calendar className="h-3 w-3" />
                                     {new Date(note.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                   </span>
+                                  </div>
                                 </div>
                                 <h4 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 leading-snug">{note.title}</h4>
                                 <p className="text-[11px] text-[#6e6e73] dark:text-white/45 leading-relaxed line-clamp-2">{noteCourse?.title || "Academic Resource"}</p>
@@ -1875,10 +1963,11 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                         <div className="apple-empty-state__icon">
                           <FileText className="h-6 w-6 text-[#8e8e93] dark:text-white/30" />
                         </div>
-                        <p className="apple-empty-state__title">No lecture materials</p>
-                        <p className="apple-empty-state__body">Lecture notes uploaded by your lecturers will appear here automatically.</p>
+                        <p className="apple-empty-state__title">{showOnlyBookmarked ? "No saved notes" : "No lecture materials"}</p>
+                        <p className="apple-empty-state__body">{showOnlyBookmarked ? "Tap the star on any note to save it here." : "Lecture notes uploaded by your lecturers will appear here automatically."}</p>
                       </div>
-                    )}
+                    );
+                    })()}
                   </div>
                 </motion.div>
               ) : (
@@ -2729,6 +2818,37 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   ))}
                 </div>
 
+                {/* Achievements */}
+                {(() => {
+                  const badges: Array<{ icon: string; label: string; earned: boolean }> = [
+                    { icon: "🎯", label: "First Quiz",    earned: attemptsList.filter(a => a.isCompleted).length >= 1 },
+                    { icon: "🔥", label: "On Fire",       earned: streak >= 5 },
+                    { icon: "⭐", label: "Perfect Score", earned: attemptsList.some(a => a.isCompleted && (a.score ?? 0) >= 100) },
+                    { icon: "📚", label: "Bookworm",      earned: bookmarkedNotes.size >= 3 },
+                    { icon: "🏆", label: "Top Scholar",   earned: avgPct !== null && avgPct >= 70 },
+                    { icon: "💪", label: "Hard Worker",   earned: allRows.length >= 5 },
+                  ];
+                  const earned = badges.filter(b => b.earned);
+                  if (earned.length === 0) return null;
+                  return (
+                    <div className="apple-card px-5 py-4">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/35 mb-3">Achievements</p>
+                      <div className="flex flex-wrap gap-2">
+                        {badges.map(b => (
+                          <span key={b.label} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-semibold border transition ${
+                            b.earned
+                              ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-400"
+                              : "bg-black/[0.02] dark:bg-white/[0.02] border-black/[0.06] dark:border-white/[0.05] text-[#c7c7cc] dark:text-white/20"
+                          }`}>
+                            <span className={b.earned ? "opacity-100" : "opacity-30 grayscale"}>{b.icon}</span>
+                            {b.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Grade letter banner (shown when graded) */}
                 {overallLetter && avgPct !== null && (
                   <div className={`rounded-[14px] border px-5 py-4 flex items-center gap-4 ${overallLetter.cls}`}>
@@ -2969,36 +3089,42 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       </div>
 
       {/* ── MOBILE BOTTOM DOCK ── */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 px-5 pb-7 pt-2" aria-label="Main navigation">
-        <div className="apple-bottom-dock flex items-center justify-around h-[60px] px-3">
-          {(["notes", "quizzes", "exams", "assignments", "live-classroom"] as const).map((id) => {
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 px-3 pb-6 pt-2" aria-label="Main navigation">
+        <div className="apple-bottom-dock flex items-center justify-around h-[60px] px-1 overflow-x-auto scrollbar-hide gap-0.5">
+          {([
+            { id: "notes",         label: "Materials",  Icon: FileText       },
+            { id: "quizzes",       label: "Quizzes",    Icon: Award          },
+            { id: "grades",        label: "Grades",     Icon: ClipboardList  },
+            { id: "calendar",      label: "Calendar",   Icon: Calendar       },
+            { id: "discussions",   label: "Chat",       Icon: MessageSquare  },
+          ] as const).map(({ id, label, Icon }) => {
             const isActive = activeTab === id;
-            const label = id === "notes" ? "Materials" : id === "quizzes" ? "Quizzes" : id === "exams" ? "Exams" : id === "assignments" ? "Assign" : "Live";
             return (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                className="flex flex-col items-center justify-center gap-[5px] min-w-[52px] min-h-[44px] px-1 rounded-[14px] transition-all"
+                className="flex flex-col items-center justify-center gap-[5px] min-w-[56px] min-h-[44px] px-1.5 rounded-[14px] transition-all flex-shrink-0"
                 style={{ transform: isActive ? "scale(1.06)" : "scale(1)", transition: "transform 220ms cubic-bezier(0.34,1.56,0.64,1)" }}
               >
-                {id === "notes" && <FileText className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`} strokeWidth={isActive ? 2.2 : 1.6} />}
-                {id === "quizzes" && <Award className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`} strokeWidth={isActive ? 2.2 : 1.6} />}
-                {id === "exams" && <Upload className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`} strokeWidth={isActive ? 2.2 : 1.6} />}
-                {id === "assignments" && <Pencil className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`} strokeWidth={isActive ? 2.2 : 1.6} />}
-                {id === "live-classroom" && !isActive ? (
-                  <span className="relative flex items-center justify-center h-5 w-5">
-                    <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-red-400 opacity-60" />
-                    <Radio className="relative h-5 w-5 text-[#8e8e93]" strokeWidth={1.6} />
-                  </span>
-                ) : id === "live-classroom" ? (
-                  <Radio className="h-5 w-5 text-emerald-500" strokeWidth={2.2} />
-                ) : null}
+                <Icon className={`h-5 w-5 transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`} strokeWidth={isActive ? 2.2 : 1.6} />
                 <span className={`text-[9.5px] font-semibold tracking-[0.01em] transition-colors ${isActive ? "text-emerald-500" : "text-[#8e8e93]"}`}>
                   {label}
                 </span>
               </button>
             );
           })}
+          {/* More button opens full mobile sidebar */}
+          <button
+            onClick={() => setMobileSidebarOpen(true)}
+            className="flex flex-col items-center justify-center gap-[5px] min-w-[56px] min-h-[44px] px-1.5 rounded-[14px] flex-shrink-0 text-[#8e8e93]"
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <circle cx="5" cy="10" r="1.2" fill="currentColor" stroke="none" />
+              <circle cx="10" cy="10" r="1.2" fill="currentColor" stroke="none" />
+              <circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none" />
+            </svg>
+            <span className="text-[9.5px] font-semibold tracking-[0.01em]">More</span>
+          </button>
         </div>
       </nav>
 

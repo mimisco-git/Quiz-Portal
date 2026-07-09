@@ -2651,18 +2651,69 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           </div>
                         ))}
                       </div>
+                      {/* Score distribution */}
+                      {analyticsData.total > 0 && (() => {
+                        const buckets = Array.from({ length: 10 }, (_, i) => ({ range: `${i*10}–${i*10+9}`, count: 0 }));
+                        for (const s of (analyticsData.scores ?? [])) {
+                          const idx = Math.min(Math.floor((s ?? 0) / 10), 9);
+                          buckets[idx].count += 1;
+                        }
+                        const maxBucket = Math.max(...buckets.map(b => b.count), 1);
+                        return (
+                          <div>
+                            <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">Score Distribution</p>
+                            <div className="flex items-end gap-1 h-20">
+                              {buckets.map((b, i) => {
+                                const h = Math.max((b.count / maxBucket) * 100, b.count > 0 ? 6 : 2);
+                                const isPassing = i >= 5;
+                                return (
+                                  <div key={i} className="flex-1 flex flex-col items-center justify-end gap-0.5" title={`${b.range}%: ${b.count} student${b.count !== 1 ? "s" : ""}`}>
+                                    <div className={`w-full rounded-t-[3px] transition-all ${isPassing ? "bg-emerald-500/70" : "bg-red-400/60"}`} style={{ height: `${h}%` }} />
+                                    {i % 2 === 0 && <span className="text-[8px] text-[#8e8e93] dark:text-white/25">{i*10}</span>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[9.5px] text-[#8e8e93] dark:text-white/30 mt-1">Score (%) · green = pass</p>
+                          </div>
+                        );
+                      })()}
+
                       <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">Question Difficulty</p>
-                        <div className="space-y-2">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-3">Question Difficulty &amp; Option Breakdown</p>
+                        <div className="space-y-4">
                           {analyticsData.questionStats.map((q: any, i: number) => (
-                            <div key={q.id} className="space-y-1">
-                              <div className="flex items-center justify-between text-[11.5px]">
-                                <span className="text-[#3a3a3c] dark:text-white/70 truncate flex-1 mr-3">Q{i+1}. {q.text}</span>
-                                <span className={`font-bold flex-shrink-0 ${q.correctRate >= 70 ? "text-emerald-600 dark:text-emerald-400" : q.correctRate >= 40 ? "text-amber-600 dark:text-amber-400" : "text-red-500"}`}>{q.correctRate}%</span>
+                            <div key={q.id} className="p-3 rounded-[10px] bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.05] dark:border-white/[0.05] space-y-2">
+                              <div className="flex items-center justify-between text-[11.5px] gap-2">
+                                <span className="text-[#1d1d1f] dark:text-white/80 flex-1 font-medium">Q{i+1}. {q.text}</span>
+                                <span className={`font-bold flex-shrink-0 ${q.correctRate >= 70 ? "text-emerald-600 dark:text-emerald-400" : q.correctRate >= 40 ? "text-amber-500" : "text-red-500"}`}>{q.correctRate}% correct</span>
                               </div>
+                              {/* Overall correct-rate bar */}
                               <div className="h-1.5 bg-black/[0.06] dark:bg-white/[0.08] rounded-full overflow-hidden">
                                 <div className={`h-full rounded-full transition-all ${q.correctRate >= 70 ? "bg-emerald-500" : q.correctRate >= 40 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${q.correctRate}%` }} />
                               </div>
+                              {/* Per-option choice breakdown */}
+                              {q.options && q.attempted > 0 && (
+                                <div className="space-y-1 pt-1">
+                                  {(q.options as string[]).map((opt: string, oi: number) => {
+                                    const count = (q.optionCounts?.[opt] ?? 0) as number;
+                                    const pct = q.attempted > 0 ? Math.round((count / q.attempted) * 100) : 0;
+                                    const isCorrect = opt === q.correctOption;
+                                    return (
+                                      <div key={oi} className="flex items-center gap-2 text-[10.5px]">
+                                        <span className={`font-bold font-mono flex-shrink-0 w-5 ${isCorrect ? "text-emerald-600 dark:text-emerald-400" : "text-[#6e6e73] dark:text-white/35"}`}>
+                                          {["A","B","C","D"][oi]}
+                                        </span>
+                                        <span className="flex-shrink-0 w-32 truncate text-[#6e6e73] dark:text-white/50">{opt}</span>
+                                        <div className="flex-1 h-1.5 bg-black/[0.06] dark:bg-white/[0.07] rounded-full overflow-hidden">
+                                          <div className={`h-full rounded-full transition-all ${isCorrect ? "bg-emerald-500" : "bg-slate-400 dark:bg-white/25"}`} style={{ width: `${pct}%` }} />
+                                        </div>
+                                        <span className={`flex-shrink-0 w-10 text-right font-mono ${isCorrect ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-[#6e6e73] dark:text-white/35"}`}>{pct}%</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
