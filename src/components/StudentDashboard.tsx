@@ -3094,7 +3094,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           {([
             { id: "notes",         label: "Materials",  Icon: FileText       },
             { id: "quizzes",       label: "Quizzes",    Icon: Award          },
-            { id: "grades",        label: "Grades",     Icon: ClipboardList  },
+            { id: "history",       label: "Grades",     Icon: ClipboardList  },
             { id: "calendar",      label: "Calendar",   Icon: Calendar       },
             { id: "discussions",   label: "Chat",       Icon: MessageSquare  },
           ] as const).map(({ id, label, Icon }) => {
