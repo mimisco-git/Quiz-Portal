@@ -297,21 +297,8 @@ export default function LandingScreen({
                 <p className="text-white/40 text-[12.5px] font-medium mt-3">{dateStr}</p>
               </div>
 
-              {/* Logo (small) + theme toggle */}
-              <div className="flex items-center gap-2 pointer-events-auto mt-1">
-                <img
-                  src="/logo-dark.png"
-                  alt="QuizOS"
-                  className="h-10 w-auto select-none opacity-65"
-                  style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.07))" }}
-                />
-                <button
-                  onClick={onToggleTheme}
-                  className="flex items-center justify-center w-9 h-9 rounded-full bg-white/10 border border-white/12 backdrop-blur text-white/65 hover:bg-white/18 hover:text-white transition-all cursor-pointer"
-                >
-                  {theme === "dark" ? <Sun className="h-[15px] w-[15px]" /> : <Moon className="h-[15px] w-[15px]" />}
-                </button>
-              </div>
+              {/* spacer — logo and theme toggle removed */}
+              <div />
             </div>
 
             {/* ── main content ── */}
