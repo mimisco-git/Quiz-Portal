@@ -1401,7 +1401,25 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                 Live
               </span>
             )}
-            {/* Mobile-only: theme + logout */}
+            {/* Mobile-only: avatar + theme + logout */}
+            <button
+              onClick={() => setIsAvatarModalOpen(true)}
+              className="sm:hidden relative flex items-center justify-center w-9 h-9 rounded-full group"
+              aria-label="Update profile photo"
+              title="Update profile photo"
+            >
+              <UserAvatar
+                userId={user.id}
+                role="lecturer"
+                size={30}
+                initials={user.name}
+                refreshTrigger={avatarRefreshTrigger}
+                className="rounded-full ring-[1.5px] ring-black/10 dark:ring-white/15"
+              />
+              <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <Camera className="h-3 w-3 text-white" />
+              </div>
+            </button>
             <button
               onClick={onToggleTheme}
               className="sm:hidden flex items-center justify-center w-9 h-9 rounded-[10px] text-[#6e6e73] dark:text-white/50 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition"
@@ -1418,6 +1436,20 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
             </button>
           </div>
         </header>
+
+        {/* Mobile-only profile strip */}
+        <div className="sm:hidden flex items-center gap-3 px-4 py-2.5 border-b border-black/[0.05] dark:border-white/[0.04] bg-black/[0.01] dark:bg-white/[0.01]">
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 leading-tight truncate">{user.name}</p>
+            <p className="text-[11px] text-[#6e6e73] dark:text-white/40 truncate">{user.email}</p>
+          </div>
+          <button
+            onClick={() => setIsAvatarModalOpen(true)}
+            className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 shrink-0"
+          >
+            Edit Photo
+          </button>
+        </div>
 
         {/* Scrollable content */}
         <main className="flex-1 overflow-y-auto">
