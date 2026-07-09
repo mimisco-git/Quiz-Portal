@@ -23,11 +23,21 @@ interface Props {
   className?: string;
 }
 
-// Google STUN + optional TURN via env vars (set in .env for production)
+// ICE servers: Google STUN + Open Relay TURN (free, no account needed).
+// Override TURN with your own server via VITE_TURN_URL/USER/PASS env vars.
+const OPEN_RELAY_TURN = {
+  username: "openrelayproject",
+  credential: "openrelayproject",
+};
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun2.l.google.com:19302" },
+  // Open Relay — free public TURN, covers NAT traversal on all networks
+  { urls: "turn:openrelay.metered.ca:80",            ...OPEN_RELAY_TURN },
+  { urls: "turn:openrelay.metered.ca:80?transport=tcp", ...OPEN_RELAY_TURN },
+  { urls: "turn:openrelay.metered.ca:443",           ...OPEN_RELAY_TURN },
+  { urls: "turn:openrelay.metered.ca:443?transport=tcp", ...OPEN_RELAY_TURN },
+  // Override with your own TURN server via environment variables if desired
   ...(import.meta.env.VITE_TURN_URL
     ? [
         {
