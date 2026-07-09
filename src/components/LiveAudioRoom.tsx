@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import { io, Socket } from "socket.io-client";
-import { Mic, MicOff, Users, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
+import { Mic, MicOff, Users, Volume2, WifiOff } from "lucide-react";
 
 interface Participant {
   socketId: string;
@@ -19,15 +19,24 @@ interface Props {
   roomId: string;
   displayName: string;
   role: "lecturer" | "student";
-  /** For students: whether the lecturer has granted this student mic permission */
   isMicAllowed?: boolean;
   className?: string;
 }
 
-const ICE_SERVERS = [
+// Google STUN + optional TURN via env vars (set in .env for production)
+const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
   { urls: "stun:stun2.l.google.com:19302" },
+  ...(import.meta.env.VITE_TURN_URL
+    ? [
+        {
+          urls: import.meta.env.VITE_TURN_URL as string,
+          username: (import.meta.env.VITE_TURN_USER as string) ?? "",
+          credential: (import.meta.env.VITE_TURN_PASS as string) ?? "",
+        },
+      ]
+    : []),
 ];
 
 const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
@@ -35,38 +44,64 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
     const socketRef = useRef<Socket | null>(null);
     const pcsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
     const localStreamRef = useRef<MediaStream | null>(null);
-    const pendingCandidates = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+    const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+    // Stores remote streams so we can attach them after React renders <audio> elements
+    const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
+
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [isMuted, setIsMuted] = useState(role === "student");
     const [isConnected, setIsConnected] = useState(false);
     const [micError, setMicError] = useState<string | null>(null);
     const [speakingSet, setSpeakingSet] = useState<Set<string>>(new Set());
-    const analyserRefs = useRef<Map<string, { analyser: AnalyserNode; ctx: AudioContext; raf: number }>>(new Map());
 
-    // --- Audio visualisation: detect speaking via AnalyserNode ---
+    const analyserRefs = useRef<
+      Map<string, { analyser: AnalyserNode; ctx: AudioContext; raf: number }>
+    >(new Map());
+
+    // ── After every render: attach any stored remote streams to their <audio> elements.
+    // This fixes the race where ontrack fires before React renders the <audio> element.
+    useEffect(() => {
+      remoteStreamsRef.current.forEach((stream, socketId) => {
+        const el = document.getElementById(`audio-${socketId}`) as HTMLAudioElement | null;
+        if (el && el.srcObject !== stream) {
+          el.srcObject = stream;
+          el.play().catch(() => {});
+        }
+      });
+    });
+
+    // ── Speaking detection via AnalyserNode ───────────────────────────────
     const attachAnalyser = useCallback((socketId: string, stream: MediaStream) => {
       try {
+        detachAnalyser(socketId); // clear any existing one first
         const ctx = new AudioContext();
         const source = ctx.createMediaStreamSource(stream);
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 256;
         source.connect(analyser);
         const data = new Uint8Array(analyser.frequencyBinCount);
+        let wasSpeaking = false;
+        let rafId = 0;
         const tick = () => {
           analyser.getByteFrequencyData(data);
           const avg = data.reduce((a, b) => a + b, 0) / data.length;
-          setSpeakingSet(prev => {
-            const next = new Set(prev);
-            if (avg > 12) next.add(socketId); else next.delete(socketId);
-            return next;
-          });
-          const raf = requestAnimationFrame(tick);
+          const speaking = avg > 12;
+          // Only update React state when speaking status actually changes
+          if (speaking !== wasSpeaking) {
+            wasSpeaking = speaking;
+            setSpeakingSet(prev => {
+              const next = new Set(prev);
+              if (speaking) next.add(socketId); else next.delete(socketId);
+              return next;
+            });
+          }
           const entry = analyserRefs.current.get(socketId);
-          if (entry) entry.raf = raf;
+          if (entry) { rafId = requestAnimationFrame(tick); entry.raf = rafId; }
         };
-        const raf = requestAnimationFrame(tick);
-        analyserRefs.current.set(socketId, { analyser, ctx, raf });
-      } catch { /* AudioContext not available */ }
+        rafId = requestAnimationFrame(tick);
+        analyserRefs.current.set(socketId, { analyser, ctx, raf: rafId });
+      } catch { }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const detachAnalyser = useCallback((socketId: string) => {
@@ -78,106 +113,140 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
       setSpeakingSet(prev => { const n = new Set(prev); n.delete(socketId); return n; });
     }, []);
 
-    // --- Create RTCPeerConnection for a peer ---
-    const createPC = useCallback((peerId: string, polite: boolean): RTCPeerConnection => {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      pcsRef.current.set(peerId, pc);
+    // ── Create a peer connection ──────────────────────────────────────────
+    const createPC = useCallback(
+      (peerId: string): RTCPeerConnection => {
+        // Close any stale connection for this peer
+        pcsRef.current.get(peerId)?.close();
 
-      // Add local tracks
-      localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        pcsRef.current.set(peerId, pc);
 
-      // ICE
-      pc.onicecandidate = ({ candidate }) => {
-        if (candidate) socketRef.current?.emit("signal", { to: peerId, signal: { type: "candidate", candidate } });
-      };
+        // Add local tracks
+        if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach(t => {
+            pc.addTrack(t, localStreamRef.current!);
+          });
+        }
 
-      // Receive remote audio
-      pc.ontrack = ({ streams: [stream] }) => {
-        if (!stream) return;
-        const el = document.getElementById(`audio-${peerId}`) as HTMLAudioElement | null;
-        if (el) { el.srcObject = stream; el.play().catch(() => {}); }
-        attachAnalyser(peerId, stream);
-      };
-
-      // Polite peer creates offer
-      if (polite) {
-        pc.onnegotiationneeded = async () => {
-          try {
-            await pc.setLocalDescription();
-            socketRef.current?.emit("signal", { to: peerId, signal: { type: "offer", sdp: pc.localDescription } });
-          } catch { /* ignore */ }
+        // Trickle ICE
+        pc.onicecandidate = ({ candidate }) => {
+          if (candidate) {
+            socketRef.current?.emit("signal", {
+              to: peerId,
+              signal: { type: "candidate", candidate: candidate.toJSON() },
+            });
+          }
         };
-      }
 
-      return pc;
-    }, [attachAnalyser]);
+        // Remote audio track — store stream in ref; React's post-render effect attaches it
+        pc.ontrack = (event) => {
+          // event.streams[0] may be undefined in some browsers — build one from the track
+          const stream = event.streams[0] ?? new MediaStream([event.track]);
+          remoteStreamsRef.current.set(peerId, stream);
+          attachAnalyser(peerId, stream);
+          // Force a re-render so the post-render effect can pick up the stream
+          setParticipants(prev => [...prev]);
+        };
 
-    const closePeer = useCallback((peerId: string) => {
-      pcsRef.current.get(peerId)?.close();
-      pcsRef.current.delete(peerId);
-      pendingCandidates.current.delete(peerId);
-      detachAnalyser(peerId);
-      const el = document.getElementById(`audio-${peerId}`) as HTMLAudioElement | null;
-      if (el) { el.srcObject = null; }
-    }, [detachAnalyser]);
+        // Auto-restart ICE if the connection fails
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === "failed") pc.restartIce();
+        };
 
-    // --- Mic: apply local mute ---
+        return pc;
+      },
+      [attachAnalyser]
+    );
+
+    // ── Send an offer to a peer (explicit createOffer — required by Safari) ─
+    const sendOffer = useCallback(async (peerId: string) => {
+      const pc = pcsRef.current.get(peerId);
+      if (!pc || !socketRef.current) return;
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socketRef.current.emit("signal", {
+          to: peerId,
+          signal: { type: "offer", sdp: pc.localDescription },
+        });
+      } catch { }
+    }, []);
+
+    // ── Close and clean up a peer ─────────────────────────────────────────
+    const closePeer = useCallback(
+      (peerId: string) => {
+        pcsRef.current.get(peerId)?.close();
+        pcsRef.current.delete(peerId);
+        pendingCandidatesRef.current.delete(peerId);
+        remoteStreamsRef.current.delete(peerId);
+        detachAnalyser(peerId);
+        const el = document.getElementById(`audio-${peerId}`) as HTMLAudioElement | null;
+        if (el) el.srcObject = null;
+      },
+      [detachAnalyser]
+    );
+
+    // ── Mic mute helpers ──────────────────────────────────────────────────
     const applyMute = useCallback((muted: boolean) => {
       localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !muted; });
     }, []);
 
     const toggleMute = useCallback(() => {
-      setIsMuted(prev => {
-        applyMute(!prev);
-        return !prev;
-      });
+      setIsMuted(prev => { applyMute(!prev); return !prev; });
     }, [applyMute]);
 
-    // --- External handle for lecturer to control participants ---
-    useImperativeHandle(ref, () => ({
-      muteAll: () => {
-        socketRef.current?.emit("mute-all", { roomId });
-      },
-      grantMic: (name: string) => {
-        const peer = participants.find(p => p.displayName === name);
-        if (peer) socketRef.current?.emit("grant-mic", { to: peer.socketId });
-      },
-      revokeMic: (name: string) => {
-        const peer = participants.find(p => p.displayName === name);
-        if (peer) socketRef.current?.emit("mute-peer", { to: peer.socketId });
-      },
-    }), [participants, roomId]);
-
-    // --- isMicAllowed prop change for students ---
+    // ── isMicAllowed prop → auto mute/unmute student ──────────────────────
     useEffect(() => {
       if (role !== "student") return;
-      if (isMicAllowed) {
-        setIsMuted(false);
-        applyMute(false);
-      } else {
-        setIsMuted(true);
-        applyMute(true);
-      }
+      setIsMuted(!isMicAllowed);
+      applyMute(!isMicAllowed);
     }, [isMicAllowed, role, applyMute]);
 
-    // --- Main effect: get mic, connect socket, set up signaling ---
+    // ── Lecturer controls exposed via ref ─────────────────────────────────
+    useImperativeHandle(
+      ref,
+      () => ({
+        muteAll: () => socketRef.current?.emit("mute-all", { roomId }),
+        grantMic: (name: string) => {
+          const peer = participants.find(p => p.displayName === name);
+          if (peer) socketRef.current?.emit("grant-mic", { to: peer.socketId });
+        },
+        revokeMic: (name: string) => {
+          const peer = participants.find(p => p.displayName === name);
+          if (peer) socketRef.current?.emit("mute-peer", { to: peer.socketId });
+        },
+      }),
+      [participants, roomId]
+    );
+
+    // ── Main effect: mic + socket + WebRTC ───────────────────────────────
     useEffect(() => {
       let destroyed = false;
 
       (async () => {
-        // Acquire microphone
+        // 1. Get microphone
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              sampleRate: 48000,
+            },
+            video: false,
+          });
           if (destroyed) { stream.getTracks().forEach(t => t.stop()); return; }
           localStreamRef.current = stream;
-          // Apply initial mute state
+          // Lecturers start live; students start muted until granted permission
           stream.getAudioTracks().forEach(t => { t.enabled = role === "lecturer"; });
-        } catch (err: any) {
-          setMicError("Microphone access denied. Please allow mic permission and reload.");
+          attachAnalyser("self", stream);
+        } catch {
+          setMicError("Microphone access denied — allow mic permission and reload.");
           return;
         }
 
-        // Connect Socket.io
+        // 2. Connect to Socket.io signaling server
         const socket = io({ path: "/socket.io", transports: ["websocket", "polling"] });
         socketRef.current = socket;
 
@@ -185,83 +254,103 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
           if (destroyed) return;
           setIsConnected(true);
           socket.emit("join-room", { roomId, displayName, role });
-          // Add self-analyser for local speaking indicator
-          if (localStreamRef.current) attachAnalyser("self", localStreamRef.current);
         });
 
         socket.on("disconnect", () => setIsConnected(false));
 
-        // Existing peers in the room
-        socket.on("room-peers", (peers: { socketId: string; displayName: string; role: string }[]) => {
-          if (destroyed) return;
-          setParticipants(peers.map(p => ({ ...p, isMuted: false })));
-          // Initiate connection to each existing peer (we are the new joiner → polite)
-          peers.forEach(p => createPC(p.socketId, true));
-        });
+        // 3. Server sends us the list of peers already in the room.
+        //    We are the newcomer → we initiate offers to all existing peers.
+        socket.on(
+          "room-peers",
+          async (peers: { socketId: string; displayName: string; role: string }[]) => {
+            if (destroyed) return;
+            setParticipants(peers.map(p => ({ ...p, isMuted: false })));
+            for (const p of peers) {
+              createPC(p.socketId);
+              await sendOffer(p.socketId);
+            }
+          }
+        );
 
-        // New participant joined
-        socket.on("peer-joined", ({ socketId, displayName: pName, role: pRole }: { socketId: string; displayName: string; role: string }) => {
-          if (destroyed) return;
-          setParticipants(prev => [...prev.filter(p => p.socketId !== socketId), { socketId, displayName: pName, role: pRole, isMuted: false }]);
-          createPC(socketId, false); // impolite — wait for offer
-        });
+        // 4. A new peer just joined → we are an existing peer.
+        //    We create a PC for them but DO NOT offer — they will offer us.
+        socket.on(
+          "peer-joined",
+          ({ socketId, displayName: pName, role: pRole }: {
+            socketId: string; displayName: string; role: string;
+          }) => {
+            if (destroyed) return;
+            setParticipants(prev => [
+              ...prev.filter(p => p.socketId !== socketId),
+              { socketId, displayName: pName, role: pRole, isMuted: false },
+            ]);
+            createPC(socketId); // wait for their offer
+          }
+        );
 
-        // Participant left
+        // 5. A peer disconnected
         socket.on("peer-left", ({ socketId }: { socketId: string }) => {
           closePeer(socketId);
           setParticipants(prev => prev.filter(p => p.socketId !== socketId));
         });
 
-        // WebRTC signal relay
+        // 6. WebRTC signaling relay
         socket.on("signal", async ({ from, signal }: { from: string; signal: any }) => {
           if (destroyed) return;
           let pc = pcsRef.current.get(from);
-          if (!pc) { pc = createPC(from, false); }
+          if (!pc) pc = createPC(from);
 
-          if (signal.type === "offer") {
-            await pc.setRemoteDescription(signal.sdp);
-            // Flush any queued candidates
-            const queued = pendingCandidates.current.get(from) ?? [];
-            for (const c of queued) await pc.addIceCandidate(c).catch(() => {});
-            pendingCandidates.current.delete(from);
-            await pc.setLocalDescription();
-            socket.emit("signal", { to: from, signal: { type: "answer", sdp: pc.localDescription } });
-          } else if (signal.type === "answer") {
-            await pc.setRemoteDescription(signal.sdp).catch(() => {});
-          } else if (signal.type === "candidate") {
-            if (pc.remoteDescription) {
-              await pc.addIceCandidate(signal.candidate).catch(() => {});
-            } else {
-              // Queue until remote description is set
-              const q = pendingCandidates.current.get(from) ?? [];
-              q.push(signal.candidate);
-              pendingCandidates.current.set(from, q);
+          try {
+            if (signal.type === "offer") {
+              // Explicit createAnswer — required by Safari (setLocalDescription() with no args is Chrome-only)
+              await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+              // Flush ICE candidates that arrived before the remote description
+              for (const c of pendingCandidatesRef.current.get(from) ?? []) {
+                await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+              }
+              pendingCandidatesRef.current.delete(from);
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              socket.emit("signal", {
+                to: from,
+                signal: { type: "answer", sdp: pc.localDescription },
+              });
+
+            } else if (signal.type === "answer") {
+              await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+
+            } else if (signal.type === "candidate" && signal.candidate) {
+              if (pc.remoteDescription) {
+                await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
+              } else {
+                // Queue: remote description not set yet (offer hasn't arrived)
+                const q = pendingCandidatesRef.current.get(from) ?? [];
+                q.push(signal.candidate);
+                pendingCandidatesRef.current.set(from, q);
+              }
             }
-          }
+          } catch { }
         });
 
-        // Mute commands
-        socket.on("force-mute", () => {
-          setIsMuted(true);
-          applyMute(true);
-        });
-
-        socket.on("mic-granted", () => {
-          setIsMuted(false);
-          applyMute(false);
-        });
+        // 7. Lecturer mute commands
+        socket.on("force-mute", () => { setIsMuted(true); applyMute(true); });
+        socket.on("mic-granted", () => { setIsMuted(false); applyMute(false); });
       })();
 
       return () => {
         destroyed = true;
         socketRef.current?.disconnect();
         socketRef.current = null;
-        pcsRef.current.forEach((pc) => pc.close());
+        pcsRef.current.forEach(pc => pc.close());
         pcsRef.current.clear();
-        pendingCandidates.current.clear();
+        pendingCandidatesRef.current.clear();
+        remoteStreamsRef.current.clear();
         localStreamRef.current?.getTracks().forEach(t => t.stop());
         localStreamRef.current = null;
-        analyserRefs.current.forEach(({ ctx, raf }) => { cancelAnimationFrame(raf); ctx.close().catch(() => {}); });
+        analyserRefs.current.forEach(({ ctx, raf }) => {
+          cancelAnimationFrame(raf);
+          ctx.close().catch(() => {});
+        });
         analyserRefs.current.clear();
         setSpeakingSet(new Set());
         setParticipants([]);
@@ -269,117 +358,187 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
       };
     }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const selfIsSpeaking = speakingSet.has("self");
+    const selfIsSpeaking = speakingSet.has("self") && !isMuted;
 
     return (
       <div className={`flex flex-col gap-3 ${className}`}>
-        {/* Hidden audio elements for each remote participant */}
+        {/* Hidden audio playback elements — one per remote participant */}
         {participants.map(p => (
-          <audio key={p.socketId} id={`audio-${p.socketId}`} autoPlay playsInline style={{ display: "none" }} />
+          <audio
+            key={p.socketId}
+            id={`audio-${p.socketId}`}
+            autoPlay
+            playsInline
+            style={{ display: "none" }}
+          />
         ))}
 
         {micError ? (
-          <div className="flex items-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/30 rounded-[12px]">
-            <MicOff className="h-4 w-4 text-red-500 shrink-0" />
+          <div className="flex items-start gap-2.5 px-4 py-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/30 rounded-[12px]">
+            <MicOff className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
             <p className="text-[12.5px] text-red-600 dark:text-red-400">{micError}</p>
           </div>
         ) : (
           <>
-            {/* Status bar */}
-            <div className="flex items-center justify-between px-4 py-3 bg-slate-900 dark:bg-black/50 rounded-[14px]">
+            {/* ── Status bar ─────────────────────────────────────────── */}
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-900 dark:bg-black/60 rounded-[14px] border border-white/[0.06]">
               <div className="flex items-center gap-3">
-                {/* Connection dot */}
-                <div className="relative flex items-center justify-center">
+                {/* Live/connecting dot */}
+                <div className="relative flex items-center justify-center w-4 h-4">
                   {isConnected ? (
                     <>
-                      <span className="animate-ping absolute h-2.5 w-2.5 rounded-full bg-emerald-400 opacity-60" />
-                      <span className="relative h-2 w-2 rounded-full bg-emerald-500" />
+                      <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-emerald-400 opacity-50" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                     </>
                   ) : (
                     <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
                   )}
                 </div>
                 <span className="text-[12px] font-semibold text-slate-200">
-                  {isConnected ? "Audio Room Live" : "Connecting…"}
+                  {isConnected ? "Audio Room · Live" : "Connecting…"}
                 </span>
-                <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                <span className="flex items-center gap-1 text-[11px] text-slate-500 font-mono">
                   <Users className="h-3 w-3" />
                   {participants.length + 1}
                 </span>
               </div>
 
-              {/* Mic toggle */}
+              {/* Mic toggle button */}
               <button
+                type="button"
                 onClick={role === "student" && !isMicAllowed ? undefined : toggleMute}
                 disabled={role === "student" && !isMicAllowed}
-                title={role === "student" && !isMicAllowed ? "Raise your hand to request mic" : isMuted ? "Unmute" : "Mute"}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[9px] text-[11px] font-semibold transition cursor-pointer disabled:cursor-not-allowed ${
+                title={
+                  role === "student" && !isMicAllowed
+                    ? "Raise your hand to request the mic"
+                    : isMuted
+                    ? "Unmute (click to go live)"
+                    : "Mute"
+                }
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[9px] text-[11px] font-semibold transition-all cursor-pointer disabled:cursor-not-allowed select-none ${
                   isMuted
                     ? "bg-red-600/80 hover:bg-red-600 text-white"
-                    : "bg-emerald-600/80 hover:bg-emerald-600 text-white"
+                    : "bg-emerald-500/90 hover:bg-emerald-500 text-white"
                 }`}
               >
-                {isMuted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+                {isMuted ? (
+                  <MicOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Mic className={`h-3.5 w-3.5 ${selfIsSpeaking ? "animate-pulse" : ""}`} />
+                )}
                 {isMuted ? "Muted" : "Live"}
               </button>
             </div>
 
-            {/* Self speaking indicator */}
-            {!isMuted && selfIsSpeaking && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/30 rounded-[10px]">
-                <Volume2 className="h-3.5 w-3.5 text-emerald-500 animate-pulse shrink-0" />
-                <span className="text-[11.5px] font-semibold text-emerald-700 dark:text-emerald-400">Speaking…</span>
+            {/* ── Speaking indicator for self ─────────────────────────── */}
+            {selfIsSpeaking && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-950/30 border border-emerald-700/30 rounded-[10px]">
+                <span className="flex gap-[3px] items-end h-4">
+                  {[1, 2, 3].map(i => (
+                    <span
+                      key={i}
+                      className="w-[3px] bg-emerald-400 rounded-full animate-pulse"
+                      style={{ height: `${8 + i * 4}px`, animationDelay: `${i * 0.1}s` }}
+                    />
+                  ))}
+                </span>
+                <Volume2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                <span className="text-[11.5px] font-semibold text-emerald-400">Speaking…</span>
               </div>
             )}
 
-            {/* Participant list */}
-            {participants.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-[10.5px] font-bold uppercase tracking-widest text-[#8e8e93] dark:text-white/30 px-1">
-                  In Room ({participants.length + 1})
-                </p>
-                {/* Self */}
-                <div className="flex items-center gap-2.5 px-3 py-2 bg-black/[0.03] dark:bg-white/[0.04] rounded-[10px]">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
-                    role === "lecturer" ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400" : "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400"
-                  }`}>
-                    {displayName.trim().charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-[12px] font-semibold text-[#1d1d1f] dark:text-white/90 flex-1 truncate">
-                    {displayName} <span className="text-[10px] font-normal text-[#8e8e93]">(you)</span>
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    {selfIsSpeaking && !isMuted && <Volume2 className="h-3 w-3 text-emerald-500 animate-pulse" />}
-                    {isMuted ? <MicOff className="h-3 w-3 text-red-400" /> : <Mic className="h-3 w-3 text-emerald-500" />}
-                  </div>
+            {/* ── Participant list ────────────────────────────────────── */}
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-white/30 px-1 pb-0.5">
+                In Room ({participants.length + 1})
+              </p>
+
+              {/* Self */}
+              <div className="flex items-center gap-2.5 px-3 py-2 bg-white/[0.03] rounded-[10px]">
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ring-1 ${
+                    role === "lecturer"
+                      ? "bg-emerald-900/50 text-emerald-300 ring-emerald-700/40"
+                      : "bg-blue-900/50 text-blue-300 ring-blue-700/40"
+                  } ${selfIsSpeaking ? "ring-2 ring-emerald-400" : ""}`}
+                >
+                  {displayName.trim().charAt(0).toUpperCase()}
                 </div>
-                {/* Others */}
-                {participants.map(p => (
-                  <div key={p.socketId} className="flex items-center gap-2.5 px-3 py-2 bg-black/[0.02] dark:bg-white/[0.02] rounded-[10px] border border-black/[0.04] dark:border-white/[0.04]">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
-                      p.role === "lecturer" ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-                    }`}>
+                <span className="text-[12px] font-semibold text-slate-200 flex-1 truncate">
+                  {displayName}{" "}
+                  <span className="text-[10px] font-normal text-slate-500">(you)</span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  {selfIsSpeaking && <Volume2 className="h-3 w-3 text-emerald-400 animate-pulse" />}
+                  {isMuted ? (
+                    <MicOff className="h-3.5 w-3.5 text-red-400" />
+                  ) : (
+                    <Mic className="h-3.5 w-3.5 text-emerald-400" />
+                  )}
+                </div>
+              </div>
+
+              {/* Remote participants */}
+              {participants.map(p => {
+                const isSpeaking = speakingSet.has(p.socketId);
+                return (
+                  <div
+                    key={p.socketId}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-[10px] border transition-all ${
+                      isSpeaking
+                        ? "bg-emerald-950/20 border-emerald-700/30"
+                        : "bg-white/[0.02] border-white/[0.04]"
+                    }`}
+                  >
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ring-1 ${
+                        p.role === "lecturer"
+                          ? "bg-emerald-900/50 text-emerald-300 ring-emerald-700/40"
+                          : "bg-slate-800 text-slate-300 ring-slate-700/40"
+                      } ${isSpeaking ? "ring-2 ring-emerald-400" : ""}`}
+                    >
                       {p.displayName.trim().charAt(0).toUpperCase()}
                     </div>
-                    <span className="text-[12px] text-[#3a3a3c] dark:text-white/75 flex-1 truncate">{p.displayName}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[12px] text-slate-300 truncate block">{p.displayName}</span>
+                      {p.role === "lecturer" && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-500">
+                          Lecturer
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5">
-                      {speakingSet.has(p.socketId) && <Volume2 className="h-3 w-3 text-emerald-500 animate-pulse" />}
-                      {p.isMuted
-                        ? <MicOff className="h-3 w-3 text-red-400/60" />
-                        : <Mic className="h-3 w-3 text-slate-400/60" />
-                      }
+                      {isSpeaking && <Volume2 className="h-3 w-3 text-emerald-400 animate-pulse" />}
+                      {p.isMuted ? (
+                        <MicOff className="h-3 w-3 text-red-400/70" />
+                      ) : (
+                        <Mic className="h-3 w-3 text-slate-500" />
+                      )}
                     </div>
                   </div>
-                ))}
+                );
+              })}
+            </div>
+
+            {/* ── Empty state ─────────────────────────────────────────── */}
+            {participants.length === 0 && isConnected && (
+              <div className="flex flex-col items-center justify-center py-6 gap-2">
+                <div className="w-10 h-10 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+                  <Users className="h-4 w-4 text-slate-500" />
+                </div>
+                <p className="text-[12px] text-slate-500 text-center">
+                  {role === "lecturer"
+                    ? "Waiting for students to join the room…"
+                    : "Connected — waiting for class to start"}
+                </p>
               </div>
             )}
 
-            {participants.length === 0 && isConnected && (
-              <div className="text-center py-6">
-                <Users className="h-6 w-6 text-[#8e8e93] dark:text-white/25 mx-auto mb-2" />
-                <p className="text-[12px] text-[#8e8e93] dark:text-white/35">
-                  {role === "lecturer" ? "Waiting for students to join…" : "Connected — waiting for class to start"}
-                </p>
+            {/* ── Not connected fallback ──────────────────────────────── */}
+            {!isConnected && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-amber-950/20 border border-amber-800/30 rounded-[10px]">
+                <WifiOff className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                <span className="text-[11.5px] text-amber-400">Connecting to audio server…</span>
               </div>
             )}
           </>
