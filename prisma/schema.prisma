@@ -161,13 +161,14 @@ model LectureAttendance {
 }
 
 model HandRaise {
-  id          String         @id @default(uuid())
-  sessionId   String
-  session     LectureSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  studentId   String
-  studentName String
-  raisedAt    DateTime       @default(now())
-  isResolved  Boolean        @default(false)
+  id               String         @id @default(uuid())
+  sessionId        String
+  session          LectureSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId        String
+  studentName      String
+  raisedAt         DateTime       @default(now())
+  isResolved       Boolean        @default(false)
+  allowedToSpeak   Boolean        @default(false)
 }
 
 model LecturePoll {

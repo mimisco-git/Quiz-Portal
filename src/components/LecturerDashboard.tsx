@@ -83,6 +83,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [lecturerChatMessage, setLecturerChatMessage] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const jitsiContainerRef = useRef<HTMLDivElement | null>(null);
+  const jitsiApiRef = useRef<any>(null);
+  const participantMapRef = useRef<Record<string, string>>({}); // displayName → participantId
 
   const [editingAttemptId, setEditingAttemptId] = useState<string | null>(null);
   const [editingScore, setEditingScore] = useState("");
@@ -194,6 +197,62 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     if (activeTab === "assignments") fetchAssignments();
     if (activeTab === "announcements") fetchAnnouncements();
   }, [activeTab]);
+
+  // Jitsi IFrame API — init when session starts, destroy when it ends
+  useEffect(() => {
+    if (!broadcastingSession) {
+      jitsiApiRef.current?.dispose();
+      jitsiApiRef.current = null;
+      participantMapRef.current = {};
+      return;
+    }
+    const roomName = broadcastingSession.jitsiRoom ?? broadcastingSession.id;
+    const initJitsi = () => {
+      if (jitsiApiRef.current || !jitsiContainerRef.current) return;
+      const api = new (window as any).JitsiMeetExternalAPI("meet.jit.si", {
+        roomName,
+        parentNode: jitsiContainerRef.current,
+        userInfo: { displayName: user.name },
+        configOverwrite: {
+          startWithVideoMuted: true,
+          startWithAudioMuted: false,
+          prejoinPageEnabled: false,
+          disableDeepLinking: true,
+        },
+        interfaceConfigOverwrite: {
+          SHOW_JITSI_WATERMARK: false,
+          TOOLBAR_BUTTONS: ["microphone", "hangup", "fullscreen", "chat"],
+        },
+      });
+      api.addEventListener("participantJoined", (e: any) => {
+        if (e.displayName) participantMapRef.current[e.displayName] = e.id;
+      });
+      api.addEventListener("participantLeft", (e: any) => {
+        Object.keys(participantMapRef.current).forEach((name) => {
+          if (participantMapRef.current[name] === e.id) delete participantMapRef.current[name];
+        });
+      });
+      jitsiApiRef.current = api;
+    };
+    if ((window as any).JitsiMeetExternalAPI) {
+      initJitsi();
+    } else {
+      const existing = document.querySelector('script[src*="external_api"]');
+      if (!existing) {
+        const s = document.createElement("script");
+        s.src = "https://meet.jit.si/external_api.js";
+        s.onload = initJitsi;
+        document.head.appendChild(s);
+      } else {
+        existing.addEventListener("load", initJitsi);
+      }
+    }
+    return () => {
+      jitsiApiRef.current?.dispose();
+      jitsiApiRef.current = null;
+      participantMapRef.current = {};
+    };
+  }, [broadcastingSession?.id]);
 
   // Keyboard arrow-key slide navigation for lecturer
   useEffect(() => {
@@ -1094,6 +1153,33 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     setBroadcastingSession((prev: any) => prev ? { ...prev, handRaises: (prev.handRaises || []).filter((h: any) => h.id !== raiseId) } : prev);
   };
 
+  const handleAllowToSpeak = async (raiseId: string, studentName: string) => {
+    if (!broadcastingSession) return;
+    await fetch(`/api/lectures/${broadcastingSession.id}/hand-raises/${raiseId}/allow`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    setBroadcastingSession((prev: any) => prev ? {
+      ...prev,
+      handRaises: (prev.handRaises || []).map((h: any) => h.id === raiseId ? { ...h, allowedToSpeak: true } : h),
+    } : prev);
+  };
+
+  const handleMuteStudent = async (raiseId: string, studentName: string) => {
+    if (!broadcastingSession) return;
+    await fetch(`/api/lectures/${broadcastingSession.id}/hand-raises/${raiseId}/mute`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    setBroadcastingSession((prev: any) => prev ? {
+      ...prev,
+      handRaises: (prev.handRaises || []).map((h: any) => h.id === raiseId ? { ...h, allowedToSpeak: false } : h),
+    } : prev);
+    // mute that participant in Jitsi if they're in the map
+    const participantId = participantMapRef.current[studentName];
+    if (participantId && jitsiApiRef.current) {
+      jitsiApiRef.current.executeCommand("muteParticipant", participantId);
+    }
+  };
+
+  const handleMuteAll = () => {
+    if (jitsiApiRef.current) jitsiApiRef.current.executeCommand("muteEveryone");
+  };
+
   const handleAttachFile = async () => {
     if (!broadcastingSession || !attachLiveFile) return;
     const fd = new FormData(); fd.append("file", attachLiveFile);
@@ -1636,17 +1722,18 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         ))}
                       </div>
 
-                      {/* Jitsi — always mounted so audio stays alive when switching tabs */}
+                      {/* Jitsi IFrame API — always mounted so audio stays alive when switching tabs */}
                       <div style={{ display: liveSubTab === "jitsi" ? "block" : "none" }}>
                         <div className="space-y-4">
-                          <div className="rounded-[12px] overflow-hidden border border-black/[0.07] dark:border-white/[0.07]" style={{ height: 420 }}>
-                            <iframe
-                              src={`https://meet.jit.si/${broadcastingSession.jitsiRoom ?? broadcastingSession.id}#userInfo.displayName=${encodeURIComponent(user.name)}&config.startWithVideoMuted=true&config.startWithAudioMuted=false&config.prejoinPageEnabled=false&config.disableDeepLinking=true`}
-                              allow="camera; microphone; fullscreen; display-capture; autoplay"
-                              className="w-full h-full border-0"
-                              title="Jitsi Meet"
-                            />
+                          {/* Mute All button */}
+                          <div className="flex items-center justify-between">
+                            <p className="text-[12px] font-semibold text-[#6e6e73] dark:text-white/40">Live audio room — you are the host</p>
+                            <button onClick={handleMuteAll}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] border border-red-200 dark:border-red-800/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition cursor-pointer">
+                              <Mic className="h-3.5 w-3.5" /> Mute All Students
+                            </button>
                           </div>
+                          <div ref={jitsiContainerRef} className="rounded-[12px] overflow-hidden border border-black/[0.07] dark:border-white/[0.07]" style={{ height: 420 }} />
                           <div className="bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4 space-y-3">
                             <p className={lbl}>Share a File with Students</p>
                             <div className="flex items-center gap-3">
@@ -1679,18 +1766,33 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                                 <ThumbsUp className="h-3.5 w-3.5" /> {handRaises.length} student{handRaises.length !== 1 ? "s" : ""} raised hand
                               </p>
                               {handRaises.map((h: any) => (
-                                <div key={h.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/30 rounded-[10px]">
+                                <div key={h.id} className={`flex items-center justify-between gap-3 px-3.5 py-2.5 border rounded-[10px] ${h.allowedToSpeak ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/30" : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/30"}`}>
                                   <div className="flex items-center gap-2">
-                                    <span className="text-amber-500 text-[15px]">✋</span>
+                                    <span className="text-[15px]">{h.allowedToSpeak ? "🎤" : "✋"}</span>
                                     <div>
                                       <p className="text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/90">{h.studentName}</p>
-                                      <p className="text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40">{new Date(h.raisedAt).toLocaleTimeString()}</p>
+                                      <p className="text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40">
+                                        {h.allowedToSpeak ? "Speaking allowed" : new Date(h.raisedAt).toLocaleTimeString()}
+                                      </p>
                                     </div>
                                   </div>
-                                  <button onClick={() => handleDismissHandRaise(h.id)}
-                                    className="flex-shrink-0 px-3 py-1 text-[11px] font-semibold border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/20 rounded-[8px] transition cursor-pointer">
-                                    Lower ✓
-                                  </button>
+                                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                                    {!h.allowedToSpeak ? (
+                                      <button onClick={() => handleAllowToSpeak(h.id, h.studentName)}
+                                        className="px-3 py-1 text-[11px] font-semibold border border-emerald-400 dark:border-emerald-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 rounded-[8px] transition cursor-pointer">
+                                        Allow 🎤
+                                      </button>
+                                    ) : (
+                                      <button onClick={() => handleMuteStudent(h.id, h.studentName)}
+                                        className="px-3 py-1 text-[11px] font-semibold border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-[8px] transition cursor-pointer">
+                                        Mute 🔇
+                                      </button>
+                                    )}
+                                    <button onClick={() => handleDismissHandRaise(h.id)}
+                                      className="px-3 py-1 text-[11px] font-semibold border border-black/[0.09] dark:border-white/[0.10] text-[#6e6e73] dark:text-white/50 hover:bg-black/[0.05] dark:hover:bg-white/[0.05] rounded-[8px] transition cursor-pointer">
+                                      Lower
+                                    </button>
+                                  </div>
                                 </div>
                               ))}
                             </div>

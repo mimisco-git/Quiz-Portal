@@ -1301,7 +1301,12 @@ app.get("/api/lectures/active/:courseId", authenticateToken, async (req: any, re
         },
       },
     });
-    return res.json(session);
+    if (!session) return res.json(null);
+    // Tell the student if they've been granted mic permission
+    const myRaise = req.user.role === "student"
+      ? session.handRaises.find((h) => h.studentId === req.user.id)
+      : null;
+    return res.json({ ...session, myAllowedToSpeak: myRaise?.allowedToSpeak ?? false });
   } catch (error: any) {
     console.error("Error fetching active lecture session:", error);
     return res.status(500).json({ error: "Error fetching active lecture session" });
@@ -1444,10 +1449,38 @@ app.post("/api/lectures/:id/hand-raise", authenticateToken, async (req: any, res
 app.delete("/api/lectures/:id/hand-raises/:raiseId", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   try {
-    await prisma.handRaise.update({ where: { id: req.params.raiseId }, data: { isResolved: true } });
+    await prisma.handRaise.update({ where: { id: req.params.raiseId }, data: { isResolved: true, allowedToSpeak: false } });
     return res.json({ ok: true });
   } catch (e) {
     return res.status(500).json({ error: "Failed to dismiss hand raise" });
+  }
+});
+
+// Lecturer grants mic permission to a student
+app.post("/api/lectures/:id/hand-raises/:raiseId/allow", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const raise = await prisma.handRaise.update({
+      where: { id: req.params.raiseId },
+      data: { allowedToSpeak: true },
+    });
+    return res.json(raise);
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to grant speaking permission" });
+  }
+});
+
+// Lecturer revokes mic permission (mutes student)
+app.post("/api/lectures/:id/hand-raises/:raiseId/mute", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const raise = await prisma.handRaise.update({
+      where: { id: req.params.raiseId },
+      data: { allowedToSpeak: false },
+    });
+    return res.json(raise);
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to mute student" });
   }
 });
 

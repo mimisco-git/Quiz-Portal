@@ -73,6 +73,9 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [audioOpen, setAudioOpen] = useState(true);
   const [handRaised, setHandRaised] = useState(false);
   const [myPollAnswer, setMyPollAnswer] = useState<string | null>(null);
+  const [isSpeakingAllowed, setIsSpeakingAllowed] = useState(false);
+  const jitsiContainerRef = useRef<HTMLDivElement | null>(null);
+  const jitsiApiRef = useRef<any>(null);
 
   // Exam state
   const [exams, setExams] = useState<any[]>([]);
@@ -125,8 +128,18 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       });
       if (res.ok) {
         const data = await res.json();
-        if (!data) { setActiveLiveSession(null); setJoinedCourseId(null); fetchAllLiveSessions(); }
-        else { setActiveLiveSession(data); if (data.chats) setLiveChats(data.chats); }
+        if (!data) { setActiveLiveSession(null); setJoinedCourseId(null); setIsSpeakingAllowed(false); fetchAllLiveSessions(); }
+        else {
+          setActiveLiveSession(data);
+          if (data.chats) setLiveChats(data.chats);
+          const wasAllowed = isSpeakingAllowed;
+          const nowAllowed = !!data.myAllowedToSpeak;
+          setIsSpeakingAllowed(nowAllowed);
+          // If permission was just revoked, mute the student's mic
+          if (wasAllowed && !nowAllowed && jitsiApiRef.current) {
+            jitsiApiRef.current.executeCommand("setAudioMuted", true);
+          }
+        }
       }
     } catch (e) {
       console.error("Error fetching live lecture session:", e);
@@ -254,9 +267,57 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       setJoinedCourseId(null);
       setAllLiveSessions([]);
       setLiveChats([]);
+      setIsSpeakingAllowed(false);
     }
     return () => clearInterval(interval);
   }, [activeTab, joinedCourseId]);
+
+  // Jitsi IFrame API for student — init when session is active, destroy when it ends
+  useEffect(() => {
+    if (!activeLiveSession) {
+      jitsiApiRef.current?.dispose();
+      jitsiApiRef.current = null;
+      return;
+    }
+    if (jitsiApiRef.current) return; // already initialised for this session
+    const roomName = activeLiveSession.jitsiRoom ?? activeLiveSession.id;
+    const initJitsi = () => {
+      if (jitsiApiRef.current || !jitsiContainerRef.current) return;
+      jitsiApiRef.current = new (window as any).JitsiMeetExternalAPI("meet.jit.si", {
+        roomName,
+        parentNode: jitsiContainerRef.current,
+        userInfo: { displayName: user.fullName },
+        configOverwrite: {
+          startWithVideoMuted: true,
+          startWithAudioMuted: true, // students start muted; lecturer grants permission
+          prejoinPageEnabled: false,
+          disableDeepLinking: true,
+          filmStripOnly: false,
+        },
+        interfaceConfigOverwrite: {
+          SHOW_JITSI_WATERMARK: false,
+          TOOLBAR_BUTTONS: ["microphone", "hangup", "fullscreen"],
+        },
+      });
+    };
+    if ((window as any).JitsiMeetExternalAPI) {
+      initJitsi();
+    } else {
+      const existing = document.querySelector('script[src*="external_api"]');
+      if (!existing) {
+        const s = document.createElement("script");
+        s.src = "https://meet.jit.si/external_api.js";
+        s.onload = initJitsi;
+        document.head.appendChild(s);
+      } else {
+        existing.addEventListener("load", initJitsi);
+      }
+    }
+    return () => {
+      jitsiApiRef.current?.dispose();
+      jitsiApiRef.current = null;
+    };
+  }, [activeLiveSession?.id]);
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -1687,28 +1748,42 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           </div>
                         )}
 
-                        {/* Audio bar — Jitsi always mounted for persistent audio, shown/hidden */}
-                        <div className={`rounded-[12px] overflow-hidden border border-black/[0.07] dark:border-white/[0.07] transition-all duration-300 ${audioOpen ? "opacity-100" : "opacity-0 h-0 border-0 pointer-events-none"}`}
-                          style={{ height: audioOpen ? 110 : 0 }}>
-                          <iframe
-                            src={`https://meet.jit.si/${activeLiveSession.jitsiRoom ?? activeLiveSession.id}#userInfo.displayName=${encodeURIComponent(user.fullName)}&config.startWithVideoMuted=true&config.startWithAudioMuted=false&config.prejoinPageEnabled=false&config.disableDeepLinking=true&config.filmStripOnly=false`}
-                            allow="camera; microphone; autoplay"
-                            className="w-full border-0"
-                            style={{ height: 110 }}
-                            title="Audio"
-                          />
-                        </div>
+                        {/* Speaking permission banner */}
+                        {isSpeakingAllowed && (
+                          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-700/50 rounded-[12px]">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[18px]">🎤</span>
+                              <div>
+                                <p className="text-[12.5px] font-bold text-emerald-700 dark:text-emerald-400">You've been allowed to speak</p>
+                                <p className="text-[11px] text-emerald-600/70 dark:text-emerald-400/60">Tap the button to unmute your microphone</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => jitsiApiRef.current?.executeCommand("toggleAudio")}
+                              className="flex-shrink-0 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-bold rounded-[10px] transition cursor-pointer">
+                              Unmute
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Jitsi IFrame API — always mounted for persistent audio */}
+                        <div ref={jitsiContainerRef}
+                          className={`rounded-[12px] overflow-hidden border border-black/[0.07] dark:border-white/[0.07] transition-all duration-300 ${audioOpen ? "" : "opacity-0 pointer-events-none"}`}
+                          style={{ height: audioOpen ? 110 : 0 }}
+                        />
 
                         {/* Audio toggle bar */}
                         <div className="flex items-center justify-between px-3.5 py-2 bg-slate-900 dark:bg-black/40 rounded-[10px]">
                           <div className="flex items-center gap-2">
                             <span className="flex h-2 w-2"><span className="animate-ping absolute h-2 w-2 rounded-full bg-emerald-400 opacity-75" /><span className="relative h-2 w-2 rounded-full bg-emerald-500" /></span>
-                            <span className="text-[11.5px] font-semibold text-slate-200">Audio Connected</span>
+                            <span className="text-[11.5px] font-semibold text-slate-200">
+                              {isSpeakingAllowed ? "Mic Active" : "Audio Connected · Mic Muted"}
+                            </span>
                             <span className="text-[10px] font-mono text-slate-500">{activeLiveSession.course?.code ?? ""}</span>
                           </div>
                           <button onClick={() => setAudioOpen(o => !o)}
                             className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-slate-400 hover:text-white border border-white/10 hover:border-white/20 rounded-[7px] transition cursor-pointer">
-                            <Mic className="h-3 w-3" /> {audioOpen ? "Hide Mic" : "Show Mic"}
+                            <Mic className="h-3 w-3" /> {audioOpen ? "Hide" : "Show"}
                           </button>
                         </div>
 
