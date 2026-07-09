@@ -41,6 +41,9 @@ async function sendPushToAll(role: "student" | "lecturer" | "all", title: string
   );
 }
 
+// In-memory grading job tracker — keyed by "exam_<id>" or "assignment_<id>"
+const gradingJobs = new Map<string, { total: number; done: number; errors: number; inProgress: boolean }>();
+
 const app = express();
 const PORT = 3000;
 
@@ -2144,6 +2147,13 @@ app.post("/api/exams/:examId/submissions/:subId/grade", authenticateToken, async
 });
 
 // Lecturer: AI grade all exam submissions
+app.get("/api/exams/:id/grading-status", authenticateToken, (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const job = gradingJobs.get(`exam_${req.params.id}`);
+  if (!job) return res.json({ inProgress: false, total: 0, done: 0, errors: 0 });
+  return res.json(job);
+});
+
 app.post("/api/exams/:id/grade", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   try {
@@ -2155,24 +2165,36 @@ app.post("/api/exams/:id/grade", authenticateToken, async (req: any, res) => {
     if (exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     if (!exam.answerKeyJson && !exam.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
     if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
-    if (exam.submissions.length === 0) return res.json({ graded: 0, message: "No submissions to grade" });
-    const results = [];
-    for (const submission of exam.submissions.filter((s) => !s.isGraded)) {
-      try {
-        const { score, totalMarks, feedback } = await gradeSubmission(
-          exam.questionsText, exam.answerKeyText, submission.answersText,
-          (submission as any).student.fullName, exam.marksText, (exam as any).answerKeyJson
-        );
-        await prisma.examSubmission.update({ where: { id: submission.id }, data: { score, totalMarks, feedback, isGraded: true } });
-        results.push({ studentId: submission.studentId, score, totalMarks });
-      } catch (err) {
-        console.error(`Failed to grade submission ${submission.id}:`, err);
-        results.push({ studentId: submission.studentId, error: "Grading failed" });
+    const ungraded = exam.submissions.filter((s) => !s.isGraded);
+    if (ungraded.length === 0) return res.json({ started: false, message: "No submissions to grade" });
+
+    const jobKey = `exam_${exam.id}`;
+    if (gradingJobs.get(jobKey)?.inProgress) return res.json({ started: false, message: "Grading already in progress" });
+
+    gradingJobs.set(jobKey, { total: ungraded.length, done: 0, errors: 0, inProgress: true });
+    res.status(202).json({ started: true, total: ungraded.length });
+
+    // Run in background — do not await
+    (async () => {
+      const job = gradingJobs.get(jobKey)!;
+      for (const submission of ungraded) {
+        try {
+          const { score, totalMarks, feedback } = await gradeSubmission(
+            exam.questionsText, exam.answerKeyText, submission.answersText,
+            (submission as any).student.fullName, exam.marksText, (exam as any).answerKeyJson
+          );
+          await prisma.examSubmission.update({ where: { id: submission.id }, data: { score, totalMarks, feedback, isGraded: true } });
+          job.done++;
+        } catch (err) {
+          console.error(`Failed to grade exam submission ${submission.id}:`, err);
+          job.errors++;
+          job.done++;
+        }
       }
-    }
-    return res.json({ graded: results.filter((r) => !r.error).length, results });
+      job.inProgress = false;
+    })();
   } catch (err) {
-    return res.status(500).json({ error: "Failed to grade exam" });
+    return res.status(500).json({ error: "Failed to start grading" });
   }
 });
 
@@ -2378,6 +2400,13 @@ app.post("/api/assignments/:assignmentId/submissions/:subId/grade", authenticate
 });
 
 // Lecturer: AI grade all assignment submissions
+app.get("/api/assignments/:id/grading-status", authenticateToken, (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const job = gradingJobs.get(`assignment_${req.params.id}`);
+  if (!job) return res.json({ inProgress: false, total: 0, done: 0, errors: 0 });
+  return res.json(job);
+});
+
 app.post("/api/assignments/:id/grade", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   try {
@@ -2389,23 +2418,36 @@ app.post("/api/assignments/:id/grade", authenticateToken, async (req: any, res) 
     if (assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     if (!(assignment as any).answerKeyJson && !assignment.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
     if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
-    if (assignment.submissions.length === 0) return res.json({ graded: 0, message: "No submissions to grade" });
-    const results = [];
-    for (const submission of assignment.submissions.filter((s) => !s.isGraded)) {
-      try {
-        const { score, totalMarks, feedback } = await gradeSubmission(
-          assignment.questionsText, assignment.answerKeyText, submission.answersText,
-          (submission as any).student.fullName, assignment.marksText, (assignment as any).answerKeyJson
-        );
-        await prisma.assignmentSubmission.update({ where: { id: submission.id }, data: { score, totalMarks, feedback, isGraded: true } });
-        results.push({ studentId: submission.studentId, score, totalMarks });
-      } catch (err) {
-        results.push({ studentId: submission.studentId, error: "Grading failed" });
+    const ungraded = assignment.submissions.filter((s) => !s.isGraded);
+    if (ungraded.length === 0) return res.json({ started: false, message: "No submissions to grade" });
+
+    const jobKey = `assignment_${assignment.id}`;
+    if (gradingJobs.get(jobKey)?.inProgress) return res.json({ started: false, message: "Grading already in progress" });
+
+    gradingJobs.set(jobKey, { total: ungraded.length, done: 0, errors: 0, inProgress: true });
+    res.status(202).json({ started: true, total: ungraded.length });
+
+    // Run in background — do not await
+    (async () => {
+      const job = gradingJobs.get(jobKey)!;
+      for (const submission of ungraded) {
+        try {
+          const { score, totalMarks, feedback } = await gradeSubmission(
+            assignment.questionsText, assignment.answerKeyText, submission.answersText,
+            (submission as any).student.fullName, assignment.marksText, (assignment as any).answerKeyJson
+          );
+          await prisma.assignmentSubmission.update({ where: { id: submission.id }, data: { score, totalMarks, feedback, isGraded: true } });
+          job.done++;
+        } catch (err) {
+          console.error(`Failed to grade assignment submission ${submission.id}:`, err);
+          job.errors++;
+          job.done++;
+        }
       }
-    }
-    return res.json({ graded: results.filter((r) => !r.error).length, results });
+      job.inProgress = false;
+    })();
   } catch (err) {
-    return res.status(500).json({ error: "Failed to grade assignment" });
+    return res.status(500).json({ error: "Failed to start grading" });
   }
 });
 

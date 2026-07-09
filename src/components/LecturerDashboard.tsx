@@ -111,6 +111,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [answerKeyText, setAnswerKeyText] = useState("");
   const [answerKeyMarks, setAnswerKeyMarks] = useState("");
   const [isGrading, setIsGrading] = useState(false);
+  const [gradingProgress, setGradingProgress] = useState<{ done: number; total: number; errors: number } | null>(null);
   const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null);
 
   // ── Assignment state ─────────────────────────────────────────────
@@ -132,6 +133,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [assignmentKeyText, setAssignmentKeyText] = useState("");
   const [assignmentKeyMarks, setAssignmentKeyMarks] = useState("");
   const [isGradingAssignment, setIsGradingAssignment] = useState(false);
+  const [gradingAssignmentProgress, setGradingAssignmentProgress] = useState<{ done: number; total: number; errors: number } | null>(null);
   const [expandedAssignmentSub, setExpandedAssignmentSub] = useState<string | null>(null);
   const [manualScoreInputs, setManualScoreInputs] = useState<Record<string, string>>({});
 
@@ -430,25 +432,55 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   const handleGradeAll = async (examId: string) => {
-    setIsGrading(true);
     try {
       const res = await fetch(`/api/exams/${examId}/grade`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       const d = await res.json();
-      if (res.ok) { showSuccess(`AI graded ${d.graded} submission${d.graded !== 1 ? "s" : ""}.`); fetchExamSubmissions(examId); }
-      else showError(d.error || "Grading failed");
+      if (!res.ok) { showError(d.error || "Failed to start grading"); return; }
+      if (!d.started) { showSuccess(d.message); return; }
+      setIsGrading(true);
+      setGradingProgress({ done: 0, total: d.total, errors: 0 });
+      const poll = setInterval(async () => {
+        try {
+          const sr = await fetch(`/api/exams/${examId}/grading-status`, { headers: { Authorization: `Bearer ${token}` } });
+          const s = await sr.json();
+          setGradingProgress({ done: s.done, total: s.total, errors: s.errors });
+          if (!s.inProgress) {
+            clearInterval(poll);
+            setIsGrading(false);
+            setGradingProgress(null);
+            fetchExamSubmissions(examId);
+            const ok = s.total - s.errors;
+            showSuccess(`AI graded ${ok} submission${ok !== 1 ? "s" : ""}${s.errors ? ` (${s.errors} failed)` : ""}.`);
+          }
+        } catch { clearInterval(poll); setIsGrading(false); setGradingProgress(null); }
+      }, 3000);
     } catch (err: any) { showError(err.message); }
-    finally { setIsGrading(false); }
   };
 
   const handleGradeAssignments = async (assignmentId: string) => {
-    setIsGradingAssignment(true);
     try {
       const res = await fetch(`/api/assignments/${assignmentId}/grade`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       const d = await res.json();
-      if (res.ok) { showSuccess(`AI graded ${d.graded} submission${d.graded !== 1 ? "s" : ""}.`); fetchAssignmentSubmissions(assignmentId); }
-      else showError(d.error || "Grading failed");
+      if (!res.ok) { showError(d.error || "Failed to start grading"); return; }
+      if (!d.started) { showSuccess(d.message); return; }
+      setIsGradingAssignment(true);
+      setGradingAssignmentProgress({ done: 0, total: d.total, errors: 0 });
+      const poll = setInterval(async () => {
+        try {
+          const sr = await fetch(`/api/assignments/${assignmentId}/grading-status`, { headers: { Authorization: `Bearer ${token}` } });
+          const s = await sr.json();
+          setGradingAssignmentProgress({ done: s.done, total: s.total, errors: s.errors });
+          if (!s.inProgress) {
+            clearInterval(poll);
+            setIsGradingAssignment(false);
+            setGradingAssignmentProgress(null);
+            fetchAssignmentSubmissions(assignmentId);
+            const ok = s.total - s.errors;
+            showSuccess(`AI graded ${ok} submission${ok !== 1 ? "s" : ""}${s.errors ? ` (${s.errors} failed)` : ""}.`);
+          }
+        } catch { clearInterval(poll); setIsGradingAssignment(false); setGradingAssignmentProgress(null); }
+      }, 3000);
     } catch { showError("Grading failed"); }
-    finally { setIsGradingAssignment(false); }
   };
 
   const handleAddMarks = async (type: "exam" | "assignment", parentId: string, subId: string) => {
@@ -2695,8 +2727,15 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         <div className="border-t border-black/[0.06] dark:border-white/[0.05] pt-4">
                           <button onClick={() => handleGradeAll(selectedExam.id)} disabled={isGrading}
                             className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
-                            {isGrading ? <><Loader2 className="h-4 w-4 animate-spin" />Grading with AI…</> : <><Star className="h-4 w-4" />Grade All with AI</>}
+                            {isGrading
+                              ? <><Loader2 className="h-4 w-4 animate-spin" />{gradingProgress ? `Grading ${gradingProgress.done}/${gradingProgress.total}…` : "Starting…"}</>
+                              : <><Star className="h-4 w-4" />Grade All with AI</>}
                           </button>
+                          {isGrading && gradingProgress && (
+                            <div className="mt-2 w-full h-1.5 rounded-full bg-black/[0.06] dark:bg-white/[0.08] overflow-hidden">
+                              <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${(gradingProgress.done / gradingProgress.total) * 100}%` }} />
+                            </div>
+                          )}
                           <p className="text-[11px] text-[#6e6e73] dark:text-white/40 text-center mt-1.5">Or expand a submission below to set a manual mark</p>
                         </div>
                       )}
@@ -2982,8 +3021,15 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         <div className="border-t border-black/[0.06] dark:border-white/[0.05] pt-4">
                           <button onClick={() => handleGradeAssignments(selectedAssignment.id)} disabled={isGradingAssignment}
                             className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
-                            {isGradingAssignment ? <><Loader2 className="h-4 w-4 animate-spin" />Grading with AI…</> : <><Star className="h-4 w-4" />Grade All with AI</>}
+                            {isGradingAssignment
+                              ? <><Loader2 className="h-4 w-4 animate-spin" />{gradingAssignmentProgress ? `Grading ${gradingAssignmentProgress.done}/${gradingAssignmentProgress.total}…` : "Starting…"}</>
+                              : <><Star className="h-4 w-4" />Grade All with AI</>}
                           </button>
+                          {isGradingAssignment && gradingAssignmentProgress && (
+                            <div className="mt-2 w-full h-1.5 rounded-full bg-black/[0.06] dark:bg-white/[0.08] overflow-hidden">
+                              <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${(gradingAssignmentProgress.done / gradingAssignmentProgress.total) * 100}%` }} />
+                            </div>
+                          )}
                           <p className="text-[11px] text-[#6e6e73] dark:text-white/40 text-center mt-1.5">Or expand a submission below to set a manual mark</p>
                         </div>
                       )}
