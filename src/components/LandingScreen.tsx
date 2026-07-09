@@ -556,8 +556,15 @@ export default function LandingScreen({
                                   </select></div>
                               </div>
                               <div><label className={lbl}>Department</label>
-                                <input type="text" required list="depts-list" value={regDepartment} onChange={e => setRegDepartment(e.target.value)} placeholder="Computer Science" className={inp} />
-                                <datalist id="depts-list">{departmentsList.map(d => <option key={d} value={d} />)}</datalist></div>
+                                {departmentsList.length > 0 ? (
+                                  <select required value={regDepartment} onChange={e => setRegDepartment(e.target.value)} className={inp + " [&>option]:bg-slate-900"}>
+                                    <option value="">Select your department…</option>
+                                    {departmentsList.map(d => <option key={d} value={d}>{d}</option>)}
+                                  </select>
+                                ) : (
+                                  <input type="text" required value={regDepartment} onChange={e => setRegDepartment(e.target.value)} placeholder="e.g. Computer Science" className={inp} />
+                                )}
+                              </div>
                               <div className="pt-1 border-t border-white/[0.07]">
                                 <p className="text-[9.5px] text-white/28 uppercase tracking-widest font-bold mb-3">Year Recovery Setup</p>
                                 <div className="space-y-3">

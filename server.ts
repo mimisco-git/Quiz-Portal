@@ -44,6 +44,14 @@ async function sendPushToAll(role: "student" | "lecturer" | "all", title: string
 // In-memory grading job tracker — keyed by "exam_<id>" or "assignment_<id>"
 const gradingJobs = new Map<string, { total: number; done: number; errors: number; inProgress: boolean }>();
 
+// Returns all department names a student has access to (primary + additional)
+async function getStudentDepts(studentId: string): Promise<string[]> {
+  const s = await prisma.student.findUnique({ where: { id: studentId }, select: { department: true, additionalDepartments: true } });
+  if (!s) return [];
+  try { return [s.department, ...JSON.parse(s.additionalDepartments || "[]")]; }
+  catch { return [s.department]; }
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -478,11 +486,12 @@ app.post("/api/auth/lecturer-login", authLimiter, async (req, res) => {
 // Fetch all courses with basic info
 app.get("/api/courses", optionalAuth, async (req: any, res) => {
   try {
-    // Students only see courses belonging to their department (or courses with no department assigned)
-    const where: any =
-      req.user?.role === "student"
-        ? { OR: [{ departmentId: null }, { department: { name: req.user.department } }] }
-        : {};
+    // Students only see courses for their departments (primary + additional) or unassigned courses
+    let where: any = {};
+    if (req.user?.role === "student") {
+      const depts = await getStudentDepts(req.user.id);
+      where = { OR: [{ departmentId: null }, { department: { name: { in: depts } } }] };
+    }
     const courses = await prisma.course.findMany({
       where,
       include: {
@@ -1340,12 +1349,23 @@ app.post("/api/student/promote-year", authenticateToken, async (req: any, res) =
   }
 });
 
+app.get("/api/student/profile", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only." });
+  try {
+    const s = await prisma.student.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, fullName: true, regNumber: true, department: true, additionalDepartments: true, year: true, email: true },
+    });
+    if (!s) return res.status(404).json({ error: "Student not found." });
+    return res.json({ ...s, additionalDepartments: JSON.parse(s.additionalDepartments || "[]") });
+  } catch { return res.status(500).json({ error: "Failed to fetch profile." }); }
+});
+
 app.patch("/api/student/department", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "student") return res.status(403).json({ error: "Students only." });
   const { department } = req.body;
   if (!department?.trim()) return res.status(400).json({ error: "Department name is required." });
   try {
-    // Verify the department exists
     const dept = await prisma.department.findFirst({ where: { name: department.trim() } });
     if (!dept) return res.status(400).json({ error: "Department not found." });
     await prisma.student.update({ where: { id: req.user.id }, data: { department: department.trim() } });
@@ -1353,6 +1373,24 @@ app.patch("/api/student/department", authenticateToken, async (req: any, res) =>
   } catch {
     return res.status(500).json({ error: "Failed to update department." });
   }
+});
+
+app.patch("/api/student/additional-departments", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only." });
+  const { departments } = req.body;
+  if (!Array.isArray(departments)) return res.status(400).json({ error: "departments must be an array." });
+  try {
+    // Validate all names exist
+    const names: string[] = departments.map((d: any) => String(d).trim()).filter(Boolean);
+    if (names.length > 0) {
+      const found = await prisma.department.findMany({ where: { name: { in: names } }, select: { name: true } });
+      const foundNames = new Set(found.map(d => d.name));
+      const invalid = names.filter(n => !foundNames.has(n));
+      if (invalid.length > 0) return res.status(400).json({ error: `Unknown departments: ${invalid.join(", ")}` });
+    }
+    await prisma.student.update({ where: { id: req.user.id }, data: { additionalDepartments: JSON.stringify(names) } });
+    return res.json({ success: true, additionalDepartments: names });
+  } catch { return res.status(500).json({ error: "Failed to update additional departments." }); }
 });
 
 // Student: get own exam attempts
@@ -2145,9 +2183,11 @@ app.post("/api/exams", authenticateToken, upload.single("file"), async (req: any
 app.get("/api/exams", authenticateToken, async (req: any, res) => {
   const { courseId } = req.query;
   try {
-    const deptFilter = req.user.role === "student"
-      ? { OR: [{ departmentId: null }, { department: { name: req.user.department } }] }
-      : {};
+    let deptFilter: any = {};
+    if (req.user.role === "student") {
+      const depts = await getStudentDepts(req.user.id);
+      deptFilter = { OR: [{ departmentId: null }, { department: { name: { in: depts } } }] };
+    }
     const exams = await prisma.exam.findMany({
       where: {
         ...(courseId ? { courseId: String(courseId) } : {}),
@@ -2406,9 +2446,11 @@ app.post("/api/assignments", authenticateToken, upload.single("file"), async (re
 app.get("/api/assignments", authenticateToken, async (req: any, res) => {
   const { courseId } = req.query;
   try {
-    const deptFilter = req.user.role === "student"
-      ? { OR: [{ departmentId: null }, { department: { name: req.user.department } }] }
-      : {};
+    let deptFilter: any = {};
+    if (req.user.role === "student") {
+      const depts = await getStudentDepts(req.user.id);
+      deptFilter = { OR: [{ departmentId: null }, { department: { name: { in: depts } } }] };
+    }
     const assignments = await prisma.assignment.findMany({
       where: {
         ...(courseId ? { courseId: String(courseId) } : {}),

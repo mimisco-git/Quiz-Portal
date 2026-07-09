@@ -44,6 +44,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [periodTick, setPeriodTick] = useState(0);
   const [currentYear, setCurrentYear] = useState(user.year);
   const [currentDepartment, setCurrentDepartment] = useState(user.department);
+  const [additionalDepts, setAdditionalDepts] = useState<string[]>([]);
   const [availableDepartments, setAvailableDepartments] = useState<{ id: string; name: string }[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -372,17 +373,25 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ department: deptName }),
       });
-      if (res.ok) {
-        // Refresh courses/exams/assignments for the new department
-        fetchCourses();
-        fetchExams();
-        fetchAssignments();
-      } else {
-        setCurrentDepartment(prev);
-      }
-    } catch {
-      setCurrentDepartment(prev);
-    }
+      if (res.ok) { fetchCourses(); fetchExams(); fetchAssignments(); }
+      else setCurrentDepartment(prev);
+    } catch { setCurrentDepartment(prev); }
+  };
+
+  const handleToggleAdditionalDept = async (deptName: string) => {
+    const next = additionalDepts.includes(deptName)
+      ? additionalDepts.filter(d => d !== deptName)
+      : [...additionalDepts, deptName];
+    setAdditionalDepts(next);
+    try {
+      const res = await fetch("/api/student/additional-departments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ departments: next }),
+      });
+      if (res.ok) { fetchCourses(); fetchExams(); fetchAssignments(); }
+      else setAdditionalDepts(additionalDepts); // rollback
+    } catch { setAdditionalDepts(additionalDepts); }
   };
 
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
@@ -430,6 +439,10 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     fetchAnnouncements();
     subscribeToPush();
     fetch("/api/departments").then(r => r.ok ? r.json() : []).then(setAvailableDepartments).catch(() => {});
+    fetch("/api/student/profile", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(p => { if (p) { setCurrentDepartment(p.department); setAdditionalDepts(p.additionalDepartments || []); } })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1310,6 +1323,29 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               </select>
               {!availableDepartments.some(d => d.name === currentDepartment) && (
                 <p className="text-[10px] text-amber-600 dark:text-amber-400 px-2 mt-1 leading-tight">Please select your department — it controls what courses and assessments you see.</p>
+              )}
+            </div>
+          )}
+
+          {/* Additional departments (borrowed courses / extra year) */}
+          {availableDepartments.filter(d => d.name !== currentDepartment).length > 0 && (
+            <div className="hidden sm:block px-1 pt-2 pb-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30 mb-1.5 px-2">Also enrolled in</p>
+              <div className="space-y-0.5 px-2">
+                {availableDepartments.filter(d => d.name !== currentDepartment).map(d => (
+                  <label key={d.id} className="flex items-center gap-2 cursor-pointer py-0.5 group">
+                    <input
+                      type="checkbox"
+                      checked={additionalDepts.includes(d.name)}
+                      onChange={() => handleToggleAdditionalDept(d.name)}
+                      className="h-3 w-3 rounded accent-emerald-500 cursor-pointer"
+                    />
+                    <span className="text-[11px] text-[#3a3a3c] dark:text-white/55 group-hover:text-[#1d1d1f] dark:group-hover:text-white/80 transition leading-tight">{d.name}</span>
+                  </label>
+                ))}
+              </div>
+              {additionalDepts.length > 0 && (
+                <p className="text-[9.5px] text-emerald-600 dark:text-emerald-400 px-2 mt-1">You see content from {1 + additionalDepts.length} departments.</p>
               )}
             </div>
           )}
