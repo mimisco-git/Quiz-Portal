@@ -3140,7 +3140,7 @@ Example format:
       options: Array.isArray(q.options) ? q.options.slice(0, 4).map(String) : ["A. ", "B. ", "C. ", "D. "],
       correctOption: String(q.correctOption || ""),
     }));
-    return res.json({ questions: cleaned });
+    return res.json(cleaned);
   } catch (err: any) {
     console.error("AI question generation error:", err);
     return res.status(500).json({ error: "AI generation failed — check NVIDIA_API_KEY" });
