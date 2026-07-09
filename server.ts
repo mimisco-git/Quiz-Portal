@@ -3007,6 +3007,211 @@ app.get("/api/quizzes/:id/leaderboard", authenticateToken, async (req: any, res)
 });
 
 // -------------------------------------------------------------
+// LECTURER ANALYTICS API
+// -------------------------------------------------------------
+app.get("/api/lecturer/analytics", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Unauthorized" });
+  const lecturerId = req.user.id;
+  try {
+    const courses = await prisma.course.findMany({
+      where: { lecturerId },
+      include: {
+        department: { select: { name: true } },
+        quizzes: {
+          include: {
+            attempts: { where: { isCompleted: true }, select: { score: true, submittedAt: true } },
+          },
+        },
+        exams: {
+          include: {
+            submissions: { where: { isGraded: true }, select: { score: true, totalMarks: true, submittedAt: true } },
+          },
+        },
+        assignments: {
+          include: {
+            submissions: { where: { isGraded: true }, select: { score: true, totalMarks: true, submittedAt: true } },
+          },
+        },
+      },
+    });
+
+    // Build per-course stats
+    const courseStats = courses.map(c => {
+      const quizScores = c.quizzes.flatMap(q => q.attempts.map(a => a.score ?? 0));
+      const examScores = c.exams.flatMap(e => e.submissions.map(s => s.totalMarks ? (s.score! / s.totalMarks) * 100 : (s.score ?? 0)));
+      const assignScores = c.assignments.flatMap(a => a.submissions.map(s => s.totalMarks ? (s.score! / s.totalMarks) * 100 : (s.score ?? 0)));
+      const allScores = [...quizScores, ...examScores, ...assignScores];
+      const avg = allScores.length ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
+      return {
+        id: c.id, code: c.code, title: c.title,
+        department: c.department?.name ?? null,
+        quizCount: c.quizzes.length,
+        examCount: c.exams.length,
+        assignmentCount: c.assignments.length,
+        quizSubmissions: quizScores.length,
+        examSubmissions: examScores.length,
+        assignmentSubmissions: assignScores.length,
+        quizAvg: quizScores.length ? quizScores.reduce((a, b) => a + b, 0) / quizScores.length : null,
+        examAvg: examScores.length ? examScores.reduce((a, b) => a + b, 0) / examScores.length : null,
+        assignmentAvg: assignScores.length ? assignScores.reduce((a, b) => a + b, 0) / assignScores.length : null,
+        overallAvg: avg,
+        totalSubmissions: allScores.length,
+      };
+    });
+
+    // Global score distribution (all graded items) in 10-point buckets
+    const allGradedScores = courseStats.flatMap(c => {
+      const all: number[] = [];
+      const course = courses.find(x => x.id === c.id)!;
+      course.quizzes.forEach(q => q.attempts.forEach(a => all.push(a.score ?? 0)));
+      course.exams.forEach(e => e.submissions.forEach(s => all.push(s.totalMarks ? (s.score! / s.totalMarks) * 100 : (s.score ?? 0))));
+      course.assignments.forEach(a => a.submissions.forEach(s => all.push(s.totalMarks ? (s.score! / s.totalMarks) * 100 : (s.score ?? 0))));
+      return all;
+    });
+
+    const distribution: Record<string, number> = { "0–49": 0, "50–59": 0, "60–69": 0, "70–79": 0, "80–89": 0, "90–100": 0 };
+    allGradedScores.forEach(s => {
+      if (s < 50) distribution["0–49"]++;
+      else if (s < 60) distribution["50–59"]++;
+      else if (s < 70) distribution["60–69"]++;
+      else if (s < 80) distribution["70–79"]++;
+      else if (s < 90) distribution["80–89"]++;
+      else distribution["90–100"]++;
+    });
+
+    const overallAvg = allGradedScores.length ? allGradedScores.reduce((a, b) => a + b, 0) / allGradedScores.length : null;
+    const passCount = allGradedScores.filter(s => s >= 50).length;
+
+    return res.json({
+      overview: {
+        totalCourses: courses.length,
+        totalSubmissions: allGradedScores.length,
+        overallAvg,
+        passRate: allGradedScores.length ? (passCount / allGradedScores.length) * 100 : null,
+      },
+      distribution,
+      courses: courseStats,
+    });
+  } catch (err) {
+    console.error("Analytics error:", err);
+    return res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
+// -------------------------------------------------------------
+// IN-APP NOTIFICATIONS API
+// -------------------------------------------------------------
+app.get("/api/notifications", authenticateToken, async (req: any, res) => {
+  const { role, id } = req.user;
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  try {
+    const notifications: Array<{ id: string; type: string; title: string; body: string; time: string; icon: string }> = [];
+
+    if (role === "student") {
+      // Recently graded exam submissions
+      const gradedExams = await prisma.examSubmission.findMany({
+        where: { studentId: id, isGraded: true, submittedAt: { gte: sevenDaysAgo } },
+        include: { exam: { select: { title: true, course: { select: { code: true } } } } },
+        orderBy: { submittedAt: "desc" }, take: 5,
+      });
+      gradedExams.forEach(s => {
+        const pct = s.totalMarks ? ((s.score ?? 0) / s.totalMarks * 100) : (s.score ?? 0);
+        notifications.push({ id: `ge_${s.id}`, type: "grade", icon: "exam",
+          title: `Exam graded: ${s.exam.title}`,
+          body: `${s.exam.course.code} · Score: ${pct.toFixed(1)}%`,
+          time: s.submittedAt.toISOString() });
+      });
+
+      // Recently graded assignment submissions
+      const gradedAssignments = await prisma.assignmentSubmission.findMany({
+        where: { studentId: id, isGraded: true, submittedAt: { gte: sevenDaysAgo } },
+        include: { assignment: { select: { title: true, course: { select: { code: true } } } } },
+        orderBy: { submittedAt: "desc" }, take: 5,
+      });
+      gradedAssignments.forEach(s => {
+        const pct = s.totalMarks ? ((s.score ?? 0) / s.totalMarks * 100) : (s.score ?? 0);
+        notifications.push({ id: `ga_${s.id}`, type: "grade", icon: "assignment",
+          title: `Assignment graded: ${s.assignment.title}`,
+          body: `${s.assignment.course.code} · Score: ${pct.toFixed(1)}%`,
+          time: s.submittedAt.toISOString() });
+      });
+
+      // New quizzes, exams, assignments posted recently
+      const [newQuizzes, newExams, newAssignments] = await Promise.all([
+        prisma.quiz.findMany({
+          where: { availableFrom: { gte: sevenDaysAgo } },
+          include: { course: { select: { code: true, title: true } } },
+          orderBy: { availableFrom: "desc" }, take: 3,
+        }),
+        prisma.exam.findMany({
+          where: { isOpen: true, createdAt: { gte: sevenDaysAgo } },
+          include: { course: { select: { code: true } } },
+          orderBy: { createdAt: "desc" }, take: 3,
+        }),
+        prisma.assignment.findMany({
+          where: { isOpen: true, createdAt: { gte: sevenDaysAgo } },
+          include: { course: { select: { code: true } } },
+          orderBy: { createdAt: "desc" }, take: 3,
+        }),
+      ]);
+      newQuizzes.forEach(q => notifications.push({ id: `nq_${q.id}`, type: "new", icon: "quiz",
+        title: `New quiz: ${q.title}`, body: `${q.course.code} · ${q.course.title}`,
+        time: (q.availableFrom ?? new Date()).toISOString() }));
+      newExams.forEach(e => notifications.push({ id: `ne_${e.id}`, type: "new", icon: "exam",
+        title: `New exam available: ${e.title}`, body: e.course.code,
+        time: e.createdAt.toISOString() }));
+      newAssignments.forEach(a => notifications.push({ id: `na_${a.id}`, type: "new", icon: "assignment",
+        title: `New assignment: ${a.title}`, body: a.course.code,
+        time: a.createdAt.toISOString() }));
+
+    } else if (role === "lecturer") {
+      // Recent exam submissions to their courses
+      const recentExamSubs = await prisma.examSubmission.findMany({
+        where: { exam: { course: { lecturerId: id } }, submittedAt: { gte: oneDayAgo } },
+        include: { student: { select: { fullName: true } }, exam: { select: { title: true, course: { select: { code: true } } } } },
+        orderBy: { submittedAt: "desc" }, take: 8,
+      });
+      recentExamSubs.forEach(s => notifications.push({ id: `les_${s.id}`, type: "submission", icon: "exam",
+        title: `${s.student.fullName} submitted an exam`,
+        body: `${s.exam.course.code} · ${s.exam.title}`,
+        time: s.submittedAt.toISOString() }));
+
+      // Recent assignment submissions
+      const recentAssignSubs = await prisma.assignmentSubmission.findMany({
+        where: { assignment: { course: { lecturerId: id } }, submittedAt: { gte: oneDayAgo } },
+        include: { student: { select: { fullName: true } }, assignment: { select: { title: true, course: { select: { code: true } } } } },
+        orderBy: { submittedAt: "desc" }, take: 8,
+      });
+      recentAssignSubs.forEach(s => notifications.push({ id: `las_${s.id}`, type: "submission", icon: "assignment",
+        title: `${s.student.fullName} submitted an assignment`,
+        body: `${s.assignment.course.code} · ${s.assignment.title}`,
+        time: s.submittedAt.toISOString() }));
+
+      // Completed grading jobs
+      const gradedToday = await prisma.examSubmission.count({
+        where: { exam: { course: { lecturerId: id } }, isGraded: true, submittedAt: { gte: oneDayAgo } },
+      });
+      if (gradedToday > 0) {
+        notifications.push({ id: "grading_done", type: "grade", icon: "grade",
+          title: `${gradedToday} submission${gradedToday > 1 ? "s" : ""} graded today`,
+          body: "AI grading complete — check gradebook",
+          time: new Date().toISOString() });
+      }
+    }
+
+    // Sort by time descending
+    notifications.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    return res.json(notifications.slice(0, 20));
+  } catch (err) {
+    console.error("Notifications error:", err);
+    return res.status(500).json({ error: "Failed to fetch notifications" });
+  }
+});
+
+// -------------------------------------------------------------
 // SERVER AND VITE DEV SETUP
 // -------------------------------------------------------------
 async function startServer() {

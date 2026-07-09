@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown } from "lucide-react";
+import NotificationBell from "./NotificationBell";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import MarkdownView from "./MarkdownView";
 import UserAvatar from "./UserAvatar";
@@ -97,6 +98,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [isSubmittingAssignment, setIsSubmittingAssignment] = useState(false);
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [assignmentSubmissionHistory, setAssignmentSubmissionHistory] = useState<any[]>([]);
+  const [gradeFilter, setGradeFilter] = useState<"all" | "quiz" | "exam" | "assignment">("all");
+  const [expandedGradeId, setExpandedGradeId] = useState<string | null>(null);
 
   const fetchAllLiveSessions = async () => {
     try {
@@ -1221,7 +1224,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             { id: "quizzes",        icon: Award,         label: "Quizzes",      live: false },
             { id: "exams",          icon: Upload,        label: "Exams",        live: false },
             { id: "assignments",    icon: Pencil,        label: "Assignments",  live: false },
-            { id: "history",        icon: ClipboardList, label: "My Results",   live: false },
+            { id: "history",        icon: ClipboardList, label: "My Grades",   live: false },
             { id: "live-classroom", icon: Radio,         label: "Live Class",   live: true  },
           ].map((item) => {
             const isActive = activeTab === (item.id as typeof activeTab);
@@ -1415,7 +1418,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 { id: "quizzes",        icon: Award,         label: "Quizzes"     },
                 { id: "exams",          icon: Upload,        label: "Exams"       },
                 { id: "assignments",    icon: Pencil,        label: "Assignments" },
-                { id: "history",        icon: ClipboardList, label: "My Results"  },
+                { id: "history",        icon: ClipboardList, label: "My Grades"  },
                 { id: "live-classroom", icon: Radio,         label: "Live Class"  },
               ].map((item) => {
                 const isActive = activeTab === (item.id as typeof activeTab);
@@ -1522,7 +1525,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               : activeTab === "quizzes" ? "Academic Quizzes"
               : activeTab === "exams" ? "Written Examinations"
               : activeTab === "assignments" ? "Assignments"
-              : activeTab === "history" ? "My Results"
+              : activeTab === "history" ? "My Grades"
               : "Virtual Classroom"}
           </h1>
           <div className="flex items-center gap-1">
@@ -1531,13 +1534,15 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 {selectedCourse.code}
               </span>
             )}
-            {/* Push notification bell */}
+            {/* Push notification subscription (hidden once granted) */}
             {!pushGranted && "Notification" in window && Notification.permission !== "granted" && (
-              <button onClick={subscribeToPush} title="Enable notifications"
+              <button onClick={subscribeToPush} title="Enable push notifications"
                 className="flex items-center justify-center w-9 h-9 rounded-[10px] text-[#6e6e73] dark:text-white/50 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition">
                 <Bell className="h-4 w-4" strokeWidth={1.6} />
               </button>
             )}
+            {/* In-app notification bell */}
+            <NotificationBell token={token} />
             {/* Mobile-only: theme + logout */}
             <button
               onClick={onToggleTheme}
@@ -2413,170 +2418,225 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             </div>
           )}
 
-          {/* ── HISTORY TAB ── */}
-          {activeTab === "history" && (
-            <div className="space-y-5">
-              {/* Quiz Attempts */}
-              <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
-                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center gap-3">
-                  <Award className="h-4 w-4 text-emerald-500 flex-shrink-0" strokeWidth={1.8} />
-                  <div>
-                    <h2 className="apple-title">Quiz Attempts</h2>
-                    <p className="apple-subtitle">All completed quiz sessions and your scores.</p>
-                  </div>
-                </div>
-                <div className="p-5">
-                  {attemptsList.filter(a => a.isCompleted).length === 0 ? (
-                    <div className="apple-empty-state">
-                      <div className="apple-empty-state__icon"><Award className="h-6 w-6 text-[#8e8e93] dark:text-white/30" /></div>
-                      <p className="apple-empty-state__title">No completed quizzes yet</p>
-                      <p className="apple-empty-state__body">Once you complete a quiz, your score and date will appear here.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {attemptsList.filter(a => a.isCompleted).map((attempt) => (
-                        <div key={attempt.id} className="flex items-center justify-between p-4 border border-black/[0.07] dark:border-white/[0.07] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{attempt.quiz?.title || "Quiz"}</p>
-                            <div className="flex items-center gap-3 text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40 mt-0.5 flex-wrap">
-                              {attempt.quiz?.course?.code && (
-                                <span className="font-bold uppercase text-emerald-600 dark:text-emerald-400">{attempt.quiz.course.code}</span>
-                              )}
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—"}
-                              </span>
-                            </div>
-                          </div>
-                          <span className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border ${
-                            (attempt.score ?? 0) >= 50
-                              ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
-                              : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30"
-                          }`}>
-                            {attempt.score?.toFixed(1) ?? "0.0"}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
+          {/* ── GRADES TAB ── */}
+          {activeTab === "history" && (() => {
+            // Build unified grade rows
+            const gradeLetter = (pct: number) => {
+              if (pct >= 70) return { letter: "A", cls: "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40" };
+              if (pct >= 60) return { letter: "B", cls: "text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/40" };
+              if (pct >= 50) return { letter: "C", cls: "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/40" };
+              if (pct >= 40) return { letter: "D", cls: "text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/40" };
+              return { letter: "F", cls: "text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/40" };
+            };
 
-              {/* Exam Submissions */}
-              <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0.06 }}>
-                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center gap-3">
-                  <FileText className="h-4 w-4 text-emerald-500 flex-shrink-0" strokeWidth={1.8} />
-                  <div>
-                    <h2 className="apple-title">Written Exams</h2>
-                    <p className="apple-subtitle">Your submitted exam papers and AI-generated grades.</p>
-                  </div>
-                </div>
-                <div className="p-5">
-                  {examSubmissions.length === 0 ? (
-                    <div className="apple-empty-state">
-                      <div className="apple-empty-state__icon"><Upload className="h-6 w-6 text-[#8e8e93] dark:text-white/30" /></div>
-                      <p className="apple-empty-state__title">No exam submissions yet</p>
-                      <p className="apple-empty-state__body">Your written exam submissions and AI grades will appear here.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {examSubmissions.map((sub) => (
-                        <div key={sub.id} className="flex items-center justify-between p-4 border border-black/[0.07] dark:border-white/[0.07] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{sub.exam?.title || "Exam"}</p>
-                            <div className="flex items-center gap-3 text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40 mt-0.5 flex-wrap">
-                              {sub.exam?.course?.code && (
-                                <span className="font-bold uppercase text-emerald-600 dark:text-emerald-400">{sub.exam.course.code}</span>
-                              )}
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {new Date(sub.submittedAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
-                              </span>
-                            </div>
-                            {sub.isGraded && sub.feedback && (
-                              <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-1 line-clamp-1 italic">{sub.feedback}</p>
-                            )}
-                          </div>
-                          {sub.isGraded ? (() => {
-                            const pct = sub.totalMarks ? (sub.score / sub.totalMarks) * 100 : (sub.score ?? 0);
-                            const pass = pct >= 50;
-                            return (
-                              <span className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border ${
-                                pass
-                                  ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
-                                  : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30"
-                              }`}>
-                                {sub.totalMarks ? `${sub.score?.toFixed(1)} / ${sub.totalMarks}` : `${sub.score?.toFixed(1) ?? "0.0"}%`}
-                              </span>
-                            );
-                          })() : (
-                            <span className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/30 flex items-center gap-1.5">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Pending
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
+            const allRows: Array<{
+              id: string; type: "quiz" | "exam" | "assignment"; title: string; courseCode: string;
+              date: string; pct: number | null; scoreLabel: string; isGraded: boolean; feedback?: string;
+            }> = [
+              ...attemptsList.filter(a => a.isCompleted).map(a => ({
+                id: `q_${a.id}`, type: "quiz" as const,
+                title: a.quiz?.title || "Quiz",
+                courseCode: a.quiz?.course?.code || "",
+                date: a.submittedAt ? new Date(a.submittedAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—",
+                pct: a.score ?? 0,
+                scoreLabel: `${(a.score ?? 0).toFixed(1)}%`,
+                isGraded: true,
+              })),
+              ...examSubmissions.map(s => {
+                const pct = s.totalMarks ? (s.score / s.totalMarks) * 100 : (s.score ?? 0);
+                return {
+                  id: `e_${s.id}`, type: "exam" as const,
+                  title: s.exam?.title || "Exam",
+                  courseCode: s.exam?.course?.code || "",
+                  date: new Date(s.submittedAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }),
+                  pct: s.isGraded ? pct : null,
+                  scoreLabel: s.isGraded ? (s.totalMarks ? `${s.score?.toFixed(1)} / ${s.totalMarks}` : `${pct.toFixed(1)}%`) : "Pending",
+                  isGraded: s.isGraded,
+                  feedback: s.feedback,
+                };
+              }),
+              ...assignmentSubmissionHistory.map(s => {
+                const pct = s.totalMarks ? (s.score / s.totalMarks) * 100 : (s.score ?? 0);
+                return {
+                  id: `a_${s.id}`, type: "assignment" as const,
+                  title: s.assignment?.title || "Assignment",
+                  courseCode: s.assignment?.course?.code || "",
+                  date: new Date(s.submittedAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }),
+                  pct: s.isGraded ? pct : null,
+                  scoreLabel: s.isGraded ? (s.totalMarks ? `${s.score?.toFixed(1)} / ${s.totalMarks}` : `${pct.toFixed(1)}%`) : "Pending",
+                  isGraded: s.isGraded,
+                  feedback: s.feedback,
+                };
+              }),
+            ];
 
-              {/* Assignment Submissions in history */}
-              {assignmentSubmissionHistory.length > 0 && (
-                <motion.div className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0.12 }}>
-                  <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center gap-3">
-                    <Pencil className="h-4 w-4 text-emerald-500 flex-shrink-0" strokeWidth={1.8} />
+            const graded = allRows.filter(r => r.isGraded && r.pct !== null);
+            const avgPct = graded.length ? graded.reduce((s, r) => s + r.pct!, 0) / graded.length : null;
+            const passCount = graded.filter(r => r.pct! >= 50).length;
+            const overallLetter = avgPct !== null ? gradeLetter(avgPct) : null;
+
+            const filtered = gradeFilter === "all" ? allRows : allRows.filter(r => r.type === gradeFilter);
+
+            const typeStyle = (t: string) =>
+              t === "quiz" ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+              : t === "exam" ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+              : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400";
+
+            return (
+              <motion.div className="space-y-4" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
+
+                {/* Stats header */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: "Overall Average", value: avgPct !== null ? `${avgPct.toFixed(1)}%` : "—", sub: overallLetter ? `Grade ${overallLetter.letter}` : "No grades yet", accent: "emerald" },
+                    { label: "Total Assessments", value: String(allRows.length), sub: `${graded.length} graded`, accent: "blue" },
+                    { label: "Passed", value: String(passCount), sub: graded.length ? `${((passCount / graded.length) * 100).toFixed(0)}% pass rate` : "—", accent: "green" },
+                    { label: "Pending", value: String(allRows.filter(r => !r.isGraded).length), sub: "awaiting grade", accent: "amber" },
+                  ].map(s => (
+                    <div key={s.label} className="apple-card px-4 py-4">
+                      <p className="text-[10px] font-bold text-[#6e6e73] dark:text-white/35 uppercase tracking-widest mb-1">{s.label}</p>
+                      <p className="text-[22px] font-bold text-[#1d1d1f] dark:text-white/90 leading-none tracking-tight">{s.value}</p>
+                      <p className="text-[11px] text-[#8e8e93] dark:text-white/30 mt-1">{s.sub}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Grade letter banner (shown when graded) */}
+                {overallLetter && avgPct !== null && (
+                  <div className={`rounded-[14px] border px-5 py-4 flex items-center gap-4 ${overallLetter.cls}`}>
+                    <span className="text-[40px] font-black leading-none">{overallLetter.letter}</span>
                     <div>
-                      <h2 className="apple-title">Assignments</h2>
-                      <p className="apple-subtitle">Your submitted assignments and grades.</p>
+                      <p className="text-[14px] font-bold leading-tight">Your current academic standing</p>
+                      <p className="text-[12px] opacity-75 mt-0.5">Based on {graded.length} graded assessment{graded.length !== 1 ? "s" : ""} · Overall {avgPct.toFixed(1)}%</p>
+                    </div>
+                    <div className="ml-auto hidden sm:block">
+                      <div className="w-28 h-2 rounded-full bg-current/20 overflow-hidden">
+                        <div className="h-full rounded-full bg-current transition-all" style={{ width: `${Math.min(avgPct, 100)}%` }} />
+                      </div>
                     </div>
                   </div>
-                  <div className="p-5">
-                    <div className="space-y-2">
-                      {assignmentSubmissionHistory.map((sub) => (
-                        <div key={sub.id} className="flex items-center justify-between p-4 border border-black/[0.07] dark:border-white/[0.07] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{sub.assignment?.title || "Assignment"}</p>
-                            <div className="flex items-center gap-3 text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40 mt-0.5 flex-wrap">
-                              {sub.assignment?.course?.code && (
-                                <span className="font-bold uppercase text-emerald-600 dark:text-emerald-400">{sub.assignment.course.code}</span>
+                )}
+
+                {/* Filter pills + list */}
+                <div className="apple-card overflow-hidden">
+                  <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center gap-2 flex-wrap">
+                    <h2 className="apple-title flex-1">All Grades</h2>
+                    {(["all", "quiz", "exam", "assignment"] as const).map(f => (
+                      <button key={f} onClick={() => setGradeFilter(f)}
+                        className={`px-3 py-1 rounded-full text-[11px] font-semibold transition border ${
+                          gradeFilter === f
+                            ? "bg-[#1d1d1f] dark:bg-white text-white dark:text-[#1d1d1f] border-transparent"
+                            : "text-[#6e6e73] dark:text-white/40 border-black/[0.08] dark:border-white/[0.08] hover:border-black/20 dark:hover:border-white/20"
+                        }`}>
+                        {f === "all" ? "All" : f === "quiz" ? "Quizzes" : f === "exam" ? "Exams" : "Assignments"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {filtered.length === 0 ? (
+                    <div className="apple-empty-state">
+                      <div className="apple-empty-state__icon"><ClipboardList className="h-6 w-6 text-[#8e8e93] dark:text-white/30" /></div>
+                      <p className="apple-empty-state__title">No grades here yet</p>
+                      <p className="apple-empty-state__body">Complete assessments to see your grades and AI feedback.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
+                      {filtered.map(row => {
+                        const gl = row.pct !== null ? gradeLetter(row.pct) : null;
+                        const isExpanded = expandedGradeId === row.id;
+                        return (
+                          <div key={row.id}>
+                            <button
+                              onClick={() => setExpandedGradeId(isExpanded ? null : row.id)}
+                              className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition text-left"
+                            >
+                              {/* Type icon */}
+                              <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${typeStyle(row.type)}`}>
+                                {row.type === "quiz" ? <Award className="h-3.5 w-3.5" strokeWidth={1.8} />
+                                  : row.type === "exam" ? <FileText className="h-3.5 w-3.5" strokeWidth={1.8} />
+                                  : <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} />}
+                              </span>
+
+                              {/* Title + meta */}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate leading-tight">{row.title}</p>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                  {row.courseCode && (
+                                    <span className="text-[10px] font-bold font-mono text-emerald-600 dark:text-emerald-400 uppercase">{row.courseCode}</span>
+                                  )}
+                                  <span className={`text-[9.5px] font-bold uppercase px-1.5 py-0.5 rounded-[5px] ${typeStyle(row.type)}`}>
+                                    {row.type}
+                                  </span>
+                                  <span className="text-[10.5px] text-[#8e8e93] dark:text-white/30">{row.date}</span>
+                                </div>
+                              </div>
+
+                              {/* Score + grade letter */}
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {row.isGraded && gl ? (
+                                  <>
+                                    <span className="text-[11.5px] font-mono font-bold text-[#6e6e73] dark:text-white/50">{row.scoreLabel}</span>
+                                    <span className={`w-8 h-8 rounded-full border-[2px] flex items-center justify-center text-[13px] font-black ${gl.cls}`}>
+                                      {gl.letter}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/30">
+                                    <Loader2 className="h-3 w-3 animate-spin" /> Pending
+                                  </span>
+                                )}
+                                <ChevronDown className={`h-3.5 w-3.5 text-[#8e8e93] dark:text-white/30 transition-transform ${isExpanded ? "rotate-180" : ""}`} strokeWidth={2} />
+                              </div>
+                            </button>
+
+                            {/* Expanded feedback */}
+                            <AnimatePresence>
+                              {isExpanded && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.22, ease: "easeInOut" }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="px-5 pb-4 pt-1 ml-10">
+                                    {/* Progress bar */}
+                                    {row.pct !== null && (
+                                      <div className="mb-3">
+                                        <div className="flex justify-between text-[10.5px] text-[#8e8e93] dark:text-white/35 mb-1">
+                                          <span>Score</span><span>{row.pct.toFixed(1)}%</span>
+                                        </div>
+                                        <div className="h-2 rounded-full bg-black/[0.06] dark:bg-white/[0.07] overflow-hidden">
+                                          <div
+                                            className={`h-full rounded-full transition-all ${row.pct >= 70 ? "bg-emerald-500" : row.pct >= 50 ? "bg-amber-500" : "bg-red-500"}`}
+                                            style={{ width: `${Math.min(row.pct, 100)}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                    {row.feedback ? (
+                                      <div className="rounded-[10px] bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] p-3">
+                                        <p className="text-[10px] font-bold text-[#6e6e73] dark:text-white/35 uppercase tracking-widest mb-1.5">AI Feedback</p>
+                                        <p className="text-[12.5px] text-[#3a3a3c] dark:text-white/70 leading-relaxed">{row.feedback}</p>
+                                      </div>
+                                    ) : (
+                                      <p className="text-[12px] text-[#8e8e93] dark:text-white/30 italic">
+                                        {row.isGraded ? "No written feedback for this submission." : "Grade pending — check back after your lecturer runs AI grading."}
+                                      </p>
+                                    )}
+                                  </div>
+                                </motion.div>
                               )}
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {new Date(sub.submittedAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
-                              </span>
-                            </div>
-                            {sub.isGraded && sub.feedback && (
-                              <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-1 line-clamp-1 italic">{sub.feedback}</p>
-                            )}
+                            </AnimatePresence>
                           </div>
-                          {sub.isGraded ? (() => {
-                            const pct = sub.totalMarks ? (sub.score / sub.totalMarks) * 100 : (sub.score ?? 0);
-                            const pass = pct >= 50;
-                            return (
-                              <span className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border ${
-                                pass
-                                  ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
-                                  : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30"
-                              }`}>
-                                {sub.totalMarks ? `${sub.score?.toFixed(1)} / ${sub.totalMarks}` : `${sub.score?.toFixed(1) ?? "0.0"}%`}
-                              </span>
-                            );
-                          })() : (
-                            <span className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/30 flex items-center gap-1.5">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Pending
-                            </span>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-          )}
+                  )}
+                </div>
+              </motion.div>
+            );
+          })()}
 
           </div>{/* /max-w-5xl */}
         </main>

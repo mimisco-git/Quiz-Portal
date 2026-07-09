@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
+import NotificationBell from "./NotificationBell";
 import AvatarModal from "./AvatarModal";
 import { motion, AnimatePresence } from "motion/react";
 import SlideView from "./SlideView";
@@ -19,7 +20,7 @@ interface LecturerDashboardProps {
 }
 
 export default function LecturerDashboard({ token, user, theme, onToggleTheme, onLogout }: LecturerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture" | "exams" | "assignments" | "announcements">("gradebook");
+  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture" | "exams" | "assignments" | "announcements" | "analytics">("gradebook");
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [attempts, setAttempts] = useState<StudentAttempt[]>([]);
@@ -33,6 +34,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   const [lecturerDepts, setLecturerDepts] = useState<string[]>([]);
   const [mobileLecturerOpen, setMobileLecturerOpen] = useState(false);
+  const [lecturerAnalytics, setLecturerAnalytics] = useState<any | null>(null);
+  const [lecturerAnalyticsLoading, setLecturerAnalyticsLoading] = useState(false);
 
   const [courseCode, setCourseCode] = useState("");
   const [courseTitle, setCourseTitle] = useState("");
@@ -207,6 +210,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     if (activeTab === "exams") fetchExams();
     if (activeTab === "assignments") fetchAssignments();
     if (activeTab === "announcements") fetchAnnouncements();
+    if (activeTab === "analytics" && !lecturerAnalytics) {
+      setLecturerAnalyticsLoading(true);
+      fetch("/api/lecturer/analytics", { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setLecturerAnalytics(d); })
+        .catch(() => {})
+        .finally(() => setLecturerAnalyticsLoading(false));
+    }
   }, [activeTab]);
 
   // Jitsi IFrame API — init when session starts, destroy when it ends
@@ -1315,6 +1326,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     courses: "Course Registry",
     announcements: "Announcements",
     departments: "Departments",
+    analytics: "Analytics",
   };
 
   // Badge showing which dept/year students will receive a piece of content
@@ -1395,6 +1407,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         {/* Nav (scrollable) */}
         <nav className="flex-1 px-2 space-y-0.5 overflow-y-auto min-h-0 pb-2">
           {navBtn("gradebook",    "Gradebook",      <ClipboardList className="h-4 w-4" strokeWidth={1.6} />)}
+          {navBtn("analytics",    "Analytics",      <TrendingUp className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("live-lecture", "Live Lecture",   <Radio className={`h-4 w-4 ${broadcastingSession ? "text-red-500 animate-pulse" : ""}`} strokeWidth={1.6} />, true)}
           {navBtn("notes",        "Publish Notes",  <PlusCircle className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("quizzes",      "Deploy Quiz",    <Award className="h-4 w-4" strokeWidth={1.6} />)}
@@ -1481,6 +1494,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                 Live
               </span>
             )}
+            {/* Notification bell — always visible */}
+            <NotificationBell token={token} />
             {/* Mobile-only: avatar + theme + logout */}
             <button
               onClick={() => setIsAvatarModalOpen(true)}
@@ -2453,6 +2468,200 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
             </div>
           )}
 
+          {/* ── ANALYTICS TAB ── */}
+          {activeTab === "analytics" && (
+            <motion.div className="space-y-5" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
+              {lecturerAnalyticsLoading ? (
+                <div className="apple-card p-10 flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+                </div>
+              ) : !lecturerAnalytics ? (
+                <div className="apple-card">
+                  <div className="apple-empty-state">
+                    <div className="apple-empty-state__icon"><TrendingUp className="h-6 w-6 text-[#8e8e93] dark:text-white/30" /></div>
+                    <p className="apple-empty-state__title">No data yet</p>
+                    <p className="apple-empty-state__body">Analytics appear once students start submitting assessments.</p>
+                  </div>
+                </div>
+              ) : (() => {
+                const { overview, distribution, courses: courseStats } = lecturerAnalytics as {
+                  overview: { totalCourses: number; totalSubmissions: number; overallAvg: number | null; passRate: number | null };
+                  distribution: Record<string, number>;
+                  courses: Array<{
+                    id: string; code: string; title: string; department: string | null;
+                    quizCount: number; examCount: number; assignmentCount: number;
+                    quizSubmissions: number; examSubmissions: number; assignmentSubmissions: number;
+                    quizAvg: number | null; examAvg: number | null; assignmentAvg: number | null;
+                    overallAvg: number | null; totalSubmissions: number;
+                  }>;
+                };
+                const maxDist = Math.max(...Object.values(distribution), 1);
+                const distBuckets = Object.entries(distribution);
+                const gradeLetter = (pct: number) =>
+                  pct >= 70 ? "A" : pct >= 60 ? "B" : pct >= 50 ? "C" : pct >= 40 ? "D" : "F";
+                const gradeColor = (pct: number) =>
+                  pct >= 70 ? "bg-emerald-500" : pct >= 60 ? "bg-blue-500" : pct >= 50 ? "bg-amber-500" : pct >= 40 ? "bg-orange-500" : "bg-red-500";
+
+                return (
+                  <>
+                    {/* Overview stats */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[
+                        { label: "Courses", value: String(overview.totalCourses), sub: "registered", accent: "blue" },
+                        { label: "Total Submissions", value: String(overview.totalSubmissions), sub: "graded", accent: "emerald" },
+                        { label: "Class Average", value: overview.overallAvg != null ? `${overview.overallAvg.toFixed(1)}%` : "—", sub: overview.overallAvg != null ? `Grade ${gradeLetter(overview.overallAvg)}` : "no data", accent: "purple" },
+                        { label: "Pass Rate", value: overview.passRate != null ? `${overview.passRate.toFixed(0)}%` : "—", sub: "≥50% threshold", accent: "green" },
+                      ].map(s => (
+                        <div key={s.label} className="apple-card px-4 py-4">
+                          <p className="text-[10px] font-bold text-[#6e6e73] dark:text-white/35 uppercase tracking-widest mb-1">{s.label}</p>
+                          <p className="text-[24px] font-bold text-[#1d1d1f] dark:text-white/90 leading-none tracking-tight">{s.value}</p>
+                          <p className="text-[11px] text-[#8e8e93] dark:text-white/30 mt-1">{s.sub}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                      {/* Score Distribution */}
+                      <div className="apple-card">
+                        <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+                          <h3 className="apple-title">Score Distribution</h3>
+                          <p className="apple-subtitle">How student scores spread across all assessments</p>
+                        </div>
+                        <div className="p-5">
+                          {overview.totalSubmissions === 0 ? (
+                            <p className="text-[12px] text-[#8e8e93] dark:text-white/35 text-center py-6">No graded submissions yet</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {distBuckets.map(([bucket, count]) => {
+                                const pct = (count / maxDist) * 100;
+                                const midPct = bucket === "0–49" ? 25 : bucket === "50–59" ? 55 : bucket === "60–69" ? 65 : bucket === "70–79" ? 75 : bucket === "80–89" ? 85 : 95;
+                                return (
+                                  <div key={bucket} className="flex items-center gap-3">
+                                    <span className="text-[11px] font-mono font-bold text-[#6e6e73] dark:text-white/40 w-14 text-right flex-shrink-0">{bucket}</span>
+                                    <div className="flex-1 h-6 rounded-[6px] bg-black/[0.04] dark:bg-white/[0.05] overflow-hidden relative">
+                                      <div
+                                        className={`h-full rounded-[6px] transition-all duration-500 ${gradeColor(midPct)}`}
+                                        style={{ width: `${pct}%`, opacity: 0.85 }}
+                                      />
+                                    </div>
+                                    <span className="text-[11px] font-bold text-[#3a3a3c] dark:text-white/65 w-8 text-right flex-shrink-0">{count}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Per-course averages */}
+                      <div className="apple-card">
+                        <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+                          <h3 className="apple-title">Course Performance</h3>
+                          <p className="apple-subtitle">Average scores across all assessments per course</p>
+                        </div>
+                        <div className="p-5">
+                          {courseStats.length === 0 ? (
+                            <p className="text-[12px] text-[#8e8e93] dark:text-white/35 text-center py-6">No courses yet</p>
+                          ) : (
+                            <div className="space-y-4">
+                              {courseStats.map(c => (
+                                <div key={c.id}>
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <div className="min-w-0">
+                                      <span className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase">{c.code}</span>
+                                      <span className="text-[11px] text-[#6e6e73] dark:text-white/40 ml-2 truncate">{c.title}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                                      {c.overallAvg != null ? (
+                                        <>
+                                          <span className="text-[11.5px] font-mono font-bold text-[#3a3a3c] dark:text-white/70">{c.overallAvg.toFixed(1)}%</span>
+                                          <span className={`text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border ${
+                                            c.overallAvg >= 70 ? "border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400"
+                                            : c.overallAvg >= 50 ? "border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400"
+                                            : "border-red-300 dark:border-red-700 text-red-700 dark:text-red-400"
+                                          }`}>{gradeLetter(c.overallAvg)}</span>
+                                        </>
+                                      ) : <span className="text-[11px] text-[#8e8e93] dark:text-white/30">—</span>}
+                                    </div>
+                                  </div>
+                                  {c.overallAvg != null && (
+                                    <div className="h-1.5 rounded-full bg-black/[0.05] dark:bg-white/[0.06] overflow-hidden">
+                                      <div className={`h-full rounded-full transition-all duration-700 ${gradeColor(c.overallAvg)}`}
+                                        style={{ width: `${Math.min(c.overallAvg, 100)}%` }} />
+                                    </div>
+                                  )}
+                                  <div className="flex gap-3 mt-1.5 text-[10px] text-[#8e8e93] dark:text-white/30">
+                                    <span>{c.quizSubmissions} quiz sub.</span>
+                                    <span>{c.examSubmissions} exam sub.</span>
+                                    <span>{c.assignmentSubmissions} assign. sub.</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Per-type breakdown table */}
+                    <div className="apple-card overflow-hidden">
+                      <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+                        <h3 className="apple-title">Assessment Breakdown</h3>
+                        <p className="apple-subtitle">Average score and submission count per course, by assessment type</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[12px]">
+                          <thead>
+                            <tr className="border-b border-black/[0.05] dark:border-white/[0.05]">
+                              {["Course", "Quizzes", "Exams", "Assignments", "Overall"].map(h => (
+                                <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-[#6e6e73] dark:text-white/35 uppercase tracking-widest">{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-black/[0.03] dark:divide-white/[0.03]">
+                            {courseStats.map(c => (
+                              <tr key={c.id} className="hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition">
+                                <td className="px-4 py-3">
+                                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-[11px] uppercase">{c.code}</span>
+                                  <span className="block text-[11px] text-[#6e6e73] dark:text-white/40 truncate max-w-[120px]">{c.title}</span>
+                                </td>
+                                {[
+                                  { avg: c.quizAvg, count: c.quizSubmissions, n: c.quizCount },
+                                  { avg: c.examAvg, count: c.examSubmissions, n: c.examCount },
+                                  { avg: c.assignmentAvg, count: c.assignmentSubmissions, n: c.assignmentCount },
+                                ].map((col, i) => (
+                                  <td key={i} className="px-4 py-3">
+                                    {col.n === 0 ? (
+                                      <span className="text-[#c7c7cc] dark:text-white/20">—</span>
+                                    ) : (
+                                      <>
+                                        <span className={`font-bold ${col.avg != null && col.avg >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                                          {col.avg != null ? `${col.avg.toFixed(1)}%` : "—"}
+                                        </span>
+                                        <span className="block text-[10px] text-[#8e8e93] dark:text-white/30">{col.count} sub · {col.n} set</span>
+                                      </>
+                                    )}
+                                  </td>
+                                ))}
+                                <td className="px-4 py-3">
+                                  {c.overallAvg != null ? (
+                                    <span className={`font-black text-[13px] ${c.overallAvg >= 70 ? "text-emerald-600 dark:text-emerald-400" : c.overallAvg >= 50 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
+                                      {c.overallAvg.toFixed(1)}%
+                                    </span>
+                                  ) : <span className="text-[#c7c7cc] dark:text-white/20">—</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </motion.div>
+          )}
+
           {/* ── ANNOUNCEMENTS TAB ── */}
           {activeTab === "announcements" && (
             <motion.div className="space-y-5" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
@@ -3361,6 +3570,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
               <div className="flex-1 px-2 overflow-y-auto min-h-0 space-y-0.5 pb-2">
                 {([
                   { id: "gradebook",     label: "Gradebook",      icon: <ClipboardList className="h-4 w-4" strokeWidth={1.6} /> },
+                  { id: "analytics",     label: "Analytics",      icon: <TrendingUp className="h-4 w-4" strokeWidth={1.6} /> },
                   { id: "live-lecture",  label: "Live Lecture",   icon: <Radio className={`h-4 w-4 ${broadcastingSession ? "text-red-500 animate-pulse" : ""}`} strokeWidth={1.6} /> },
                   { id: "notes",         label: "Publish Notes",  icon: <PlusCircle className="h-4 w-4" strokeWidth={1.6} /> },
                   { id: "quizzes",       label: "Deploy Quiz",    icon: <Award className="h-4 w-4" strokeWidth={1.6} /> },
