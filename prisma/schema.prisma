@@ -60,6 +60,7 @@ model Exam {
   course        Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
   questionsText String          // Extracted text from uploaded questions doc
   answerKeyText String?         // Extracted text from uploaded answer key doc
+  marksText     String?         // Comma-separated marks per question e.g. "5,10,5,3"
   isOpen        Boolean         @default(true)
   availableFrom  DateTime?
   availableUntil DateTime?
@@ -74,7 +75,8 @@ model ExamSubmission {
   studentId   String
   student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   answersText String   // Student's typed answers
-  score       Float?   // AI-graded 0–100
+  score       Float?   // AI-graded: actual marks if totalMarks set, else 0–100 percentage
+  totalMarks  Float?   // Maximum possible marks (null = legacy percentage mode)
   feedback    String?  // AI feedback text
   isGraded    Boolean  @default(false)
   submittedAt DateTime @default(now())
@@ -205,6 +207,7 @@ model Assignment {
   description   String?
   questionsText String
   answerKeyText String?
+  marksText     String?                // Comma-separated marks per question e.g. "5,10,5,3"
   dueDate       DateTime?
   isOpen        Boolean                @default(true)
   createdAt     DateTime               @default(now())
@@ -218,7 +221,8 @@ model AssignmentSubmission {
   studentId    String
   student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
   answersText  String
-  score        Float?
+  score        Float?     // Actual marks if totalMarks set, else 0–100 percentage
+  totalMarks   Float?     // Maximum possible marks (null = legacy percentage mode)
   feedback     String?
   isGraded     Boolean    @default(false)
   submittedAt  DateTime   @default(now())

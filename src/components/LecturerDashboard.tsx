@@ -98,6 +98,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [examSubmissions, setExamSubmissions] = useState<any[]>([]);
   const [answerKeyFile, setAnswerKeyFile] = useState<File | null>(null);
   const [answerKeyText, setAnswerKeyText] = useState("");
+  const [answerKeyMarks, setAnswerKeyMarks] = useState("");
   const [isGrading, setIsGrading] = useState(false);
   const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null);
 
@@ -113,6 +114,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [assignmentSubmissions, setAssignmentSubmissions] = useState<any[]>([]);
   const [assignmentKeyFile, setAssignmentKeyFile] = useState<File | null>(null);
   const [assignmentKeyText, setAssignmentKeyText] = useState("");
+  const [assignmentKeyMarks, setAssignmentKeyMarks] = useState("");
   const [isGradingAssignment, setIsGradingAssignment] = useState(false);
   const [expandedAssignmentSub, setExpandedAssignmentSub] = useState<string | null>(null);
 
@@ -318,12 +320,13 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       const fd = new FormData();
       if (assignmentKeyFile) fd.append("file", assignmentKeyFile);
       else fd.append("answerKeyText", assignmentKeyText);
+      if (assignmentKeyMarks.trim()) fd.append("marksText", assignmentKeyMarks.trim());
       const res = await fetch(`/api/assignments/${assignmentId}/answer-key`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
       if (res.ok) {
         showSuccess("Answer key uploaded!");
         const updated = await res.json();
         setSelectedAssignment(updated);
-        setAssignmentKeyFile(null); setAssignmentKeyText("");
+        setAssignmentKeyFile(null); setAssignmentKeyText(""); setAssignmentKeyMarks("");
         fetchAssignments();
       } else {
         const d = await res.json(); showError(d.error || "Failed to upload answer key");
@@ -769,10 +772,11 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       const fd = new FormData();
       if (answerKeyFile) fd.append("file", answerKeyFile);
       else fd.append("answerKeyText", answerKeyText);
+      if (answerKeyMarks.trim()) fd.append("marksText", answerKeyMarks.trim());
       const res = await fetch(`/api/exams/${examId}/answer-key`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
       if (res.ok) {
         showSuccess("Answer key uploaded!");
-        setAnswerKeyFile(null); setAnswerKeyText("");
+        setAnswerKeyFile(null); setAnswerKeyText(""); setAnswerKeyMarks("");
         const updated = await res.json();
         setSelectedExam(updated);
         fetchExams();
@@ -2369,6 +2373,18 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           <input type="file" accept=".docx,.doc,.txt" className="hidden" onChange={e => { setAnswerKeyFile(e.target.files?.[0] ?? null); setAnswerKeyText(""); }} />
                         </label>
                         <textarea rows={4} value={answerKeyText} onChange={e => { setAnswerKeyText(e.target.value); setAnswerKeyFile(null); }} placeholder="Or paste answer key text..." className="form-input resize-none" />
+                        <div>
+                          <p className={lbl}>Marks Per Question <span className="text-[#6e6e73] dark:text-white/40 font-normal">(optional — comma-separated, e.g. 5,10,5,3)</span></p>
+                          <input type="text" value={answerKeyMarks} onChange={e => setAnswerKeyMarks(e.target.value)} placeholder="e.g. 5,10,5,3" className="form-input" />
+                          {answerKeyMarks.trim() && (
+                            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
+                              Total: {answerKeyMarks.split(",").map(m => parseFloat(m.trim())).filter(m => !isNaN(m) && m > 0).reduce((a, b) => a + b, 0)} marks
+                            </p>
+                          )}
+                          {selectedExam.marksText && !answerKeyMarks.trim() && (
+                            <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-1">Current: {selectedExam.marksText}</p>
+                          )}
+                        </div>
                         <button onClick={() => handleUploadAnswerKey(selectedExam.id)} className="btn-gradient w-full">
                           {selectedExam.answerKeyText ? "Replace Answer Key" : "Upload Answer Key"}
                         </button>
@@ -2379,7 +2395,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                             className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
                             {isGrading ? <><Loader2 className="h-4 w-4 animate-spin" />Grading with AI…</> : <><Star className="h-4 w-4" />Grade All Submissions with AI</>}
                           </button>
-                          <p className="text-[11px] text-[#6e6e73] dark:text-white/40 text-center mt-2">NVIDIA AI will evaluate each student's answers against your answer key</p>
+                          <p className="text-[11px] text-[#6e6e73] dark:text-white/40 text-center mt-2">
+                            {selectedExam.marksText ? `AI grades per question using marks: ${selectedExam.marksText}` : "No marks set — AI will use percentage scoring"}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -2410,11 +2428,15 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                  {sub.isGraded ? (
-                                    <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${sub.score >= 50 ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" : "bg-red-100 dark:bg-red-950/40 text-red-500"}`}>
-                                      {sub.score?.toFixed(1)}%
-                                    </span>
-                                  ) : (
+                                  {sub.isGraded ? (() => {
+                                    const pct = sub.totalMarks ? (sub.score / sub.totalMarks) * 100 : sub.score;
+                                    const pass = pct >= 50;
+                                    return (
+                                      <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${pass ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" : "bg-red-100 dark:bg-red-950/40 text-red-500"}`}>
+                                        {sub.totalMarks ? `${sub.score?.toFixed(1)} / ${sub.totalMarks}` : `${sub.score?.toFixed(1)}%`}
+                                      </span>
+                                    );
+                                  })() : (
                                     <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1 rounded-full border border-amber-100 dark:border-amber-900/30">Pending</span>
                                   )}
                                   {expandedSubmission === sub.id ? <ChevronUp className="h-4 w-4 text-[#6e6e73] dark:text-white/40" /> : <ChevronDown className="h-4 w-4 text-[#6e6e73] dark:text-white/40" />}
@@ -2571,6 +2593,18 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           <input type="file" accept=".docx,.doc,.txt" className="hidden" onChange={e => { setAssignmentKeyFile(e.target.files?.[0] ?? null); setAssignmentKeyText(""); }} />
                         </label>
                         <textarea rows={4} value={assignmentKeyText} onChange={e => { setAssignmentKeyText(e.target.value); setAssignmentKeyFile(null); }} placeholder="Or paste answer key text..." className="form-input resize-none" />
+                        <div>
+                          <p className={lbl}>Marks Per Question <span className="text-[#6e6e73] dark:text-white/40 font-normal">(optional — comma-separated, e.g. 5,10,5,3)</span></p>
+                          <input type="text" value={assignmentKeyMarks} onChange={e => setAssignmentKeyMarks(e.target.value)} placeholder="e.g. 5,10,5,3" className="form-input" />
+                          {assignmentKeyMarks.trim() && (
+                            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
+                              Total: {assignmentKeyMarks.split(",").map(m => parseFloat(m.trim())).filter(m => !isNaN(m) && m > 0).reduce((a, b) => a + b, 0)} marks
+                            </p>
+                          )}
+                          {selectedAssignment.marksText && !assignmentKeyMarks.trim() && (
+                            <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-1">Current: {selectedAssignment.marksText}</p>
+                          )}
+                        </div>
                         <button onClick={() => handleUploadAssignmentKey(selectedAssignment.id)} className="btn-gradient w-full">
                           {selectedAssignment.answerKeyText ? "Replace Answer Key" : "Upload Answer Key"}
                         </button>
@@ -2581,6 +2615,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                             className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
                             {isGradingAssignment ? <><Loader2 className="h-4 w-4 animate-spin" />Grading with AI…</> : <><Star className="h-4 w-4" />Grade All Submissions with AI</>}
                           </button>
+                          <p className="text-[11px] text-[#6e6e73] dark:text-white/40 text-center mt-2">
+                            {selectedAssignment.marksText ? `AI grades per question using marks: ${selectedAssignment.marksText}` : "No marks set — AI will use percentage scoring"}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -2611,11 +2648,15 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                  {sub.isGraded ? (
-                                    <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${sub.score >= 50 ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" : "bg-red-100 dark:bg-red-950/40 text-red-500"}`}>
-                                      {sub.score?.toFixed(1)}%
-                                    </span>
-                                  ) : (
+                                  {sub.isGraded ? (() => {
+                                    const pct = sub.totalMarks ? (sub.score / sub.totalMarks) * 100 : sub.score;
+                                    const pass = pct >= 50;
+                                    return (
+                                      <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${pass ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" : "bg-red-100 dark:bg-red-950/40 text-red-500"}`}>
+                                        {sub.totalMarks ? `${sub.score?.toFixed(1)} / ${sub.totalMarks}` : `${sub.score?.toFixed(1)}%`}
+                                      </span>
+                                    );
+                                  })() : (
                                     <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1 rounded-full border border-amber-100 dark:border-amber-900/30">Pending</span>
                                   )}
                                   {expandedAssignmentSub === sub.id ? <ChevronUp className="h-4 w-4 text-[#6e6e73] dark:text-white/40" /> : <ChevronDown className="h-4 w-4 text-[#6e6e73] dark:text-white/40" />}

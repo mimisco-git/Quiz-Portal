@@ -1875,11 +1875,24 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   <div className="p-5 space-y-5">
                     {mySubmission.isGraded ? (
                       <div className="space-y-4">
-                        <div className={`rounded-[12px] p-6 text-center border ${mySubmission.score >= 50 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30" : "bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30"}`}>
-                          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-1">Your Score</p>
-                          <p className={`text-5xl font-black ${mySubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{mySubmission.score?.toFixed(1)}%</p>
-                          <p className={`text-[13px] font-semibold mt-2 ${mySubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{mySubmission.score >= 50 ? "Passed" : "Failed"}</p>
-                        </div>
+                        {(() => {
+                          const pct = mySubmission.totalMarks ? (mySubmission.score / mySubmission.totalMarks) * 100 : mySubmission.score;
+                          const pass = pct >= 50;
+                          return (
+                            <div className={`rounded-[12px] p-6 text-center border ${pass ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30" : "bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30"}`}>
+                              <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-1">Your Score</p>
+                              {mySubmission.totalMarks ? (
+                                <>
+                                  <p className={`text-5xl font-black ${pass ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{mySubmission.score?.toFixed(1)}</p>
+                                  <p className={`text-[15px] font-semibold ${pass ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>out of {mySubmission.totalMarks} marks</p>
+                                </>
+                              ) : (
+                                <p className={`text-5xl font-black ${pass ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{mySubmission.score?.toFixed(1)}%</p>
+                              )}
+                              <p className={`text-[13px] font-semibold mt-2 ${pass ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{pass ? "Passed" : "Failed"}</p>
+                            </div>
+                          );
+                        })()}
                         {mySubmission.feedback && (
                           <div>
                             <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">AI Feedback</p>
@@ -2022,11 +2035,24 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   <div className="p-5 space-y-5">
                     {myAssignmentSubmission.isGraded ? (
                       <div className="space-y-4">
-                        <div className={`rounded-[12px] p-6 text-center border ${myAssignmentSubmission.score >= 50 ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30" : "bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30"}`}>
-                          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-1">Your Score</p>
-                          <p className={`text-5xl font-black ${myAssignmentSubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{myAssignmentSubmission.score?.toFixed(1)}%</p>
-                          <p className={`text-[13px] font-semibold mt-2 ${myAssignmentSubmission.score >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{myAssignmentSubmission.score >= 50 ? "Passed" : "Failed"}</p>
-                        </div>
+                        {(() => {
+                          const pct = myAssignmentSubmission.totalMarks ? (myAssignmentSubmission.score / myAssignmentSubmission.totalMarks) * 100 : myAssignmentSubmission.score;
+                          const pass = pct >= 50;
+                          return (
+                            <div className={`rounded-[12px] p-6 text-center border ${pass ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30" : "bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30"}`}>
+                              <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-1">Your Score</p>
+                              {myAssignmentSubmission.totalMarks ? (
+                                <>
+                                  <p className={`text-5xl font-black ${pass ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{myAssignmentSubmission.score?.toFixed(1)}</p>
+                                  <p className={`text-[15px] font-semibold ${pass ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>out of {myAssignmentSubmission.totalMarks} marks</p>
+                                </>
+                              ) : (
+                                <p className={`text-5xl font-black ${pass ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{myAssignmentSubmission.score?.toFixed(1)}%</p>
+                              )}
+                              <p className={`text-[13px] font-semibold mt-2 ${pass ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{pass ? "Passed" : "Failed"}</p>
+                            </div>
+                          );
+                        })()}
                         {myAssignmentSubmission.feedback && (
                           <div>
                             <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">AI Feedback</p>
@@ -2169,15 +2195,19 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                               <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-1 line-clamp-1 italic">{sub.feedback}</p>
                             )}
                           </div>
-                          {sub.isGraded ? (
-                            <span className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border ${
-                              (sub.score ?? 0) >= 50
-                                ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
-                                : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30"
-                            }`}>
-                              {sub.score?.toFixed(1) ?? "0.0"}%
-                            </span>
-                          ) : (
+                          {sub.isGraded ? (() => {
+                            const pct = sub.totalMarks ? (sub.score / sub.totalMarks) * 100 : (sub.score ?? 0);
+                            const pass = pct >= 50;
+                            return (
+                              <span className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border ${
+                                pass
+                                  ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
+                                  : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30"
+                              }`}>
+                                {sub.totalMarks ? `${sub.score?.toFixed(1)} / ${sub.totalMarks}` : `${sub.score?.toFixed(1) ?? "0.0"}%`}
+                              </span>
+                            );
+                          })() : (
                             <span className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/30 flex items-center gap-1.5">
                               <Loader2 className="h-3 w-3 animate-spin" />
                               Pending
@@ -2219,15 +2249,19 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                               <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-1 line-clamp-1 italic">{sub.feedback}</p>
                             )}
                           </div>
-                          {sub.isGraded ? (
-                            <span className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border ${
-                              (sub.score ?? 0) >= 50
-                                ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
-                                : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30"
-                            }`}>
-                              {sub.score?.toFixed(1) ?? "0.0"}%
-                            </span>
-                          ) : (
+                          {sub.isGraded ? (() => {
+                            const pct = sub.totalMarks ? (sub.score / sub.totalMarks) * 100 : (sub.score ?? 0);
+                            const pass = pct >= 50;
+                            return (
+                              <span className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-bold border ${
+                                pass
+                                  ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
+                                  : "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30"
+                              }`}>
+                                {sub.totalMarks ? `${sub.score?.toFixed(1)} / ${sub.totalMarks}` : `${sub.score?.toFixed(1) ?? "0.0"}%`}
+                              </span>
+                            );
+                          })() : (
                             <span className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold border bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/30 flex items-center gap-1.5">
                               <Loader2 className="h-3 w-3 animate-spin" />
                               Pending

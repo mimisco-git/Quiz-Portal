@@ -1628,11 +1628,47 @@ async function gradeSubmission(
   questionsText: string,
   answerKeyText: string,
   studentAnswers: string,
-  studentName: string
-): Promise<{ score: number; feedback: string }> {
+  studentName: string,
+  marksText?: string | null
+): Promise<{ score: number; totalMarks: number | null; feedback: string }> {
   const nvidia = getNvidiaClient();
 
-  const prompt = `You are a fair and thorough academic exam grader.
+  const marksArray = marksText
+    ? marksText.split(",").map((m) => parseFloat(m.trim())).filter((m) => !isNaN(m) && m > 0)
+    : [];
+  const usesMarks = marksArray.length > 0;
+  const totalMarks = usesMarks ? marksArray.reduce((a, b) => a + b, 0) : null;
+
+  let prompt: string;
+
+  if (usesMarks) {
+    const marksDesc = marksArray.map((m, i) => `Q${i + 1}: ${m} mark${m !== 1 ? "s" : ""}`).join(", ");
+    prompt = `You are a fair and thorough academic exam grader.
+
+EXAM QUESTIONS:
+${questionsText}
+
+MODEL ANSWER KEY:
+${answerKeyText}
+
+STUDENT NAME: ${studentName}
+STUDENT'S ANSWERS:
+${studentAnswers}
+
+MARKS ALLOCATION: ${marksDesc} (total: ${totalMarks} marks)
+
+For each question, compare the student's answer to the model answer key and estimate a similarity percentage (0–100) representing how much of the correct answer the student captured. Evaluate semantic understanding, not just exact wording.
+
+Respond with ONLY a valid JSON object, no other text:
+{
+  "questions": [
+    {"q": 1, "similarity": <0-100>, "comment": "<one concise sentence about this answer>"},
+    {"q": 2, "similarity": <0-100>, "comment": "<one concise sentence about this answer>"}
+  ],
+  "overall_feedback": "<2-3 sentences of overall feedback for ${studentName}>"
+}`;
+  } else {
+    prompt = `You are a fair and thorough academic exam grader.
 
 EXAM QUESTIONS:
 ${questionsText}
@@ -1652,22 +1688,41 @@ SCORING CRITERIA:
 - 50–69: Genuine attempt, answer is relevant and shows partial understanding
 - 0–49: No meaningful attempt, completely wrong, irrelevant, or left blank
 
-IMPORTANT: If a student's answer shows genuine effort and captures at least 50% of the correct meaning, they pass. Award partial credit generously for effort and relevant content. Only fail a student if they clearly did not try or gave a completely irrelevant answer.
-
 Respond with ONLY a valid JSON object, no other text:
-{"score": <0-100>, "feedback": "<2-4 sentences of specific, constructive feedback mentioning what they got right and what needs improvement>"}`;
+{"score": <0-100>, "feedback": "<2-4 sentences of specific, constructive feedback>"}`;
+  }
 
   const response = await nvidia.chat.completions.create({
     model: "meta/llama-3.1-70b-instruct",
     messages: [{ role: "user", content: prompt }],
     temperature: 0.2,
-    max_tokens: 512,
+    max_tokens: 1024,
   });
 
-  const raw = response.choices[0]?.message?.content ?? '{"score":0,"feedback":"Grading failed."}';
+  const raw = response.choices[0]?.message?.content ?? "{}";
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   const parsed = JSON.parse(jsonMatch?.[0] ?? raw);
-  return { score: Math.max(0, Math.min(100, Number(parsed.score))), feedback: String(parsed.feedback) };
+
+  if (usesMarks && Array.isArray(parsed.questions)) {
+    const breakdown = (parsed.questions as any[]).map((q, i) => {
+      const maxM = marksArray[i] ?? 0;
+      const sim = Math.max(0, Math.min(100, Number(q.similarity)));
+      // Below 50% → 0.5 (half mark); 50%+ → scales linearly to full marks
+      const raw = sim < 50 ? 0.5 : ((sim - 50) / 50) * maxM;
+      const awarded = Math.round(raw * 2) / 2; // nearest 0.5
+      return { q: q.q ?? i + 1, similarity: sim, awarded, max: maxM, comment: String(q.comment ?? "") };
+    });
+    const score = breakdown.reduce((s, b) => s + b.awarded, 0);
+    const breakdownText = breakdown
+      .map((b) => `Q${b.q}: ${b.awarded}/${b.max} marks (${b.similarity}% match) — ${b.comment}`)
+      .join("\n");
+    const feedback = `${String(parsed.overall_feedback ?? "")}\n\nQuestion Breakdown:\n${breakdownText}`;
+    return { score, totalMarks, feedback };
+  }
+
+  // Legacy: no marks scheme — return percentage score
+  const score = Math.max(0, Math.min(100, Number(parsed.score)));
+  return { score, totalMarks: null, feedback: String(parsed.feedback ?? "Grading complete.") };
 }
 
 // Create exam (lecturer uploads questions doc)
@@ -1741,7 +1796,8 @@ app.post("/api/exams/:id/answer-key", authenticateToken, upload.single("file"), 
     if (exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     const answerKeyText = req.file ? await extractTextFromFile(req.file) : req.body.answerKeyText;
     if (!answerKeyText) return res.status(400).json({ error: "Answer key file or text required" });
-    const updated = await prisma.exam.update({ where: { id: req.params.id }, data: { answerKeyText } });
+    const marksText = req.body.marksText?.trim() || null;
+    const updated = await prisma.exam.update({ where: { id: req.params.id }, data: { answerKeyText, marksText } });
     return res.json(updated);
   } catch (err) {
     console.error("Error uploading answer key:", err);
@@ -1848,17 +1904,18 @@ app.post("/api/exams/:id/grade", authenticateToken, async (req: any, res) => {
     const results = [];
     for (const submission of ungraded) {
       try {
-        const { score, feedback } = await gradeSubmission(
+        const { score, totalMarks, feedback } = await gradeSubmission(
           exam.questionsText,
           exam.answerKeyText,
           submission.answersText,
-          (submission as any).student.fullName
+          (submission as any).student.fullName,
+          exam.marksText
         );
         await prisma.examSubmission.update({
           where: { id: submission.id },
-          data: { score, feedback, isGraded: true },
+          data: { score, totalMarks, feedback, isGraded: true },
         });
-        results.push({ studentId: submission.studentId, score });
+        results.push({ studentId: submission.studentId, score, totalMarks });
       } catch (err) {
         console.error(`Failed to grade submission ${submission.id}:`, err);
         results.push({ studentId: submission.studentId, error: "Grading failed" });
@@ -1952,7 +2009,8 @@ app.post("/api/assignments/:id/answer-key", authenticateToken, upload.single("fi
     if (assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     const answerKeyText = req.file ? await extractTextFromFile(req.file) : req.body.answerKeyText;
     if (!answerKeyText) return res.status(400).json({ error: "Answer key file or text is required" });
-    const updated = await prisma.assignment.update({ where: { id: req.params.id }, data: { answerKeyText } });
+    const marksText = req.body.marksText?.trim() || null;
+    const updated = await prisma.assignment.update({ where: { id: req.params.id }, data: { answerKeyText, marksText } });
     return res.json(updated);
   } catch (err) {
     return res.status(500).json({ error: "Failed to upload answer key" });
@@ -2051,14 +2109,15 @@ app.post("/api/assignments/:id/grade", authenticateToken, async (req: any, res) 
     const results = [];
     for (const submission of ungraded) {
       try {
-        const { score, feedback } = await gradeSubmission(
+        const { score, totalMarks, feedback } = await gradeSubmission(
           assignment.questionsText,
           assignment.answerKeyText,
           submission.answersText,
-          (submission as any).student.fullName
+          (submission as any).student.fullName,
+          assignment.marksText
         );
-        await prisma.assignmentSubmission.update({ where: { id: submission.id }, data: { score, feedback, isGraded: true } });
-        results.push({ studentId: submission.studentId, score });
+        await prisma.assignmentSubmission.update({ where: { id: submission.id }, data: { score, totalMarks, feedback, isGraded: true } });
+        results.push({ studentId: submission.studentId, score, totalMarks });
       } catch (err) {
         results.push({ studentId: submission.studentId, error: "Grading failed" });
       }
