@@ -60,26 +60,10 @@ export default function BootScreen({ onDone }: Props) {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.65, ease: [0.25, 0, 0.25, 1] }}
           className="fixed inset-0 z-50"
-          style={{ backgroundColor: "#000" }}
         >
-          {/* ── ultra-subtle noise for perceived depth ── */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-              backgroundSize: "256px 256px",
-              opacity: 0.028,
-            }}
-          />
-
-          {/* ── very faint radial bloom behind logo ── */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background:
-                "radial-gradient(ellipse 38% 32% at 50% 47%, rgba(255,255,255,0.045) 0%, transparent 100%)",
-            }}
-          />
+          <img src="/loader-wallpaper.png" alt="" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+          {/* Dark overlay so logo and progress bar stay visible */}
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.45)" }} />
 
           {/* ── centred content cluster ── */}
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-[52px] sm:gap-[72px]">
