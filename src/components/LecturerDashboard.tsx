@@ -2981,7 +2981,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── DISCUSSIONS TAB ── */}
           {activeTab === "discussions" && (
-            <DiscussionBoard token={token} userId={user.id} userRole="lecturer" userName={user.name} />
+            <DiscussionBoard token={token} userId={user.id} userRole="lecturer" userName={user.name} courses={courses.map((c: any) => ({ id: c.id, code: c.code, title: c.title }))} />
           )}
 
           {/* ── ANNOUNCEMENTS TAB ── */}

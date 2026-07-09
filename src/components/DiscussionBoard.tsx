@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { MessageSquare, PlusCircle, ChevronLeft, Pin, Trash2, Send, BookOpen } from "lucide-react";
+import { MessageSquare, PlusCircle, ChevronLeft, Pin, Trash2, Send, BookOpen, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 interface Thread {
@@ -25,12 +25,18 @@ interface Reply {
   createdAt: string;
 }
 
+interface CourseOption {
+  id: string;
+  code: string;
+  title: string;
+}
+
 interface Props {
   token: string;
   userId: string;
   userRole: "student" | "lecturer";
   userName: string;
-  // If provided, scope to one course. If absent, show all accessible threads.
+  courses?: CourseOption[];
   courseId?: string;
   courseCode?: string;
 }
@@ -45,31 +51,36 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-export default function DiscussionBoard({ token, userId, userRole, userName, courseId, courseCode }: Props) {
+export default function DiscussionBoard({ token, userId, userRole, userName, courses = [], courseId: propCourseId, courseCode: propCourseCode }: Props) {
+  const [selectedCourseId, setSelectedCourseId] = useState(propCourseId ?? "");
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThread, setActiveThread] = useState<(Thread & { replies: Reply[] }) | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [composing, setComposing] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newBody, setNewBody] = useState("");
-  const [newCourseId, setNewCourseId] = useState(courseId ?? "");
   const [replyBody, setReplyBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const authH = { Authorization: `Bearer ${token}` };
   const jsonH = { ...authH, "Content-Type": "application/json" };
 
-  const fetchThreads = async () => {
+  const selectedCourse = courses.find(c => c.id === selectedCourseId);
+
+  const fetchThreads = async (cid: string) => {
+    if (!cid) return;
     setLoading(true);
     try {
-      const url = courseId ? `/api/courses/${courseId}/threads` : "/api/discussions";
-      const r = await fetch(url, { headers: authH });
+      const r = await fetch(`/api/courses/${cid}/threads`, { headers: authH });
       if (r.ok) setThreads(await r.json());
     } catch {}
     setLoading(false);
   };
 
-  useEffect(() => { fetchThreads(); }, [courseId]);
+  useEffect(() => {
+    if (selectedCourseId) fetchThreads(selectedCourseId);
+    else setThreads([]);
+  }, [selectedCourseId]);
 
   const openThread = async (t: Thread) => {
     const r = await fetch(`/api/threads/${t.id}`, { headers: authH });
@@ -77,17 +88,15 @@ export default function DiscussionBoard({ token, userId, userRole, userName, cou
   };
 
   const submitThread = async () => {
-    if (!newTitle.trim() || !newBody.trim()) return;
-    const cid = courseId ?? newCourseId;
-    if (!cid) return;
+    if (!newTitle.trim() || !newBody.trim() || !selectedCourseId) return;
     setSubmitting(true);
-    const r = await fetch(`/api/courses/${cid}/threads`, {
+    const r = await fetch(`/api/courses/${selectedCourseId}/threads`, {
       method: "POST", headers: jsonH,
       body: JSON.stringify({ title: newTitle.trim(), body: newBody.trim() }),
     });
     if (r.ok) {
-      setComposing(false); setNewTitle(""); setNewBody(""); setNewCourseId(courseId ?? "");
-      fetchThreads();
+      setComposing(false); setNewTitle(""); setNewBody("");
+      fetchThreads(selectedCourseId);
     }
     setSubmitting(false);
   };
@@ -103,14 +112,14 @@ export default function DiscussionBoard({ token, userId, userRole, userName, cou
       setReplyBody("");
       const updated = await fetch(`/api/threads/${activeThread.id}`, { headers: authH });
       if (updated.ok) setActiveThread(await updated.json());
-      fetchThreads();
+      fetchThreads(selectedCourseId);
     }
     setSubmitting(false);
   };
 
   const pinThread = async (id: string) => {
     await fetch(`/api/threads/${id}/pin`, { method: "PATCH", headers: authH });
-    fetchThreads();
+    fetchThreads(selectedCourseId);
     if (activeThread?.id === id) {
       const updated = await fetch(`/api/threads/${id}`, { headers: authH });
       if (updated.ok) setActiveThread(await updated.json());
@@ -121,7 +130,7 @@ export default function DiscussionBoard({ token, userId, userRole, userName, cou
     if (!confirm("Delete this thread and all its replies?")) return;
     await fetch(`/api/threads/${id}`, { method: "DELETE", headers: authH });
     if (activeThread?.id === id) setActiveThread(null);
-    fetchThreads();
+    fetchThreads(selectedCourseId);
   };
 
   const avatarCls = (role: string) =>
@@ -142,7 +151,7 @@ export default function DiscussionBoard({ token, userId, userRole, userName, cou
               <div>
                 <h2 className="apple-title">{activeThread.title}</h2>
                 <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">
-                  {activeThread.course?.code && <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 mr-1">{activeThread.course.code}</span>}
+                  {selectedCourse && <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 mr-1">{selectedCourse.code}</span>}
                   {activeThread.authorName} · {timeAgo(activeThread.createdAt)}
                   {activeThread.isPinned && <span className="ml-2 text-amber-600 dark:text-amber-400 font-bold">📌 Pinned</span>}
                 </p>
@@ -219,57 +228,100 @@ export default function DiscussionBoard({ token, userId, userRole, userName, cou
   // ── Thread list ─────────────────────────────────────────────
   return (
     <motion.div className="space-y-4" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
-      <div className="apple-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
-          <div>
-            <h2 className="apple-title flex items-center gap-2"><MessageSquare className="h-4 w-4 text-emerald-500" />
-              {courseCode ? `${courseCode} Discussions` : "All Discussions"}
-            </h2>
-            <p className="apple-subtitle">Ask questions, share insights, help each other.</p>
-          </div>
-          <button onClick={() => setComposing(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold rounded-[10px] transition cursor-pointer">
-            <PlusCircle className="h-3.5 w-3.5" /> New Thread
-          </button>
-        </div>
 
-        {loading ? (
-          <div className="py-12 text-center text-[12px] text-[#8e8e93] dark:text-white/35">Loading discussions…</div>
-        ) : threads.length === 0 ? (
-          <div className="apple-empty-state">
-            <div className="apple-empty-state__icon"><MessageSquare className="h-6 w-6 text-[#8e8e93] dark:text-white/30" /></div>
-            <p className="apple-empty-state__title">No threads yet</p>
-            <p className="apple-empty-state__body">Be the first to start a discussion for this course.</p>
+      {/* Course selector — only shown when courses list is provided and no fixed courseId prop */}
+      {courses.length > 0 && !propCourseId && (
+        <div className="apple-card px-5 py-4">
+          <label className="block text-[10.5px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">
+            Select Course
+          </label>
+          <div className="relative">
+            <select
+              value={selectedCourseId}
+              onChange={e => { setSelectedCourseId(e.target.value); setActiveThread(null); }}
+              className="form-input text-[13px] appearance-none pr-8 cursor-pointer"
+            >
+              <option value="">— Choose a course to view discussions —</option>
+              {courses.map(c => (
+                <option key={c.id} value={c.id}>{c.code} — {c.title}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8e8e93] dark:text-white/30" />
           </div>
-        ) : (
-          <div className="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
-            {threads.map(t => (
-              <button key={t.id} onClick={() => openThread(t)}
-                className="w-full flex items-start gap-3 px-5 py-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition text-left cursor-pointer">
-                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold mt-0.5 ${avatarCls(t.authorRole)}`}>
-                  {t.authorName[0]?.toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {t.isPinned && <Pin className="h-3 w-3 text-amber-500 flex-shrink-0" />}
-                    <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/88 truncate">{t.title}</p>
-                  </div>
-                  <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5 line-clamp-1">{t.body}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    {t.course && <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">{t.course.code}</span>}
-                    <span className="text-[10.5px] text-[#8e8e93] dark:text-white/30">{t.authorName} · {timeAgo(t.createdAt)}</span>
-                    {(t._count?.replies ?? 0) > 0 && (
-                      <span className="flex items-center gap-1 text-[10.5px] text-[#6e6e73] dark:text-white/40">
-                        <MessageSquare className="h-3 w-3" /> {t._count!.replies}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))}
+        </div>
+      )}
+
+      {/* Prompt when no course selected */}
+      {!selectedCourseId && (
+        <div className="apple-card">
+          <div className="apple-empty-state py-16">
+            <div className="apple-empty-state__icon">
+              <BookOpen className="h-7 w-7 text-[#8e8e93] dark:text-white/30" />
+            </div>
+            <p className="apple-empty-state__title">Select a course above</p>
+            <p className="apple-empty-state__body">Choose a course from the dropdown to see its discussions and post questions.</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Threads panel — shown only when a course is selected */}
+      {selectedCourseId && (
+        <div className="apple-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
+            <div>
+              <h2 className="apple-title flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-emerald-500" />
+                {selectedCourse
+                  ? `${selectedCourse.code} Discussions`
+                  : propCourseCode
+                    ? `${propCourseCode} Discussions`
+                    : "Discussions"}
+              </h2>
+              <p className="apple-subtitle">Ask questions, share insights, help each other.</p>
+            </div>
+            <button onClick={() => setComposing(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold rounded-[10px] transition cursor-pointer">
+              <PlusCircle className="h-3.5 w-3.5" /> New Thread
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="py-12 text-center text-[12px] text-[#8e8e93] dark:text-white/35">Loading discussions…</div>
+          ) : threads.length === 0 ? (
+            <div className="apple-empty-state">
+              <div className="apple-empty-state__icon"><MessageSquare className="h-6 w-6 text-[#8e8e93] dark:text-white/30" /></div>
+              <p className="apple-empty-state__title">No threads yet</p>
+              <p className="apple-empty-state__body">Be the first to start a discussion for this course.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
+              {threads.map(t => (
+                <button key={t.id} onClick={() => openThread(t)}
+                  className="w-full flex items-start gap-3 px-5 py-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition text-left cursor-pointer">
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold mt-0.5 ${avatarCls(t.authorRole)}`}>
+                    {t.authorName[0]?.toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {t.isPinned && <Pin className="h-3 w-3 text-amber-500 flex-shrink-0" />}
+                      <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/88 truncate">{t.title}</p>
+                    </div>
+                    <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5 line-clamp-1">{t.body}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10.5px] text-[#8e8e93] dark:text-white/30">{t.authorName} · {timeAgo(t.createdAt)}</span>
+                      {(t._count?.replies ?? 0) > 0 && (
+                        <span className="flex items-center gap-1 text-[10.5px] text-[#6e6e73] dark:text-white/40">
+                          <MessageSquare className="h-3 w-3" /> {t._count!.replies}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Compose modal */}
       <AnimatePresence>
@@ -280,14 +332,13 @@ export default function DiscussionBoard({ token, userId, userRole, userName, cou
               className="apple-card w-full max-w-lg" onClick={e => e.stopPropagation()}>
               <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
                 <h3 className="apple-title">Start a Discussion</h3>
+                {selectedCourse && (
+                  <p className="apple-subtitle mt-0.5">
+                    Posting in <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{selectedCourse.code}</span> — {selectedCourse.title}
+                  </p>
+                )}
               </div>
               <div className="p-5 space-y-3">
-                {!courseId && (
-                  <div>
-                    <label className="block text-[10.5px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-1">Course</label>
-                    <input value={newCourseId} onChange={e => setNewCourseId(e.target.value)} placeholder="Course ID" className="form-input text-[13px]" />
-                  </div>
-                )}
                 <div>
                   <label className="block text-[10.5px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-1">Title</label>
                   <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="What's your question or topic?" className="form-input text-[13px]" />

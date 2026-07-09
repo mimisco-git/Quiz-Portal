@@ -3074,7 +3074,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
           {/* ── DISCUSSIONS TAB ── */}
           {activeTab === "discussions" && (
-            <DiscussionBoard token={token} userId={user.id} userRole="student" userName={user.fullName} />
+            <DiscussionBoard token={token} userId={user.id} userRole="student" userName={user.fullName} courses={courses.map(c => ({ id: c.id, code: c.code, title: c.title }))} />
           )}
 
           </div>{/* /max-w-5xl */}
