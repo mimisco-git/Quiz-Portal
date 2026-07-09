@@ -2461,7 +2461,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                               <div className="min-w-0">
                                 <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{exam.title}</p>
                                 <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">
-                                  {exam.course?.code} · {exam._count?.submissions ?? 0} submission{exam._count?.submissions !== 1 ? "s" : ""} · {exam.answerKeyText ? "✓ Answer key uploaded" : "⚠ No answer key yet"}
+                                  {exam.course?.code} · {exam._count?.submissions ?? 0} submission{exam._count?.submissions !== 1 ? "s" : ""} · {(exam.answerKeyText || exam.answerKeyJson) ? "✓ Answer key uploaded" : "⚠ No answer key yet"}
                                   {exam.availableFrom && <> · Opens {new Date(exam.availableFrom).toLocaleString()}</>}
                                   {exam.availableUntil && <> · Closes {new Date(exam.availableUntil).toLocaleString()}</>}
                                 </p>
@@ -2508,7 +2508,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{selectedExam.questionsText}</pre>
                       </div>
                       <div className="space-y-3 border-t border-black/[0.06] dark:border-white/[0.05] pt-4">
-                        <p className={lbl + " flex items-center gap-1.5"}>{selectedExam.answerKeyText ? <><CheckCircle className="h-3.5 w-3.5 text-emerald-500" /> Answer Key (Replace)</> : "Upload Answer Key"}</p>
+                        <p className={lbl + " flex items-center gap-1.5"}>{(selectedExam.answerKeyText || selectedExam.answerKeyJson) ? <><CheckCircle className="h-3.5 w-3.5 text-emerald-500" /> Answer Key (Replace)</> : "Upload Answer Key"}</p>
                         {selectedExam.answerKeyText && (
                           <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/20 rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">{selectedExam.answerKeyText}</pre>
                         )}
@@ -2534,7 +2534,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           {selectedExam.answerKeyText ? "Replace Answer Key" : "Upload Answer Key"}
                         </button>
                       </div>
-                      {selectedExam.answerKeyText && examSubmissions.length > 0 && (
+                      {(selectedExam.answerKeyText || selectedExam.answerKeyJson) && examSubmissions.length > 0 && (
                         <div className="border-t border-black/[0.06] dark:border-white/[0.05] pt-4">
                           <button onClick={() => handleGradeAll(selectedExam.id)} disabled={isGrading}
                             className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
@@ -2743,7 +2743,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                               <div className="min-w-0">
                                 <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{a.title}</p>
                                 <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">
-                                  {a.course?.code} · {a._count?.submissions ?? 0} submission{a._count?.submissions !== 1 ? "s" : ""} · {a.answerKeyText ? "✓ Answer key uploaded" : "⚠ No answer key yet"}
+                                  {a.course?.code} · {a._count?.submissions ?? 0} submission{a._count?.submissions !== 1 ? "s" : ""} · {(a.answerKeyText || a.answerKeyJson) ? "✓ Answer key uploaded" : "⚠ No answer key yet"}
                                   {a.dueDate && <> · Due {new Date(a.dueDate).toLocaleString()}</>}
                                 </p>
                               </div>
@@ -2795,7 +2795,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{selectedAssignment.questionsText}</pre>
                       </div>
                       <div className="space-y-3 border-t border-black/[0.06] dark:border-white/[0.05] pt-4">
-                        <p className={lbl + " flex items-center gap-1.5"}>{selectedAssignment.answerKeyText ? <><CheckCircle className="h-3.5 w-3.5 text-emerald-500" /> Answer Key (Replace)</> : "Upload Answer Key"}</p>
+                        <p className={lbl + " flex items-center gap-1.5"}>{(selectedAssignment.answerKeyText || selectedAssignment.answerKeyJson) ? <><CheckCircle className="h-3.5 w-3.5 text-emerald-500" /> Answer Key (Replace)</> : "Upload Answer Key"}</p>
                         {selectedAssignment.answerKeyText && (
                           <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/20 rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">{selectedAssignment.answerKeyText}</pre>
                         )}
@@ -2821,7 +2821,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           {selectedAssignment.answerKeyText ? "Replace Answer Key" : "Upload Answer Key"}
                         </button>
                       </div>
-                      {selectedAssignment.answerKeyText && assignmentSubmissions.length > 0 && (
+                      {(selectedAssignment.answerKeyText || selectedAssignment.answerKeyJson) && assignmentSubmissions.length > 0 && (
                         <div className="border-t border-black/[0.06] dark:border-white/[0.05] pt-4">
                           <button onClick={() => handleGradeAssignments(selectedAssignment.id)} disabled={isGradingAssignment}
                             className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
