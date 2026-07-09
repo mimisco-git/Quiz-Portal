@@ -107,6 +107,16 @@ function authenticateToken(req: any, res: any, next: any) {
   });
 }
 
+// Like authenticateToken but never blocks — sets req.user if token valid, otherwise continues as unauthenticated
+function optionalAuth(req: any, _res: any, next: any) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (token) {
+    try { req.user = jwt.verify(token, JWT_SECRET); } catch { /* ignore */ }
+  }
+  next();
+}
+
 // -------------------------------------------------------------
 // AUTHENTICATION API
 // -------------------------------------------------------------
@@ -463,16 +473,19 @@ app.post("/api/auth/lecturer-login", authLimiter, async (req, res) => {
 // -------------------------------------------------------------
 
 // Fetch all courses with basic info
-app.get("/api/courses", async (req, res) => {
+app.get("/api/courses", optionalAuth, async (req: any, res) => {
   try {
+    // Students only see courses belonging to their department (or courses with no department assigned)
+    const where: any =
+      req.user?.role === "student"
+        ? { OR: [{ departmentId: null }, { department: { name: req.user.department } }] }
+        : {};
     const courses = await prisma.course.findMany({
+      where,
       include: {
-        lecturer: {
-          select: { name: true, email: true },
-        },
-        _count: {
-          select: { notes: true, quizzes: true },
-        },
+        lecturer: { select: { name: true, email: true } },
+        department: { select: { id: true, name: true } },
+        _count: { select: { notes: true, quizzes: true } },
       },
     });
     return res.json(courses);
@@ -544,7 +557,7 @@ app.post("/api/courses", authenticateToken, async (req: any, res) => {
     return res.status(403).json({ error: "Only Lecturers can perform this action" });
   }
 
-  const { code, title } = req.body;
+  const { code, title, departmentId } = req.body;
   if (!code || !title) {
     return res.status(400).json({ error: "Course code and title are required" });
   }
@@ -555,7 +568,9 @@ app.post("/api/courses", authenticateToken, async (req: any, res) => {
         code: code.toUpperCase().replace(/\s+/g, ""),
         title,
         lecturerId: req.user.id,
+        ...(departmentId ? { departmentId } : {}),
       },
+      include: { department: { select: { id: true, name: true } } },
     });
     return res.status(201).json(newCourse);
   } catch (error: any) {
@@ -1069,6 +1084,55 @@ app.get("/api/lecturer/gradebook", authenticateToken, async (req: any, res) => {
 // -------------------------------------------------------------
 // DEPARTMENT MANAGEMENT API
 // -------------------------------------------------------------
+app.get("/api/departments/stats", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const departments = await prisma.department.findMany({
+      orderBy: { name: "asc" },
+      include: { courses: { select: { id: true } } },
+    });
+
+    const stats = await Promise.all(
+      departments.map(async (dept) => {
+        const studentCount = await prisma.student.count({ where: { department: dept.name } });
+
+        const gradedExamSubs = await prisma.examSubmission.findMany({
+          where: { isGraded: true, student: { department: dept.name } },
+          select: { score: true, totalMarks: true },
+        });
+        const gradedAsgSubs = await prisma.assignmentSubmission.findMany({
+          where: { isGraded: true, student: { department: dept.name } },
+          select: { score: true, totalMarks: true },
+        });
+
+        const toPercent = (s: { score: number | null; totalMarks: number | null }) =>
+          s.totalMarks ? ((s.score ?? 0) / s.totalMarks) * 100 : (s.score ?? 0);
+
+        const allSubs = [...gradedExamSubs, ...gradedAsgSubs];
+        const avgScore =
+          allSubs.length > 0
+            ? allSubs.reduce((sum, s) => sum + toPercent(s), 0) / allSubs.length
+            : null;
+
+        return {
+          id: dept.id,
+          name: dept.name,
+          createdAt: dept.createdAt,
+          courseCount: dept.courses.length,
+          studentCount,
+          avgScore,
+          gradedCount: allSubs.length,
+        };
+      })
+    );
+
+    return res.json(stats);
+  } catch (err) {
+    console.error("Error fetching department stats:", err);
+    return res.status(500).json({ error: "Failed to fetch department stats" });
+  }
+});
+
 app.get("/api/departments", async (req, res) => {
   try {
     const departments = await prisma.department.findMany({
@@ -1885,8 +1949,14 @@ app.post("/api/exams", authenticateToken, upload.single("file"), async (req: any
 app.get("/api/exams", authenticateToken, async (req: any, res) => {
   const { courseId } = req.query;
   try {
+    const deptFilter = req.user.role === "student"
+      ? { OR: [{ departmentId: null }, { department: { name: req.user.department } }] }
+      : {};
     const exams = await prisma.exam.findMany({
-      where: courseId ? { courseId: String(courseId) } : undefined,
+      where: {
+        ...(courseId ? { courseId: String(courseId) } : {}),
+        course: deptFilter,
+      },
       include: { course: { select: { code: true, title: true } }, _count: { select: { submissions: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -2121,8 +2191,14 @@ app.post("/api/assignments", authenticateToken, upload.single("file"), async (re
 app.get("/api/assignments", authenticateToken, async (req: any, res) => {
   const { courseId } = req.query;
   try {
+    const deptFilter = req.user.role === "student"
+      ? { OR: [{ departmentId: null }, { department: { name: req.user.department } }] }
+      : {};
     const assignments = await prisma.assignment.findMany({
-      where: courseId ? { courseId: String(courseId) } : undefined,
+      where: {
+        ...(courseId ? { courseId: String(courseId) } : {}),
+        course: deptFilter,
+      },
       include: { course: { select: { code: true, title: true } }, _count: { select: { submissions: true } } },
       orderBy: { createdAt: "desc" },
     });

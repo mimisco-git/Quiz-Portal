@@ -33,6 +33,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   const [courseCode, setCourseCode] = useState("");
   const [courseTitle, setCourseTitle] = useState("");
+  const [courseDepId, setCourseDepId] = useState("");
+  const [deptStats, setDeptStats] = useState<any[]>([]);
 
   const [noteCourseId, setNoteCourseId] = useState("");
   const [noteTitle, setNoteTitle] = useState("");
@@ -478,6 +480,15 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
+  const fetchDeptStats = async () => {
+    try {
+      const res = await fetch("/api/departments/stats", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setDeptStats(await res.json());
+    } catch (e) {
+      console.error("Error fetching department stats:", e);
+    }
+  };
+
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!courseCode || !courseTitle) return;
@@ -485,12 +496,13 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       const res = await fetch("/api/courses", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ code: courseCode, title: courseTitle }),
+        body: JSON.stringify({ code: courseCode, title: courseTitle, departmentId: courseDepId || undefined }),
       });
       if (res.ok) {
         showSuccess(`Course module ${courseCode} successfully registered.`);
         setCourseCode("");
         setCourseTitle("");
+        setCourseDepId("");
         fetchCourses();
       } else {
         const d = await res.json();
@@ -1139,7 +1151,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         onClick={() => {
           setActiveTab(id as any);
           if (id === "gradebook") fetchGradebook();
-          if (id === "departments") fetchDepartments();
+          if (id === "departments") { fetchDepartments(); fetchDeptStats(); }
         }}
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[13px] font-medium transition-all cursor-pointer ${
           isActive
@@ -2235,17 +2247,24 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                 <p className="apple-subtitle">Register new academic course modules.</p>
               </div>
               <div className="p-5 space-y-5">
-                <form onSubmit={handleCreateCourse} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4">
+                <form onSubmit={handleCreateCourse} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4">
                   <div>
                     <label className={lbl}>Course Code</label>
                     <input type="text" required value={courseCode} onChange={(e) => setCourseCode(e.target.value)} placeholder="e.g. CSC301" className="form-input uppercase font-mono" />
                   </div>
-                  <div>
+                  <div className="md:col-span-2">
                     <label className={lbl}>Course Title</label>
                     <input type="text" required value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)} placeholder="e.g. Database Systems" className="form-input" />
                   </div>
-                  <button type="submit" className="btn-gradient" style={{ marginTop: "24px" }}>
-                    Register
+                  <div>
+                    <label className={lbl}>Department</label>
+                    <select value={courseDepId} onChange={(e) => setCourseDepId(e.target.value)} className="form-input">
+                      <option value="">All Departments</option>
+                      {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  </div>
+                  <button type="submit" className="btn-gradient md:col-span-4" style={{ marginTop: "4px" }}>
+                    Register Course
                   </button>
                 </form>
 
@@ -2266,14 +2285,22 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {courses.map((c) => (
-                        <div key={c.id} className="p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] flex items-center justify-between bg-black/[0.01] dark:bg-white/[0.02] hover:border-emerald-200 dark:hover:border-emerald-800/40 hover:shadow-sm transition-all duration-200">
-                          <div>
+                        <div key={c.id} className="p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] flex items-center justify-between bg-black/[0.01] dark:bg-white/[0.02] hover:border-emerald-200 dark:hover:border-emerald-800/40 hover:shadow-sm transition-all duration-200 gap-3">
+                          <div className="min-w-0">
                             <span className="block font-mono text-[12px] font-bold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">{c.code}</span>
-                            <span className="block text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/85 leading-tight mt-0.5">{c.title}</span>
+                            <span className="block text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/85 leading-tight mt-0.5 truncate">{c.title}</span>
+                            {c.department && (
+                              <span className="block text-[11px] font-medium text-[#6e6e73] dark:text-white/35 mt-0.5 truncate">{c.department.name}</span>
+                            )}
                           </div>
-                          <span className="text-[11px] font-mono font-bold bg-black/[0.04] dark:bg-white/[0.05] text-[#6e6e73] dark:text-white/40 px-2.5 py-1 border border-black/[0.07] dark:border-white/[0.07] rounded-full">
-                            {c._count?.notes || 0} notes
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {!c.department && (
+                              <span className="text-[10px] font-bold bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 border border-blue-100 dark:border-blue-900/30 rounded-full">All Depts</span>
+                            )}
+                            <span className="text-[11px] font-mono font-bold bg-black/[0.04] dark:bg-white/[0.05] text-[#6e6e73] dark:text-white/40 px-2.5 py-1 border border-black/[0.07] dark:border-white/[0.07] rounded-full">
+                              {c._count?.notes || 0} notes
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -2285,58 +2312,82 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 6. DEPARTMENTS ── */}
           {activeTab === "departments" && (
-            <motion.div id="departments-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
-              <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
-                <h2 className="apple-title">Academic Departments</h2>
-                <p className="apple-subtitle">Establish and manage school departments.</p>
-              </div>
-              <div className="p-5 space-y-5">
-                <form onSubmit={handleCreateDepartment} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4">
-                  <div className="md:col-span-2">
-                    <label htmlFor="dept-name" className={lbl}>New Department Name</label>
-                    <input id="dept-name" type="text" required value={newDeptName} onChange={(e) => setNewDeptName(e.target.value)} placeholder="e.g. Information Technology" className="form-input" />
-                  </div>
-                  <button type="submit" className="btn-gradient" style={{ marginTop: "24px" }}>
-                    Create
-                  </button>
-                </form>
-
-                <div className="space-y-3">
-                  <p className="text-[12px] font-bold text-[#6e6e73] dark:text-white/35 uppercase tracking-widest">Active Departments ({departments.length})</p>
-                  {loading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-pulse" id="departments-skeleton">
-                      {[1,2,3,4].map((i) => (
-                        <div key={i} className="p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] flex items-center justify-between">
-                          <div className="space-y-2 w-2/3">
-                            <div className="h-4 bg-black/[0.06] dark:bg-white/[0.06] rounded-md w-3/4" />
-                            <div className="h-3 bg-black/[0.06] dark:bg-white/[0.06] rounded-md w-24" />
-                          </div>
-                          <div className="h-5 bg-black/[0.06] dark:bg-white/[0.06] rounded-full w-16" />
-                        </div>
-                      ))}
+            <motion.div id="departments-panel" className="space-y-5" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
+              {/* Create form */}
+              <div className="apple-card">
+                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
+                  <h2 className="apple-title">Academic Departments</h2>
+                  <p className="apple-subtitle">Establish departments — courses and students are linked to them.</p>
+                </div>
+                <div className="p-5">
+                  <form onSubmit={handleCreateDepartment} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4">
+                    <div className="md:col-span-2">
+                      <label htmlFor="dept-name" className={lbl}>New Department Name</label>
+                      <input id="dept-name" type="text" required value={newDeptName} onChange={(e) => setNewDeptName(e.target.value)} placeholder="e.g. Information Technology" className="form-input" />
                     </div>
-                  ) : departments.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {departments.map((dept) => (
-                        <div key={dept.id} className="p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] flex items-center justify-between bg-black/[0.01] dark:bg-white/[0.02] hover:border-emerald-200 dark:hover:border-emerald-800/40 hover:shadow-sm transition-all duration-200">
-                          <div>
-                            <span className="block text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/85 leading-tight">{dept.name}</span>
-                            <span className="block font-mono text-[11px] text-[#6e6e73] dark:text-white/35 font-bold uppercase tracking-wider mt-0.5">ID: {dept.id.substring(0, 8)}</span>
-                          </div>
-                          <span className="text-[11px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 border border-emerald-100 dark:border-emerald-900/30 rounded-full">
-                            FUTO
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="py-12 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
-                      <Users className="h-7 w-7 text-black/20 dark:text-white/20 mx-auto mb-2" />
-                      <p className="text-[12px] text-[#6e6e73] dark:text-white/40 font-medium">No departments established yet.</p>
-                    </div>
-                  )}
+                    <button type="submit" className="btn-gradient" style={{ marginTop: "24px" }}>
+                      Create
+                    </button>
+                  </form>
                 </div>
               </div>
+
+              {/* Stats grid */}
+              {deptStats.length > 0 ? (
+                <div className="space-y-3">
+                  <p className="text-[12px] font-bold text-[#6e6e73] dark:text-white/35 uppercase tracking-widest">Departments ({deptStats.length})</p>
+                  <div className="grid grid-cols-1 gap-4">
+                    {deptStats.map((dept) => (
+                      <div key={dept.id} className="apple-card p-5">
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                          <div>
+                            <h3 className="text-[14px] font-bold text-[#1d1d1f] dark:text-white/90">{dept.name}</h3>
+                            <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">
+                              {dept.courseCount} course{dept.courseCount !== 1 ? "s" : ""} assigned
+                            </p>
+                          </div>
+                          {dept.avgScore !== null && (
+                            <div className={`text-center px-3 py-2 rounded-[10px] ${dept.avgScore >= 50 ? "bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/30" : "bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30"}`}>
+                              <p className={`text-[18px] font-black ${dept.avgScore >= 50 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>{dept.avgScore.toFixed(1)}%</p>
+                              <p className="text-[10px] font-bold text-[#6e6e73] dark:text-white/40 uppercase tracking-wide">Avg Score</p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="text-center p-3 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.05] rounded-[10px]">
+                            <p className="text-[16px] font-black text-[#1d1d1f] dark:text-white/90 tabular-nums">{dept.studentCount}</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/35 mt-0.5">Students</p>
+                          </div>
+                          <div className="text-center p-3 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.05] rounded-[10px]">
+                            <p className="text-[16px] font-black text-[#1d1d1f] dark:text-white/90 tabular-nums">{dept.courseCount}</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/35 mt-0.5">Courses</p>
+                          </div>
+                          <div className="text-center p-3 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.05] rounded-[10px]">
+                            <p className="text-[16px] font-black text-[#1d1d1f] dark:text-white/90 tabular-nums">{dept.gradedCount}</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/35 mt-0.5">Graded</p>
+                          </div>
+                        </div>
+                        {dept.courseCount === 0 && (
+                          <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-3 text-center">No courses assigned yet — assign via Course Registry</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : departments.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {departments.map((dept) => (
+                    <div key={dept.id} className="p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] flex items-center justify-between bg-black/[0.01] dark:bg-white/[0.02]">
+                      <span className="text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/85">{dept.name}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-12 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
+                  <Users className="h-7 w-7 text-black/20 dark:text-white/20 mx-auto mb-2" />
+                  <p className="text-[12px] text-[#6e6e73] dark:text-white/40 font-medium">No departments established yet.</p>
+                </div>
+              )}
             </motion.div>
           )}
 
