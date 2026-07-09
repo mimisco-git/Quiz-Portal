@@ -1204,7 +1204,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 <Camera className="h-3 w-3 text-white" />
               </div>
             </div>
-            <div className="hidden sm:block min-w-0 flex-1">
+            <div className="min-w-0 flex-1">
               <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 leading-tight truncate">{user.fullName}</p>
               <p className="text-[11px] text-[#6e6e73] dark:text-white/38 font-mono truncate mt-0.5">{user.regNumber}</p>
             </div>
@@ -1249,19 +1249,19 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           })}
 
           {/* Courses header */}
-          <div className="hidden sm:block pt-3 pb-1">
+          <div className="pt-3 pb-1">
             <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30">Courses</p>
           </div>
 
           {/* Courses list */}
           {loading ? (
-            <div className="hidden sm:block space-y-1 animate-pulse" id="courses-skeleton">
+            <div className="space-y-1 animate-pulse" id="courses-skeleton">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="h-8 apple-skeleton" />
               ))}
             </div>
           ) : (
-            <div className="hidden sm:block space-y-0.5">
+            <div className="space-y-0.5">
               {courses.map((c) => {
                 const isSelected = selectedCourse?.id === c.id;
                 return (
@@ -1286,7 +1286,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           )}
 
           {/* Academic year selector */}
-          <div className="hidden sm:block px-1 pt-3">
+          <div className="px-1 pt-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30 mb-1.5 px-2">Academic Year</p>
             <select
               value={currentYear}
@@ -1302,7 +1302,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
           {/* Department selector */}
           {availableDepartments.length > 0 && (
-            <div className="hidden sm:block px-1 pt-2">
+            <div className="px-1 pt-2">
               <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30 mb-1.5 px-2">Department</p>
               <select
                 value={currentDepartment}
@@ -1329,7 +1329,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
           {/* Additional departments (borrowed courses / extra year) */}
           {availableDepartments.filter(d => d.name !== currentDepartment).length > 0 && (
-            <div className="hidden sm:block px-1 pt-2 pb-1">
+            <div className="px-1 pt-2 pb-1">
               <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30 mb-1.5 px-2">Also enrolled in</p>
               <div className="space-y-0.5 px-2">
                 {availableDepartments.filter(d => d.name !== currentDepartment).map(d => (
