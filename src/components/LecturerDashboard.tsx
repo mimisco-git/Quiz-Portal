@@ -2337,17 +2337,20 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           {exams.map(exam => (
                             <button key={exam.id} onClick={() => { setSelectedExam(exam); fetchExamSubmissions(exam.id); }}
                               className="w-full text-left p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 hover:shadow-sm transition-all duration-200 flex items-center justify-between gap-3">
-                              <div>
+                              <div className="min-w-0">
                                 <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{exam.title}</p>
                                 <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">
-                                {exam.course?.code} · {exam._count?.submissions ?? 0} submission{exam._count?.submissions !== 1 ? "s" : ""} · {exam.answerKeyText ? "Answer key uploaded" : "No answer key yet"}
-                                {exam.availableFrom && <> · Opens {new Date(exam.availableFrom).toLocaleString()}</>}
-                                {exam.availableUntil && <> · Closes {new Date(exam.availableUntil).toLocaleString()}</>}
-                              </p>
+                                  {exam.course?.code} · {exam._count?.submissions ?? 0} submission{exam._count?.submissions !== 1 ? "s" : ""} · {exam.answerKeyText ? "✓ Answer key uploaded" : "⚠ No answer key yet"}
+                                  {exam.availableFrom && <> · Opens {new Date(exam.availableFrom).toLocaleString()}</>}
+                                  {exam.availableUntil && <> · Closes {new Date(exam.availableUntil).toLocaleString()}</>}
+                                </p>
                               </div>
-                              <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border flex-shrink-0 ${exam.isOpen ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30" : "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"}`}>
-                                {exam.isOpen ? "Open" : "Closed"}
-                              </span>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${exam.isOpen ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30" : "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"}`}>
+                                  {exam.isOpen ? "Open" : "Closed"}
+                                </span>
+                                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Manage →</span>
+                              </div>
                             </button>
                           ))}
                         </div>
@@ -2561,16 +2564,19 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           {assignments.map(a => (
                             <button key={a.id} onClick={() => { setSelectedAssignment(a); fetchAssignmentSubmissions(a.id); }}
                               className="w-full text-left p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 hover:shadow-sm transition-all duration-200 flex items-center justify-between gap-3">
-                              <div>
+                              <div className="min-w-0">
                                 <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{a.title}</p>
                                 <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">
-                                  {a.course?.code} · {a._count?.submissions ?? 0} submission{a._count?.submissions !== 1 ? "s" : ""} · {a.answerKeyText ? "Answer key uploaded" : "No answer key"}
+                                  {a.course?.code} · {a._count?.submissions ?? 0} submission{a._count?.submissions !== 1 ? "s" : ""} · {a.answerKeyText ? "✓ Answer key uploaded" : "⚠ No answer key yet"}
                                   {a.dueDate && <> · Due {new Date(a.dueDate).toLocaleString()}</>}
                                 </p>
                               </div>
-                              <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border flex-shrink-0 ${a.isOpen ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30" : "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"}`}>
-                                {a.isOpen ? "Open" : "Closed"}
-                              </span>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${a.isOpen ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30" : "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"}`}>
+                                  {a.isOpen ? "Open" : "Closed"}
+                                </span>
+                                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Manage →</span>
+                              </div>
                             </button>
                           ))}
                         </div>
