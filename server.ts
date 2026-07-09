@@ -1885,45 +1885,28 @@ app.get("/api/exams/:id/my-submission", authenticateToken, async (req: any, res)
   }
 });
 
-// Lecturer: grade all ungraded submissions with AI (must own the exam)
-app.post("/api/exams/:id/grade", authenticateToken, async (req: any, res) => {
+// Lecturer: manually grade a single exam submission
+app.post("/api/exams/:examId/submissions/:subId/grade", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const score = parseFloat(req.body.score);
+  if (isNaN(score) || score < 0) return res.status(400).json({ error: "Invalid score" });
   try {
     const exam = await prisma.exam.findUnique({
-      where: { id: req.params.id },
-      include: { submissions: { include: { student: { select: { fullName: true } } } }, course: { select: { lecturerId: true } } },
+      where: { id: req.params.examId },
+      include: { course: { select: { lecturerId: true } } },
     });
     if (!exam) return res.status(404).json({ error: "Exam not found" });
     if (exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
-    if (!exam.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
-    if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
-
-    if (exam.submissions.length === 0) return res.json({ graded: 0, message: "No submissions to grade" });
-
-    const results = [];
-    for (const submission of exam.submissions) {
-      try {
-        const { score, totalMarks, feedback } = await gradeSubmission(
-          exam.questionsText,
-          exam.answerKeyText,
-          submission.answersText,
-          (submission as any).student.fullName,
-          exam.marksText
-        );
-        await prisma.examSubmission.update({
-          where: { id: submission.id },
-          data: { score, totalMarks, feedback, isGraded: true },
-        });
-        results.push({ studentId: submission.studentId, score, totalMarks });
-      } catch (err) {
-        console.error(`Failed to grade submission ${submission.id}:`, err);
-        results.push({ studentId: submission.studentId, error: "Grading failed" });
-      }
-    }
-    return res.json({ graded: results.filter((r) => !r.error).length, results });
+    const totalMarks = exam.marksText
+      ? exam.marksText.split(",").map((m) => parseFloat(m.trim())).filter((m) => !isNaN(m) && m > 0).reduce((a, b) => a + b, 0)
+      : null;
+    const updated = await prisma.examSubmission.update({
+      where: { id: req.params.subId },
+      data: { score, totalMarks, feedback: null, isGraded: true },
+    });
+    return res.json(updated);
   } catch (err) {
-    console.error("Error grading exam:", err);
-    return res.status(500).json({ error: "Failed to grade exam" });
+    return res.status(500).json({ error: "Failed to save grade" });
   }
 });
 
@@ -2092,37 +2075,28 @@ app.get("/api/assignments/:id/submissions", authenticateToken, async (req: any, 
   }
 });
 
-app.post("/api/assignments/:id/grade", authenticateToken, async (req: any, res) => {
+// Lecturer: manually grade a single assignment submission
+app.post("/api/assignments/:assignmentId/submissions/:subId/grade", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const score = parseFloat(req.body.score);
+  if (isNaN(score) || score < 0) return res.status(400).json({ error: "Invalid score" });
   try {
     const assignment = await prisma.assignment.findUnique({
-      where: { id: req.params.id },
-      include: { submissions: { include: { student: { select: { fullName: true } } } }, course: { select: { lecturerId: true } } },
+      where: { id: req.params.assignmentId },
+      include: { course: { select: { lecturerId: true } } },
     });
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
     if (assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
-    if (!assignment.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
-    if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
-    if (assignment.submissions.length === 0) return res.json({ graded: 0, message: "No submissions to grade" });
-    const results = [];
-    for (const submission of assignment.submissions) {
-      try {
-        const { score, totalMarks, feedback } = await gradeSubmission(
-          assignment.questionsText,
-          assignment.answerKeyText,
-          submission.answersText,
-          (submission as any).student.fullName,
-          assignment.marksText
-        );
-        await prisma.assignmentSubmission.update({ where: { id: submission.id }, data: { score, totalMarks, feedback, isGraded: true } });
-        results.push({ studentId: submission.studentId, score, totalMarks });
-      } catch (err) {
-        results.push({ studentId: submission.studentId, error: "Grading failed" });
-      }
-    }
-    return res.json({ graded: results.filter((r) => !r.error).length, results });
+    const totalMarks = assignment.marksText
+      ? assignment.marksText.split(",").map((m) => parseFloat(m.trim())).filter((m) => !isNaN(m) && m > 0).reduce((a, b) => a + b, 0)
+      : null;
+    const updated = await prisma.assignmentSubmission.update({
+      where: { id: req.params.subId },
+      data: { score, totalMarks, feedback: null, isGraded: true },
+    });
+    return res.json(updated);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to grade assignment" });
+    return res.status(500).json({ error: "Failed to save grade" });
   }
 });
 
