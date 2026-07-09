@@ -1653,9 +1653,11 @@ async function gradeSubmission(
     const keyItems: AnswerKeyItem[] = parsedKey.filter(
       (q: AnswerKeyItem) => q.answer?.trim() && q.marks > 0
     );
-    const totalMarks = keyItems.reduce((s, q) => s + q.marks, 0);
 
-    const prompt = `You are grading a student's written exam answers.
+    if (keyItems.length > 0) {
+      const totalMarks = keyItems.reduce((s, q) => s + q.marks, 0);
+
+      const prompt = `You are grading a student's written exam answers.
 
 STUDENT: ${studentName}
 
@@ -1674,31 +1676,36 @@ Return ONLY valid JSON, no other text:
   "overall_feedback": "<2-3 sentences for ${studentName}>"
 }`;
 
-    const response = await nvidia.chat.completions.create({
-      model: "meta/llama-3.1-70b-instruct",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
-      max_tokens: 1024,
-    });
-
-    const raw = response.choices[0]?.message?.content ?? "{}";
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse(jsonMatch?.[0] ?? raw);
-
-    if (Array.isArray(parsed.questions)) {
-      const breakdown = (parsed.questions as any[]).map((q) => {
-        const key = keyItems.find((k) => k.qLabel === q.qLabel);
-        const maxM = key?.marks ?? 0;
-        const sim = Math.max(0, Math.min(100, Number(q.similarity)));
-        const awarded = applyMarkingFormula(sim, maxM);
-        return { qLabel: q.qLabel, sim, awarded, max: maxM, comment: String(q.comment ?? "") };
+      const response = await nvidia.chat.completions.create({
+        model: "meta/llama-3.1-70b-instruct",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+        max_tokens: 1024,
       });
-      const score = breakdown.reduce((s, b) => s + b.awarded, 0);
-      const breakdownText = breakdown
-        .map((b) => `${b.qLabel}: ${b.awarded}/${b.max} marks (${b.sim}% match) — ${b.comment}`)
-        .join("\n");
-      const feedback = `${String(parsed.overall_feedback ?? "")}\n\nBreakdown:\n${breakdownText}`;
-      return { score, totalMarks, feedback };
+
+      const raw = response.choices[0]?.message?.content ?? "{}";
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      let parsed: any = {};
+      try { parsed = JSON.parse(jsonMatch?.[0] ?? raw); } catch { /* fall through to 0 score */ }
+
+      if (Array.isArray(parsed.questions)) {
+        const breakdown = (parsed.questions as any[]).map((q) => {
+          const key = keyItems.find((k) => k.qLabel === q.qLabel);
+          const maxM = key?.marks ?? 0;
+          const sim = Math.max(0, Math.min(100, Number(q.similarity)));
+          const awarded = applyMarkingFormula(sim, maxM);
+          return { qLabel: q.qLabel, sim, awarded, max: maxM, comment: String(q.comment ?? "") };
+        });
+        const score = breakdown.reduce((s, b) => s + b.awarded, 0);
+        const breakdownText = breakdown
+          .map((b) => `${b.qLabel}: ${b.awarded}/${b.max} marks (${b.sim}% match) — ${b.comment}`)
+          .join("\n");
+        const feedback = `${String(parsed.overall_feedback ?? "")}\n\nBreakdown:\n${breakdownText}`;
+        return { score, totalMarks, feedback };
+      }
+
+      // AI gave unexpected format — return 0 with correct totalMarks so display stays marks-based
+      return { score: 0, totalMarks, feedback: "Auto-grading response was in an unexpected format. Please try grading again." };
     }
   }
 
@@ -1708,7 +1715,7 @@ Return ONLY valid JSON, no other text:
       ? marksText.split(",").map((m) => parseFloat(m.trim())).filter((m) => !isNaN(m) && m > 0)
       : [];
     const usesMarks = marksArray.length > 0;
-    const totalMarks = usesMarks ? marksArray.reduce((a, b) => a + b, 0) : null;
+    const totalMarks = usesMarks ? marksArray.reduce((a, b) => a + b, 0) : 100;
 
     let prompt: string;
     if (usesMarks) {
@@ -1783,11 +1790,12 @@ Respond with ONLY valid JSON:
       return { score, totalMarks, feedback };
     }
 
+    // No per-question marks: treat 0–100 AI score as marks out of 100
     const score = Math.max(0, Math.min(100, Number(parsed.score)));
-    return { score, totalMarks: null, feedback: String(parsed.feedback ?? "Grading complete.") };
+    return { score, totalMarks: 100, feedback: String(parsed.feedback ?? "Grading complete.") };
   }
 
-  return { score: 0, totalMarks: null, feedback: "No answer key available for grading." };
+  return { score: 0, totalMarks: 100, feedback: "No answer key available for grading." };
 }
 
 // Parse question structure from uploaded doc

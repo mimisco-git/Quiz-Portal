@@ -2576,7 +2576,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                                 </div>
                                 <div className="flex items-center gap-3">
                                   {sub.isGraded ? (() => {
-                                    const pct = sub.totalMarks ? (sub.score / sub.totalMarks) * 100 : sub.score;
+                                    const pct = sub.totalMarks ? ((sub.score ?? 0) / sub.totalMarks) * 100 : (sub.score ?? 0);
                                     const pass = pct >= 50;
                                     return (
                                       <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${pass ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" : "bg-red-100 dark:bg-red-950/40 text-red-500"}`}>
@@ -2863,7 +2863,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                                 </div>
                                 <div className="flex items-center gap-3">
                                   {sub.isGraded ? (() => {
-                                    const pct = sub.totalMarks ? (sub.score / sub.totalMarks) * 100 : sub.score;
+                                    const pct = sub.totalMarks ? ((sub.score ?? 0) / sub.totalMarks) * 100 : (sub.score ?? 0);
                                     const pass = pct >= 50;
                                     return (
                                       <span className={`text-[12px] font-bold px-3 py-1 rounded-full ${pass ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" : "bg-red-100 dark:bg-red-950/40 text-red-500"}`}>

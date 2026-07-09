@@ -1294,7 +1294,9 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 const done = attemptsList.filter(a => a.isCompleted);
                 const quizAvg = done.length > 0 ? done.reduce((s, a) => s + (a.score ?? 0), 0) / done.length : 0;
                 const gradedExams = examSubmissions.filter(e => e.isGraded);
-                const examAvg = gradedExams.length > 0 ? gradedExams.reduce((s, e) => s + (e.score ?? 0), 0) / gradedExams.length : 0;
+                const examAvg = gradedExams.length > 0
+                  ? gradedExams.reduce((s, e) => s + (e.totalMarks ? ((e.score ?? 0) / e.totalMarks) * 100 : (e.score ?? 0)), 0) / gradedExams.length
+                  : 0;
                 return [
                   { icon: Award,       label: "Quizzes Done",   value: done.length },
                   { icon: TrendingUp,  label: "Quiz Avg",        value: `${quizAvg.toFixed(1)}%` },
