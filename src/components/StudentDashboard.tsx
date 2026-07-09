@@ -2189,43 +2189,49 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           </div>
                         )}
 
-                        {/* Custom WebRTC audio room */}
-                        <LiveAudioRoom
-                          roomId={activeLiveSession.id}
-                          displayName={user.fullName}
-                          role="student"
-                          isMicAllowed={isSpeakingAllowed}
+                        {/* ── Slide — primary content, takes full width ── */}
+                        <SlideView
+                          content={slide}
+                          slideNumber={Math.min(currentSlide, slides.length - 1) + 1}
+                          totalSlides={slides.length}
+                          topic={activeLiveSession.topic}
+                          courseCode={activeLiveSession.course?.code}
                         />
+                        <p className="text-center text-[10px] font-mono text-[#6e6e73] dark:text-white/30">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />
+                            Hover slide → fullscreen &nbsp;·&nbsp; Slides auto-advance
+                          </span>
+                        </p>
 
-                        {/* placeholder to avoid unused audioOpen state warning */}
-                        <div style={{ display: "none" }}>{String(audioOpen)}</div>
-                        <div className="flex items-center justify-between px-3.5 py-2 bg-slate-900 dark:bg-black/40 rounded-[10px]">
+                        {/* ── Compact audio bar ── */}
+                        <div className="flex items-center justify-between px-3.5 py-2 bg-slate-900 dark:bg-black/50 rounded-[10px]">
                           <div className="flex items-center gap-2">
-                            <span className="flex h-2 w-2"><span className="animate-ping absolute h-2 w-2 rounded-full bg-emerald-400 opacity-75" /><span className="relative h-2 w-2 rounded-full bg-emerald-500" /></span>
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute h-2 w-2 rounded-full bg-emerald-400 opacity-75" />
+                              <span className="relative h-2 w-2 rounded-full bg-emerald-500" />
+                            </span>
                             <span className="text-[11.5px] font-semibold text-slate-200">
-                              {isSpeakingAllowed ? "Mic Active" : "Audio Connected · Mic Muted"}
+                              {isSpeakingAllowed ? "Mic Active" : "Audio · Mic Muted"}
                             </span>
                             <span className="text-[10px] font-mono text-slate-500">{activeLiveSession.course?.code ?? ""}</span>
                           </div>
                           <button onClick={() => setAudioOpen(o => !o)}
                             className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-slate-400 hover:text-white border border-white/10 hover:border-white/20 rounded-[7px] transition cursor-pointer">
-                            <Mic className="h-3 w-3" /> {audioOpen ? "Hide" : "Show"}
+                            <Mic className="h-3 w-3" /> {audioOpen ? "Hide" : "Audio"}
                           </button>
                         </div>
 
-                        {/* Slides always visible as primary content */}
-                        <div className="space-y-2">
-                          <SlideView
-                            content={slide}
-                            slideNumber={Math.min(currentSlide, slides.length - 1) + 1}
-                            totalSlides={slides.length}
-                            topic={activeLiveSession.topic}
-                            courseCode={activeLiveSession.course?.code}
+                        {/* Collapsible audio room */}
+                        {audioOpen && (
+                          <LiveAudioRoom
+                            roomId={activeLiveSession.id}
+                            displayName={user.fullName}
+                            role="student"
+                            isMicAllowed={isSpeakingAllowed}
                           />
-                          <p className="text-center text-[10.5px] font-mono text-[#6e6e73] dark:text-white/30">
-                            <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />Slides advance automatically</span>
-                          </p>
-                        </div>
+                        )}
+                        <div style={{ display: "none" }}>{String(audioOpen)}</div>
 
                         {/* Sub-tabs: Chat + Poll only */}
                         <div className="flex gap-1 bg-black/[0.04] dark:bg-white/[0.04] rounded-[12px] p-1 border border-black/[0.06] dark:border-white/[0.05]">

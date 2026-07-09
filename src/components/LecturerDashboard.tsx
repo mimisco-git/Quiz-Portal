@@ -2084,13 +2084,16 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                                 totalSlides={slides.length}
                                 topic={broadcastingSession.topic}
                                 courseCode={courses.find((c: any) => c.id === broadcastingSession.courseId)?.code}
+                                canNavigate
+                                onPrev={() => handleSlideChange(Math.max(0, safeSlide - 1))}
+                                onNext={() => handleSlideChange(Math.min(slides.length - 1, safeSlide + 1))}
                               />
                               <div className="flex items-center justify-between gap-3">
                                 <button onClick={() => handleSlideChange(Math.max(0, safeSlide - 1))} disabled={safeSlide === 0}
                                   className="flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold bg-black/[0.06] dark:bg-white/[0.08] hover:bg-black/[0.12] dark:hover:bg-white/[0.14] text-[#3a3a3c] dark:text-white/70 rounded-[10px] disabled:opacity-30 transition cursor-pointer">
                                   <ChevronLeft className="h-4 w-4" /> Previous
                                 </button>
-                                <span className="text-[11px] font-mono text-[#6e6e73] dark:text-white/40 select-none">← → arrow keys work too</span>
+                                <span className="text-[11px] font-mono text-[#6e6e73] dark:text-white/40 select-none">← → or hover slide for fullscreen</span>
                                 <button onClick={() => handleSlideChange(Math.min(slides.length - 1, safeSlide + 1))} disabled={safeSlide === slides.length - 1}
                                   className="flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-[10px] disabled:opacity-30 transition cursor-pointer">
                                   Next <ChevronRight className="h-4 w-4" />
