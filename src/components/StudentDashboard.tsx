@@ -43,6 +43,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "assignments" | "history">("notes");
   const [periodTick, setPeriodTick] = useState(0);
   const [currentYear, setCurrentYear] = useState(user.year);
+  const [currentDepartment, setCurrentDepartment] = useState(user.department);
+  const [availableDepartments, setAvailableDepartments] = useState<{ id: string; name: string }[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [selectedNote, setSelectedNote] = useState<LectureNote | null>(null);
@@ -361,6 +363,28 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     }
   };
 
+  const handleChangeDepartment = async (deptName: string) => {
+    const prev = currentDepartment;
+    setCurrentDepartment(deptName);
+    try {
+      const res = await fetch("/api/student/department", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ department: deptName }),
+      });
+      if (res.ok) {
+        // Refresh courses/exams/assignments for the new department
+        fetchCourses();
+        fetchExams();
+        fetchAssignments();
+      } else {
+        setCurrentDepartment(prev);
+      }
+    } catch {
+      setCurrentDepartment(prev);
+    }
+  };
+
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const [activeAttempt, setActiveAttempt] = useState<StudentAttempt | null>(null);
   const [quizQuestions, setQuizQuestions] = useState<Question[]>([]);
@@ -405,6 +429,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     fetchAllNotes();
     fetchAnnouncements();
     subscribeToPush();
+    fetch("/api/departments").then(r => r.ok ? r.json() : []).then(setAvailableDepartments).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1261,6 +1286,33 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               ))}
             </select>
           </div>
+
+          {/* Department selector */}
+          {availableDepartments.length > 0 && (
+            <div className="hidden sm:block px-1 pt-2">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30 mb-1.5 px-2">Department</p>
+              <select
+                value={currentDepartment}
+                onChange={(e) => handleChangeDepartment(e.target.value)}
+                className={`w-full px-2.5 py-1.5 rounded-[8px] text-[11.5px] border outline-none transition cursor-pointer ${
+                  availableDepartments.some(d => d.name === currentDepartment)
+                    ? "bg-black/[0.04] dark:bg-white/[0.07] border-black/[0.09] dark:border-white/[0.10] text-[#1d1d1f] dark:text-white/90 focus:border-emerald-500/60"
+                    : "bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700/50 text-amber-800 dark:text-amber-300 focus:border-amber-500"
+                }`}
+                title="Change your department"
+              >
+                {!availableDepartments.some(d => d.name === currentDepartment) && (
+                  <option value={currentDepartment}>{currentDepartment} (unverified)</option>
+                )}
+                {availableDepartments.map((d) => (
+                  <option key={d.id} value={d.name}>{d.name}</option>
+                ))}
+              </select>
+              {!availableDepartments.some(d => d.name === currentDepartment) && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 px-2 mt-1 leading-tight">Please select your department — it controls what courses and assessments you see.</p>
+              )}
+            </div>
+          )}
         </nav>
 
         {/* Bottom: theme + logout */}

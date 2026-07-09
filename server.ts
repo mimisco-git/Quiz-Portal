@@ -1329,23 +1329,29 @@ app.post("/api/departments", authenticateToken, async (req: any, res) => {
 // STUDENT PROFILE & YEAR ADVANCEMENT API
 // -------------------------------------------------------------
 app.post("/api/student/promote-year", authenticateToken, async (req: any, res) => {
-  if (req.user.role !== "student") {
-    return res.status(403).json({ error: "Only students can update their profile." });
-  }
+  if (req.user.role !== "student") return res.status(403).json({ error: "Only students can update their profile." });
   const { newYear } = req.body;
-  if (!newYear) {
-    return res.status(400).json({ error: "New Year of Study is required." });
-  }
-
+  if (!newYear) return res.status(400).json({ error: "New Year of Study is required." });
   try {
-    const updated = await prisma.student.update({
-      where: { id: req.user.id },
-      data: { year: newYear.trim() },
-    });
+    const updated = await prisma.student.update({ where: { id: req.user.id }, data: { year: newYear.trim() } });
     return res.json(updated);
   } catch (error: any) {
-    console.error("Error promoting/updating student year:", error);
     return res.status(500).json({ error: "Error updating Year of Study." });
+  }
+});
+
+app.patch("/api/student/department", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only." });
+  const { department } = req.body;
+  if (!department?.trim()) return res.status(400).json({ error: "Department name is required." });
+  try {
+    // Verify the department exists
+    const dept = await prisma.department.findFirst({ where: { name: department.trim() } });
+    if (!dept) return res.status(400).json({ error: "Department not found." });
+    await prisma.student.update({ where: { id: req.user.id }, data: { department: department.trim() } });
+    return res.json({ success: true, department: department.trim() });
+  } catch {
+    return res.status(500).json({ error: "Failed to update department." });
   }
 });
 
