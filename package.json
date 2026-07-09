@@ -38,6 +38,8 @@
     "react-markdown": "^10.1.0",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "turndown": "^7.2.4",
     "vite": "^6.2.3",
     "web-push": "^3.6.7"

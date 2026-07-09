@@ -10,6 +10,7 @@ import AvatarModal from "./AvatarModal";
 import { motion, AnimatePresence } from "motion/react";
 import SlideView from "./SlideView";
 import DiscussionBoard from "./DiscussionBoard";
+import LiveAudioRoom, { type LiveAudioRoomHandle } from "./LiveAudioRoom";
 import OnboardingTour from "./OnboardingTour";
 
 interface LecturerDashboardProps {
@@ -115,9 +116,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [lecturerChatMessage, setLecturerChatMessage] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
-  const jitsiContainerRef = useRef<HTMLDivElement | null>(null);
-  const jitsiApiRef = useRef<any>(null);
-  const participantMapRef = useRef<Record<string, string>>({}); // displayName → participantId
+  const audioRoomRef = useRef<LiveAudioRoomHandle>(null);
 
   const [editingAttemptId, setEditingAttemptId] = useState<string | null>(null);
   const [editingScore, setEditingScore] = useState("");
@@ -170,7 +169,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [expandedAssignmentSub, setExpandedAssignmentSub] = useState<string | null>(null);
   const [manualScoreInputs, setManualScoreInputs] = useState<Record<string, string>>({});
 
-  const [liveSubTab, setLiveSubTab] = useState<"jitsi" | "slides" | "poll" | "attendance" | "chat">("slides");
+  const [liveSubTab, setLiveSubTab] = useState<"audio" | "slides" | "poll" | "attendance" | "chat">("slides");
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["Option A", "Option B", "Option C", "Option D"]);
   const [attachLiveFile, setAttachLiveFile] = useState<File | null>(null);
@@ -246,61 +245,6 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   }, [activeTab]);
 
-  // Jitsi IFrame API — init when session starts, destroy when it ends
-  useEffect(() => {
-    if (!broadcastingSession) {
-      jitsiApiRef.current?.dispose();
-      jitsiApiRef.current = null;
-      participantMapRef.current = {};
-      return;
-    }
-    const roomName = broadcastingSession.jitsiRoom ?? broadcastingSession.id;
-    const initJitsi = () => {
-      if (jitsiApiRef.current || !jitsiContainerRef.current) return;
-      const api = new (window as any).JitsiMeetExternalAPI("meet.jit.si", {
-        roomName,
-        parentNode: jitsiContainerRef.current,
-        userInfo: { displayName: user.name },
-        configOverwrite: {
-          startWithVideoMuted: true,
-          startWithAudioMuted: false,
-          prejoinPageEnabled: false,
-          disableDeepLinking: true,
-        },
-        interfaceConfigOverwrite: {
-          SHOW_JITSI_WATERMARK: false,
-          TOOLBAR_BUTTONS: ["microphone", "hangup", "fullscreen", "chat"],
-        },
-      });
-      api.addEventListener("participantJoined", (e: any) => {
-        if (e.displayName) participantMapRef.current[e.displayName] = e.id;
-      });
-      api.addEventListener("participantLeft", (e: any) => {
-        Object.keys(participantMapRef.current).forEach((name) => {
-          if (participantMapRef.current[name] === e.id) delete participantMapRef.current[name];
-        });
-      });
-      jitsiApiRef.current = api;
-    };
-    if ((window as any).JitsiMeetExternalAPI) {
-      initJitsi();
-    } else {
-      const existing = document.querySelector('script[src*="external_api"]');
-      if (!existing) {
-        const s = document.createElement("script");
-        s.src = "https://meet.jit.si/external_api.js";
-        s.onload = initJitsi;
-        document.head.appendChild(s);
-      } else {
-        existing.addEventListener("load", initJitsi);
-      }
-    }
-    return () => {
-      jitsiApiRef.current?.dispose();
-      jitsiApiRef.current = null;
-      participantMapRef.current = {};
-    };
-  }, [broadcastingSession?.id]);
 
   // Keyboard arrow-key slide navigation for lecturer
   useEffect(() => {
@@ -1367,6 +1311,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       ...prev,
       handRaises: (prev.handRaises || []).map((h: any) => h.id === raiseId ? { ...h, allowedToSpeak: true } : h),
     } : prev);
+    audioRoomRef.current?.grantMic(studentName);
   };
 
   const handleMuteStudent = async (raiseId: string, studentName: string) => {
@@ -1376,15 +1321,11 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       ...prev,
       handRaises: (prev.handRaises || []).map((h: any) => h.id === raiseId ? { ...h, allowedToSpeak: false } : h),
     } : prev);
-    // mute that participant in Jitsi if they're in the map
-    const participantId = participantMapRef.current[studentName];
-    if (participantId && jitsiApiRef.current) {
-      jitsiApiRef.current.executeCommand("muteParticipant", participantId);
-    }
+    audioRoomRef.current?.revokeMic(studentName);
   };
 
   const handleMuteAll = () => {
-    if (jitsiApiRef.current) jitsiApiRef.current.executeCommand("muteEveryone");
+    audioRoomRef.current?.muteAll();
   };
 
   const handleAttachFile = async () => {
@@ -2042,12 +1983,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       {/* Sub-tabs */}
                       <div className="flex gap-1 bg-black/[0.04] dark:bg-white/[0.04] rounded-[12px] p-1 border border-black/[0.06] dark:border-white/[0.05] overflow-x-auto">
                         {([
-                          { id: "jitsi",      icon: Mic,           label: "Audio/Video" },
+                          { id: "audio",      icon: Mic,           label: "Audio/Video" },
                           { id: "slides",     icon: Layers,        label: `Slides${slides.length > 1 ? ` (${safeSlide + 1}/${slides.length})` : ""}` },
                           { id: "poll",       icon: BarChart2,     label: `Poll${activePoll ? " •" : ""}` },
                           { id: "attendance", icon: Users,         label: `Attendance (${attendance.length})` },
                           { id: "chat",       icon: MessageSquare, label: `Chat (${liveChats.length})` },
-                        ] as { id: "jitsi" | "slides" | "poll" | "attendance" | "chat"; icon: React.ElementType; label: string }[]).map(tab => (
+                        ] as { id: "audio" | "slides" | "poll" | "attendance" | "chat"; icon: React.ElementType; label: string }[]).map(tab => (
                           <button key={tab.id} onClick={() => setLiveSubTab(tab.id)}
                             className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveSubTab === tab.id ? "bg-[#ffffff] dark:bg-white/[0.10] text-[#1d1d1f] dark:text-white/90 shadow-sm border border-black/[0.07] dark:border-white/[0.08]" : "text-[#6e6e73] dark:text-white/50 hover:text-[#1d1d1f] dark:hover:text-white/75"}`}>
                             <tab.icon className="h-3.5 w-3.5 flex-shrink-0" />
@@ -2056,10 +1997,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         ))}
                       </div>
 
-                      {/* Jitsi IFrame API — always mounted so audio stays alive when switching tabs */}
-                      <div style={{ display: liveSubTab === "jitsi" ? "block" : "none" }}>
+                      {/* LiveAudioRoom — always mounted so audio stays alive when switching tabs */}
+                      <div style={{ display: liveSubTab === "audio" ? "block" : "none" }}>
                         <div className="space-y-4">
-                          {/* Mute All button */}
                           <div className="flex items-center justify-between">
                             <p className="text-[12px] font-semibold text-[#6e6e73] dark:text-white/40">Live audio room — you are the host</p>
                             <button onClick={handleMuteAll}
@@ -2067,7 +2007,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                               <Mic className="h-3.5 w-3.5" /> Mute All Students
                             </button>
                           </div>
-                          <div ref={jitsiContainerRef} className="rounded-[12px] overflow-hidden border border-black/[0.07] dark:border-white/[0.07]" style={{ height: 420 }} />
+                          <LiveAudioRoom
+                            ref={audioRoomRef}
+                            roomId={broadcastingSession.id}
+                            displayName={user.name}
+                            role="lecturer"
+                          />
                           <div className="bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4 space-y-3">
                             <p className={lbl}>Share a File with Students</p>
                             <div className="flex items-center gap-3">

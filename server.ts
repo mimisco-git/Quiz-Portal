@@ -1,4 +1,6 @@
 import express from "express";
+import { createServer } from "http";
+import { Server as SocketIOServer } from "socket.io";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
@@ -62,6 +64,10 @@ async function getStudentFilter(studentId: string): Promise<{ depts: string[]; y
 }
 
 const app = express();
+const httpServer = createServer(app);
+const io = new SocketIOServer(httpServer, {
+  cors: { origin: process.env.FRONTEND_URL ?? "*", credentials: true },
+});
 const PORT = 3000;
 
 // Explicit CORS policy — restricts cross-origin requests to the configured frontend origin
@@ -3428,6 +3434,62 @@ app.get("/api/notifications", authenticateToken, async (req: any, res) => {
 // -------------------------------------------------------------
 // SERVER AND VITE DEV SETUP
 // -------------------------------------------------------------
+// WEBRTC SIGNALING — Socket.io
+// -------------------------------------------------------------
+io.on("connection", (socket) => {
+  socket.on("join-room", ({ roomId, displayName, role }: { roomId: string; displayName: string; role: string }) => {
+    socket.join(roomId);
+    socket.data = { displayName, role, roomId };
+
+    // Tell existing room members about the new participant
+    socket.to(roomId).emit("peer-joined", { socketId: socket.id, displayName, role });
+
+    // Send the new participant the list of everyone already in the room
+    const room = io.sockets.adapter.rooms.get(roomId);
+    const peers: { socketId: string; displayName: string; role: string }[] = [];
+    if (room) {
+      for (const sid of room) {
+        if (sid === socket.id) continue;
+        const s = io.sockets.sockets.get(sid);
+        if (s?.data?.displayName) {
+          peers.push({ socketId: sid, displayName: s.data.displayName, role: s.data.role });
+        }
+      }
+    }
+    socket.emit("room-peers", peers);
+  });
+
+  // Relay WebRTC signal (offer / answer / ice-candidate) between two peers
+  socket.on("signal", ({ to, signal }: { to: string; signal: unknown }) => {
+    io.to(to).emit("signal", { from: socket.id, signal });
+  });
+
+  // Lecturer → all students: force mute
+  socket.on("mute-all", ({ roomId }: { roomId: string }) => {
+    if (socket.data?.role !== "lecturer") return;
+    socket.to(roomId).emit("force-mute");
+  });
+
+  // Lecturer → one student: force mute
+  socket.on("mute-peer", ({ to }: { to: string }) => {
+    if (socket.data?.role !== "lecturer") return;
+    io.to(to).emit("force-mute");
+  });
+
+  // Lecturer → one student: grant mic
+  socket.on("grant-mic", ({ to }: { to: string }) => {
+    if (socket.data?.role !== "lecturer") return;
+    io.to(to).emit("mic-granted");
+  });
+
+  socket.on("disconnect", () => {
+    if (socket.data?.roomId) {
+      socket.to(socket.data.roomId).emit("peer-left", { socketId: socket.id });
+    }
+  });
+});
+
+// -------------------------------------------------------------
 async function startServer() {
   // Pre-seed Database
   await seedDatabase();
@@ -3448,7 +3510,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server is running at http://localhost:${PORT}`);
   });
 }
