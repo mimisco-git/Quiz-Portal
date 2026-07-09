@@ -1898,11 +1898,10 @@ app.post("/api/exams/:id/grade", authenticateToken, async (req: any, res) => {
     if (!exam.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
     if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
 
-    const ungraded = exam.submissions.filter((s) => !s.isGraded);
-    if (ungraded.length === 0) return res.json({ graded: 0, message: "All submissions already graded" });
+    if (exam.submissions.length === 0) return res.json({ graded: 0, message: "No submissions to grade" });
 
     const results = [];
-    for (const submission of ungraded) {
+    for (const submission of exam.submissions) {
       try {
         const { score, totalMarks, feedback } = await gradeSubmission(
           exam.questionsText,
@@ -2104,10 +2103,9 @@ app.post("/api/assignments/:id/grade", authenticateToken, async (req: any, res) 
     if (assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     if (!assignment.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
     if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
-    const ungraded = assignment.submissions.filter((s) => !s.isGraded);
-    if (ungraded.length === 0) return res.json({ graded: 0, message: "All submissions already graded" });
+    if (assignment.submissions.length === 0) return res.json({ graded: 0, message: "No submissions to grade" });
     const results = [];
-    for (const submission of ungraded) {
+    for (const submission of assignment.submissions) {
       try {
         const { score, totalMarks, feedback } = await gradeSubmission(
           assignment.questionsText,
