@@ -41,6 +41,7 @@ function formatCountdown(target: Date): string {
 
 export default function StudentDashboard({ token, user, theme, onToggleTheme, onLogout }: StudentDashboardProps) {
   const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "assignments" | "history">("notes");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [periodTick, setPeriodTick] = useState(0);
   const [currentYear, setCurrentYear] = useState(user.year);
   const [currentDepartment, setCurrentDepartment] = useState(user.department);
@@ -1375,12 +1376,148 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
         </div>
       </aside>
 
+      {/* ── MOBILE SIDEBAR DRAWER ── */}
+      {mobileSidebarOpen && (
+        <div className="sm:hidden fixed inset-0 z-[200] flex">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
+          {/* Panel */}
+          <div className="relative w-[280px] max-w-[85vw] h-full apple-sidebar flex flex-col shadow-2xl overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 pt-5 pb-3 flex-shrink-0">
+              <span className="text-[13px] font-bold text-[#1d1d1f] dark:text-white/80">Menu</span>
+              <button onClick={() => setMobileSidebarOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-black/[0.06] dark:bg-white/[0.09] text-[#3a3a3c] dark:text-white/60">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Avatar + profile */}
+            <div className="px-3 pb-3 flex-shrink-0">
+              <button onClick={() => { setIsAvatarModalOpen(true); setMobileSidebarOpen(false); }}
+                className="group w-full flex items-center gap-3 p-2.5 rounded-[12px] hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition cursor-pointer text-left">
+                <div className="relative flex-shrink-0">
+                  <UserAvatar userId={user.id} role="student" size={34} initials={user.fullName} refreshTrigger={avatarRefreshTrigger} className="rounded-full ring-[1.5px] ring-black/10 dark:ring-white/15 shadow-sm" />
+                  <div className="absolute inset-0 bg-black/45 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <Camera className="h-3 w-3 text-white" />
+                  </div>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 leading-tight truncate">{user.fullName}</p>
+                  <p className="text-[11px] text-[#6e6e73] dark:text-white/38 font-mono truncate mt-0.5">{user.regNumber}</p>
+                </div>
+              </button>
+            </div>
+
+            {/* Nav tabs */}
+            <nav className="flex-1 px-2 space-y-0.5">
+              {[
+                { id: "notes",          icon: FileText,      label: "Materials"   },
+                { id: "quizzes",        icon: Award,         label: "Quizzes"     },
+                { id: "exams",          icon: Upload,        label: "Exams"       },
+                { id: "assignments",    icon: Pencil,        label: "Assignments" },
+                { id: "history",        icon: ClipboardList, label: "My Results"  },
+                { id: "live-classroom", icon: Radio,         label: "Live Class"  },
+              ].map((item) => {
+                const isActive = activeTab === (item.id as typeof activeTab);
+                return (
+                  <button key={item.id} onClick={() => { setActiveTab(item.id as typeof activeTab); setMobileSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[13px] font-medium transition-all ${isActive ? "bg-emerald-500/[0.15] dark:bg-emerald-500/[0.12] text-emerald-700 dark:text-emerald-400" : "text-[#3a3a3c] dark:text-white/60 hover:bg-black/[0.05] dark:hover:bg-white/[0.06]"}`}>
+                    <item.icon className={`h-4 w-4 flex-shrink-0 ${isActive ? "text-emerald-500" : ""}`} strokeWidth={1.6} />
+                    {item.label}
+                  </button>
+                );
+              })}
+
+              {/* Courses */}
+              <div className="pt-3 pb-1">
+                <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30">Courses</p>
+              </div>
+              {courses.map((c) => {
+                const isSelected = selectedCourse?.id === c.id;
+                return (
+                  <button key={c.id} onClick={() => { fetchCourseDetail(c.id); setSelectedNote(null); setNotesFilterCourseId(c.id); setMobileSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-[10px] text-left transition-all ${isSelected ? "bg-emerald-500/[0.12] text-emerald-700 dark:text-emerald-400" : "text-[#3a3a3c] dark:text-white/50 hover:bg-black/[0.04] dark:hover:bg-white/[0.05]"}`}>
+                    <span className={`font-mono text-[10.5px] font-bold uppercase tracking-wide flex-shrink-0 w-[52px] truncate ${isSelected ? "text-emerald-600 dark:text-emerald-400" : "text-[#6e6e73] dark:text-white/35"}`}>{c.code}</span>
+                    <span className="text-[11px] font-medium truncate flex-1 leading-tight">{c.title}</span>
+                    {isSelected && <ChevronRight className="h-3 w-3 flex-shrink-0 text-emerald-500" />}
+                  </button>
+                );
+              })}
+
+              {/* Academic Year */}
+              <div className="px-1 pt-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30 mb-1.5 px-2">Academic Year</p>
+                <select value={currentYear} onChange={(e) => handlePromoteYear(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-[8px] text-[11.5px] bg-black/[0.04] dark:bg-white/[0.07] border border-black/[0.09] dark:border-white/[0.10] text-[#1d1d1f] dark:text-white/90 outline-none focus:border-emerald-500/60 transition cursor-pointer">
+                  {["Year 1","Year 2","Year 3","Year 4","Year 5","Extra Year","Postgraduate"].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+
+              {/* Department */}
+              {availableDepartments.length > 0 && (
+                <div className="px-1 pt-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30 mb-1.5 px-2">Department</p>
+                  <select value={currentDepartment} onChange={(e) => handleChangeDepartment(e.target.value)}
+                    className={`w-full px-2.5 py-1.5 rounded-[8px] text-[11.5px] border outline-none transition cursor-pointer ${availableDepartments.some(d => d.name === currentDepartment) ? "bg-black/[0.04] dark:bg-white/[0.07] border-black/[0.09] dark:border-white/[0.10] text-[#1d1d1f] dark:text-white/90 focus:border-emerald-500/60" : "bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700/50 text-amber-800 dark:text-amber-300"}`}>
+                    {!availableDepartments.some(d => d.name === currentDepartment) && <option value={currentDepartment}>{currentDepartment} (unverified)</option>}
+                    {availableDepartments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  </select>
+                  {!availableDepartments.some(d => d.name === currentDepartment) && (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 px-2 mt-1 leading-tight">Select your department — it controls what you see.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Also enrolled in */}
+              {availableDepartments.filter(d => d.name !== currentDepartment).length > 0 && (
+                <div className="px-1 pt-3 pb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/30 mb-1.5 px-2">Also enrolled in</p>
+                  <div className="space-y-0.5 px-2">
+                    {availableDepartments.filter(d => d.name !== currentDepartment).map(d => (
+                      <label key={d.id} className="flex items-center gap-2 cursor-pointer py-1 group">
+                        <input type="checkbox" checked={additionalDepts.includes(d.name)} onChange={() => handleToggleAdditionalDept(d.name)} className="h-3.5 w-3.5 rounded accent-emerald-500 cursor-pointer" />
+                        <span className="text-[12px] text-[#3a3a3c] dark:text-white/55 leading-tight">{d.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {additionalDepts.length > 0 && (
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 px-2 mt-1">Viewing {1 + additionalDepts.length} departments.</p>
+                  )}
+                </div>
+              )}
+            </nav>
+
+            {/* Bottom: theme + logout */}
+            <div className="flex-shrink-0 px-2 pb-6 pt-3 space-y-0.5 border-t border-black/[0.06] dark:border-white/[0.06]">
+              <button onClick={onToggleTheme} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[13px] font-medium text-[#3a3a3c] dark:text-white/55 hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition">
+                {theme === "dark" ? <Sun className="h-4 w-4 flex-shrink-0" strokeWidth={1.6} /> : <Moon className="h-4 w-4 flex-shrink-0" strokeWidth={1.6} />}
+                {theme === "dark" ? "Light Mode" : "Dark Mode"}
+              </button>
+              <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[13px] font-medium text-red-500 dark:text-red-400 hover:bg-red-500/[0.08] transition">
+                <LogOut className="h-4 w-4 flex-shrink-0" strokeWidth={1.6} />
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── MAIN PANEL ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
 
         {/* Top toolbar */}
-        <header className="apple-header-bar flex-shrink-0 flex items-center justify-between px-6 h-[44px] border-b border-black/[0.05] dark:border-white/[0.04] backdrop-blur-xl">
-          <h1 className="text-[13.5px] font-semibold text-[#1d1d1f] dark:text-white/88 tracking-[-0.01em]">
+        <header className="apple-header-bar flex-shrink-0 flex items-center gap-2 px-3 sm:px-6 h-[44px] border-b border-black/[0.05] dark:border-white/[0.04] backdrop-blur-xl">
+          {/* Hamburger — mobile only */}
+          <button
+            onClick={() => setMobileSidebarOpen(true)}
+            className="sm:hidden flex items-center justify-center w-9 h-9 rounded-[10px] text-[#3a3a3c] dark:text-white/60 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition flex-shrink-0"
+            aria-label="Open menu"
+          >
+            <svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <line x1="0" y1="1" x2="18" y2="1"/><line x1="0" y1="7" x2="18" y2="7"/><line x1="0" y1="13" x2="18" y2="13"/>
+            </svg>
+          </button>
+          <h1 className="flex-1 text-[13.5px] font-semibold text-[#1d1d1f] dark:text-white/88 tracking-[-0.01em]">
             {activeTab === "notes" ? "Lecture Materials"
               : activeTab === "quizzes" ? "Academic Quizzes"
               : activeTab === "exams" ? "Written Examinations"
