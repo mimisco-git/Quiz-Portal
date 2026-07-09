@@ -89,6 +89,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   const [editingAttemptId, setEditingAttemptId] = useState<string | null>(null);
   const [editingScore, setEditingScore] = useState("");
+  const [editingRowType, setEditingRowType] = useState<"quiz" | "exam" | "assignment">("quiz");
 
   const [quizList, setQuizList] = useState<any[]>([]);
 
@@ -831,21 +832,26 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
-  const handleSaveScoreAdjustment = async (attemptId: string) => {
+  const handleSaveScoreAdjustment = async (rowId: string) => {
     if (!editingScore) return;
+    const url = editingRowType === "quiz"
+      ? `/api/attempts/${rowId}/score`
+      : editingRowType === "exam"
+        ? `/api/exam-submissions/${rowId}/score`
+        : `/api/assignment-submissions/${rowId}/score`;
     try {
-      const res = await fetch(`/api/attempts/${attemptId}/score`, {
+      const res = await fetch(url, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ score: parseFloat(editingScore) }),
       });
       if (res.ok) {
-        showSuccess("Manual evaluation scorecard recorded successfully.");
+        showSuccess("Score updated successfully.");
         setEditingAttemptId(null);
         fetchGradebook();
       } else {
         const d = await res.json();
-        showError(d.error || "Evaluation grading failed");
+        showError(d.error || "Failed to update score");
       }
     } catch (err: any) {
       showError(err.message);
@@ -853,64 +859,55 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   const handleDownloadExcel = () => {
-    if (attempts.length === 0) {
-      showError("No attempt records available to export.");
-      return;
-    }
-    const filteredAttempts = attempts.filter((att) => {
-      if (filterCourseId && att.quiz?.courseId !== filterCourseId) return false;
-      if (filterQuizId && att.quizId !== filterQuizId) return false;
+    if (attempts.length === 0) { showError("No records available to export."); return; }
+    const toExport = attempts.filter((att) => {
+      if (filterCourseId && att.courseId !== filterCourseId) return false;
+      if (filterQuizId && att.assessmentId !== filterQuizId) return false;
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const nameMatch = att.student?.fullName?.toLowerCase().includes(query);
-        const regMatch = att.student?.regNumber?.toLowerCase().includes(query);
-        const deptMatch = att.student?.department?.toLowerCase().includes(query);
-        if (!nameMatch && !regMatch && !deptMatch) return false;
+        const q = searchQuery.toLowerCase();
+        if (!att.studentName?.toLowerCase().includes(q) && !att.regNumber?.toLowerCase().includes(q) && !att.department?.toLowerCase().includes(q)) return false;
       }
       return true;
     });
+    if (toExport.length === 0) { showError("No records matching the current filters to export."); return; }
 
-    if (filteredAttempts.length === 0) {
-      showError("No records matching the current filters to export.");
-      return;
-    }
+    const scoreLabel = (att: any) => {
+      if (att.status === "not_submitted") return "-";
+      if (att.type === "quiz") return att.score !== null ? `${att.score.toFixed(1)}%` : "Pending";
+      if (att.totalMarks) return att.isGraded && att.score !== null ? `${att.score}/${att.totalMarks}` : "Pending";
+      return att.isGraded && att.score !== null ? `${att.score.toFixed(1)}%` : "Pending";
+    };
 
-    const headers = ["Student Name","Registration Number","Department","Study Year","Course Code","Course Title","Exam/Quiz Title","Status","Score (%)","Date Started","Date Submitted"];
-    const rows = filteredAttempts.map((att) => [
-      att.student?.fullName || "",
-      att.student?.regNumber || "",
-      att.student?.department || "",
-      att.student?.year || "",
-      att.quiz?.course?.code || "",
-      att.quiz?.course?.title || "",
-      att.quiz?.title || "",
-      att.isCompleted ? "SUBMITTED" : "IN PROGRESS",
-      att.score !== null && att.score !== undefined ? att.score.toFixed(1) : "N/A",
-      att.startedAt ? new Date(att.startedAt).toLocaleString() : "",
-      att.submittedAt ? new Date(att.submittedAt).toLocaleString() : "",
+    const headers = ["Student Name","Reg. Number","Department","Year","Course Code","Course Title","Type","Assessment Title","Status","Score","Date Submitted"];
+    const rows = toExport.map((att) => [
+      att.studentName || "",
+      att.regNumber || "",
+      att.department || "",
+      att.year || "",
+      att.courseCode || "",
+      att.courseTitle || "",
+      att.type === "quiz" ? "Quiz" : att.type === "exam" ? "Written Exam" : "Assignment",
+      att.assessmentTitle || "",
+      att.status === "not_submitted" ? "NOT SUBMITTED" : att.status === "in_progress" ? "IN PROGRESS" : "SUBMITTED",
+      scoreLabel(att),
+      att.submittedAt ? new Date(att.submittedAt).toLocaleString() : "-",
     ]);
 
-    const csvContent = [
-      headers.join(","),
-      ...rows.map((row) => row.map((val) => { const str = String(val).replace(/"/g, '""'); return str.includes(",") || str.includes("\n") || str.includes('"') ? `"${str}"` : str; }).join(",")),
-    ].join("\n");
-
+    const escape = (val: any) => { const s = String(val).replace(/"/g, '""'); return s.includes(",") || s.includes("\n") || s.includes('"') ? `"${s}"` : s; };
+    const csvContent = [headers.join(","), ...rows.map(r => r.map(escape).join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    let fileName = "FUTO_Student_Exam_Attempts";
-    if (filterCourseId) {
-      const selectedC = courses.find((c) => c.id === filterCourseId);
-      if (selectedC) fileName += `_${selectedC.code}`;
-    }
+    let fileName = "FUTO_Gradebook";
+    if (filterCourseId) { const c = courses.find(c => c.id === filterCourseId); if (c) fileName += `_${c.code}`; }
     fileName += `_${new Date().toISOString().split("T")[0]}.csv`;
     link.setAttribute("download", fileName);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showSuccess("Exam student list downloaded successfully in Excel/CSV format!");
+    showSuccess("Gradebook downloaded successfully!");
   };
 
   const buildAnswerKeyJson = (structure: any[], marks: Record<string, string>, answers: Record<string, string>) => {
@@ -1248,15 +1245,11 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   };
 
   const filteredAttempts = attempts.filter((att) => {
-    if (filterCourseId && att.quiz?.courseId !== filterCourseId) return false;
-    if (filterQuizId && att.quizId !== filterQuizId) return false;
+    if (filterCourseId && att.courseId !== filterCourseId) return false;
+    if (filterQuizId && att.assessmentId !== filterQuizId) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const nameMatch = att.student?.fullName?.toLowerCase().includes(q);
-      const regMatch = att.student?.regNumber?.toLowerCase().includes(q);
-      const deptMatch = att.student?.department?.toLowerCase().includes(q);
-      const yearMatch = att.student?.year?.toLowerCase().includes(q);
-      if (!nameMatch && !regMatch && !deptMatch && !yearMatch) return false;
+      if (!att.studentName?.toLowerCase().includes(q) && !att.regNumber?.toLowerCase().includes(q) && !att.department?.toLowerCase().includes(q) && !att.year?.toLowerCase().includes(q)) return false;
     }
     return true;
   });
@@ -1497,13 +1490,16 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         onChange={(e) => setFilterQuizId(e.target.value)}
                         className="form-input"
                       >
-                        <option value="">All Exams</option>
-                        {attempts.reduce((acc: any[], att) => {
-                          if (att.quiz && !acc.some(q => q.id === att.quizId)) {
-                            if (!filterCourseId || att.quiz.courseId === filterCourseId) acc.push(att.quiz);
-                          }
-                          return acc;
-                        }, []).map((q) => <option key={q.id} value={q.id}>{q.title}</option>)}
+                        <option value="">All Assessments</option>
+                        {(() => {
+                          const asmMap = new Map<string, { id: string; title: string; type: string }>();
+                          attempts.filter(att => !filterCourseId || att.courseId === filterCourseId).forEach(att => asmMap.set(att.assessmentId, { id: att.assessmentId, title: att.assessmentTitle, type: att.type }));
+                          return Array.from(asmMap.values()).map(a => (
+                            <option key={a.id} value={a.id}>
+                              [{a.type === "quiz" ? "Quiz" : a.type === "exam" ? "Exam" : "Assignment"}] {a.title}
+                            </option>
+                          ));
+                        })()}
                       </select>
                     </div>
                   </div>
@@ -1524,7 +1520,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   <table className="min-w-full divide-y divide-black/[0.05] dark:divide-white/[0.05] text-left">
                     <thead className="apple-thead">
                       <tr>
-                        {["Student Name","Reg. No.","Department","Year","Exam Target","Status","Score","Action"].map((h) => (
+                        {["Student Name","Reg. No.","Dept","Year","Course","Assessment","Type","Status","Score","Action"].map((h) => (
                           <th key={h}>{h}</th>
                         ))}
                       </tr>
@@ -1533,74 +1529,96 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       {loading ? (
                         [1,2,3,4,5].map((i) => (
                           <tr key={i} className="animate-pulse">
-                            {[1,2,3,4,5,6,7,8].map((j) => (
+                            {[1,2,3,4,5,6,7,8,9,10].map((j) => (
                               <td key={j} className="px-4 py-3"><div className="h-3.5 bg-black/[0.06] dark:bg-white/[0.06] rounded-md w-full" /></td>
                             ))}
                           </tr>
                         ))
                       ) : filteredAttempts.length > 0 ? (
-                        filteredAttempts.map((att) => (
-                          <tr key={att.id} className="hover:bg-emerald-50/30 dark:hover:bg-white/[0.02] transition-colors text-[13px]">
-                            <td className="px-4 py-3 font-semibold text-[#1d1d1f] dark:text-white/90 whitespace-nowrap">{att.student?.fullName}</td>
-                            <td className="px-4 py-3 font-mono text-[12px] text-[#6e6e73] dark:text-white/40 font-bold uppercase">{att.student?.regNumber}</td>
-                            <td className="px-4 py-3 text-[#3a3a3c] dark:text-white/70">{att.student?.department}</td>
-                            <td className="px-4 py-3 font-mono text-[12px] text-[#6e6e73] dark:text-white/40 font-bold">{att.student?.year}</td>
+                        filteredAttempts.map((att) => {
+                          const scoreDisplay = (() => {
+                            if (att.status === "not_submitted") return "-";
+                            if (att.type === "quiz") return att.score !== null ? `${att.score.toFixed(1)}%` : "Pending";
+                            if (!att.isGraded) return "Pending";
+                            if (att.totalMarks) return `${att.score ?? 0}/${att.totalMarks}`;
+                            return att.score !== null ? `${att.score.toFixed(1)}%` : "Pending";
+                          })();
+                          const canOverride = att.status !== "not_submitted";
+                          return (
+                          <tr key={att.id} className={`hover:bg-emerald-50/30 dark:hover:bg-white/[0.02] transition-colors text-[13px] ${att.status === "not_submitted" ? "opacity-50" : ""}`}>
+                            <td className="px-4 py-3 font-semibold text-[#1d1d1f] dark:text-white/90 whitespace-nowrap">{att.studentName}</td>
+                            <td className="px-4 py-3 font-mono text-[12px] text-[#6e6e73] dark:text-white/40 font-bold uppercase">{att.regNumber}</td>
+                            <td className="px-4 py-3 text-[#3a3a3c] dark:text-white/70 text-[12px]">{att.department}</td>
+                            <td className="px-4 py-3 font-mono text-[12px] text-[#6e6e73] dark:text-white/40 font-bold">{att.year}</td>
                             <td className="px-4 py-3">
-                              <span className="font-semibold text-[#1d1d1f] dark:text-white/85 block leading-none">{att.quiz?.title}</span>
-                              <span className="text-[11px] font-mono text-[#6e6e73] dark:text-white/35 font-bold uppercase mt-0.5 block">{att.quiz?.course?.code}</span>
+                              <span className="font-mono text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase block">{att.courseCode}</span>
+                              <span className="text-[11px] text-[#6e6e73] dark:text-white/35 block">{att.courseTitle}</span>
                             </td>
                             <td className="px-4 py-3">
-                              {att.isCompleted ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/30">
-                                  Submitted
+                              <span className="font-semibold text-[#1d1d1f] dark:text-white/85 block leading-none text-[12px]">{att.assessmentTitle}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                                att.type === "quiz" ? "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900/30"
+                                : att.type === "exam" ? "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-900/30"
+                                : "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-900/30"
+                              }`}>
+                                {att.type === "quiz" ? "Quiz" : att.type === "exam" ? "Exam" : "Assignment"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {att.status === "not_submitted" ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/30">
+                                  Not Submitted
                                 </span>
-                              ) : (
+                              ) : att.status === "in_progress" ? (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/30 animate-pulse">
                                   In Progress
                                 </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/30">
+                                  Submitted
+                                </span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-[11px] font-mono font-bold text-[#1d1d1f] dark:text-white/90 text-center">
-                              {att.score !== null ? `${att.score?.toFixed(1)}%` : "N/A"}
+                            <td className="px-4 py-3 text-[12px] font-mono font-bold text-[#1d1d1f] dark:text-white/90 text-center">
+                              {scoreDisplay}
                             </td>
                             <td className="px-4 py-3 text-center">
-                              {editingAttemptId === att.id ? (
+                              {canOverride && editingAttemptId === att.id ? (
                                 <div className="flex items-center gap-1 justify-center">
                                   <input
                                     type="number"
-                                    min="0" max="100" step="0.5"
+                                    min="0" step="0.5"
                                     value={editingScore}
                                     onChange={(e) => setEditingScore(e.target.value)}
-                                    className="w-14 px-1.5 py-1 border border-black/[0.10] dark:border-white/[0.12] rounded-[8px] text-center font-mono text-[12px] bg-[#ffffff] dark:bg-black/30 text-[#1d1d1f] dark:text-white outline-none focus:border-emerald-400"
+                                    className="w-16 px-1.5 py-1 border border-black/[0.10] dark:border-white/[0.12] rounded-[8px] text-center font-mono text-[12px] bg-[#ffffff] dark:bg-black/30 text-[#1d1d1f] dark:text-white outline-none focus:border-emerald-400"
                                   />
-                                  <button
-                                    onClick={() => handleSaveScoreAdjustment(att.id)}
-                                    className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[8px] transition cursor-pointer"
-                                  >
+                                  <button onClick={() => handleSaveScoreAdjustment(att.id)} className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[8px] transition cursor-pointer">
                                     <Check className="h-3 w-3" />
                                   </button>
-                                  <button
-                                    onClick={() => setEditingAttemptId(null)}
-                                    className="p-1.5 bg-black/[0.05] dark:bg-white/[0.07] hover:bg-black/[0.08] text-[#3a3a3c] dark:text-white/60 rounded-[8px] transition cursor-pointer"
-                                  >
+                                  <button onClick={() => setEditingAttemptId(null)} className="p-1.5 bg-black/[0.05] dark:bg-white/[0.07] hover:bg-black/[0.08] text-[#3a3a3c] dark:text-white/60 rounded-[8px] transition cursor-pointer">
                                     <X className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
-                              ) : (
+                              ) : canOverride ? (
                                 <button
-                                  onClick={() => { setEditingAttemptId(att.id); setEditingScore(att.score?.toString() || "0"); }}
+                                  onClick={() => { setEditingAttemptId(att.id); setEditingRowType(att.type); setEditingScore(att.score?.toString() || "0"); }}
                                   className="text-[12px] font-semibold text-[#3a3a3c] dark:text-white/60 border border-black/[0.09] dark:border-white/[0.09] px-2.5 py-1 bg-black/[0.03] dark:bg-white/[0.04] hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:text-emerald-700 dark:hover:text-emerald-400 hover:border-emerald-200 dark:hover:border-emerald-800/40 transition rounded-[8px] cursor-pointer"
                                 >
-                                  Regrade
+                                  Override
                                 </button>
+                              ) : (
+                                <span className="text-[12px] text-[#6e6e73] dark:text-white/30">—</span>
                               )}
                             </td>
                           </tr>
-                        ))
+                          );
+                        })
                       ) : (
                         <tr>
-                          <td colSpan={8} className="text-center py-12 text-[#6e6e73] dark:text-white/35 text-[12px]">
-                            No student attempts match the current filters.
+                          <td colSpan={10} className="text-center py-12 text-[#6e6e73] dark:text-white/35 text-[12px]">
+                            No records match the current filters.
                           </td>
                         </tr>
                       )}

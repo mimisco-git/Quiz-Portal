@@ -1053,34 +1053,188 @@ app.post("/api/quiz/submit", authenticateToken, async (req: any, res) => {
 // LECTURER GRADEBOOK / MONITORING API
 // -------------------------------------------------------------
 app.get("/api/lecturer/gradebook", authenticateToken, async (req: any, res) => {
-  if (req.user.role !== "lecturer") {
-    return res.status(403).json({ error: "Unauthorized access" });
-  }
-
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Unauthorized access" });
   try {
-    const attempts = await prisma.studentAttempt.findMany({
-      where: {
-        quiz: {
-          course: {
-            lecturerId: req.user.id,
-          },
+    const lecturerId = req.user.id;
+    const [quizAttempts, examSubmissions, assignmentSubmissions, allExams, allAssignments] = await Promise.all([
+      prisma.studentAttempt.findMany({
+        where: { quiz: { course: { lecturerId } } },
+        include: {
+          student: { select: { id: true, fullName: true, regNumber: true, department: true, year: true } },
+          quiz: { select: { id: true, title: true, courseId: true, course: { select: { code: true, title: true } } } },
         },
-      },
-      include: {
-        student: {
-          select: { fullName: true, regNumber: true, department: true, year: true },
+      }),
+      prisma.examSubmission.findMany({
+        where: { exam: { course: { lecturerId } } },
+        include: {
+          student: { select: { id: true, fullName: true, regNumber: true, department: true, year: true } },
+          exam: { select: { id: true, title: true, courseId: true, course: { select: { code: true, title: true } } } },
         },
-        quiz: {
-          select: { title: true, courseId: true, course: { select: { code: true } } },
+      }),
+      prisma.assignmentSubmission.findMany({
+        where: { assignment: { course: { lecturerId } } },
+        include: {
+          student: { select: { id: true, fullName: true, regNumber: true, department: true, year: true } },
+          assignment: { select: { id: true, title: true, courseId: true, course: { select: { code: true, title: true } } } },
         },
-      },
-      orderBy: { submittedAt: "desc" },
+      }),
+      prisma.exam.findMany({
+        where: { course: { lecturerId } },
+        select: { id: true, title: true, courseId: true, course: { select: { code: true, title: true } } },
+      }),
+      prisma.assignment.findMany({
+        where: { course: { lecturerId } },
+        select: { id: true, title: true, courseId: true, course: { select: { code: true, title: true } } },
+      }),
+    ]);
+
+    // Build per-course student roster from all submissions
+    const courseRoster = new Map<string, Map<string, any>>();
+    const addToRoster = (courseId: string, student: any) => {
+      if (!courseRoster.has(courseId)) courseRoster.set(courseId, new Map());
+      courseRoster.get(courseId)!.set(student.id, student);
+    };
+    for (const a of quizAttempts) addToRoster(a.quiz.courseId, a.student);
+    for (const s of examSubmissions) addToRoster(s.exam.courseId, s.student);
+    for (const s of assignmentSubmissions) addToRoster(s.assignment.courseId, s.student);
+
+    const rows: any[] = [];
+
+    // Quiz rows
+    const quizMap = new Map<string, any>();
+    for (const a of quizAttempts) {
+      quizMap.set(a.quiz.id, a.quiz);
+      rows.push({
+        id: a.id, type: "quiz", studentId: a.student.id,
+        studentName: a.student.fullName, regNumber: a.student.regNumber,
+        department: a.student.department, year: a.student.year,
+        courseId: a.quiz.courseId, courseCode: a.quiz.course.code, courseTitle: a.quiz.course.title,
+        assessmentId: a.quiz.id, assessmentTitle: a.quiz.title,
+        status: a.isCompleted ? "submitted" : "in_progress",
+        score: a.score, totalMarks: null, isGraded: a.isCompleted && a.score !== null,
+        submittedAt: a.submittedAt,
+      });
+    }
+    // Not-submitted rows for quizzes
+    for (const [quizId, quiz] of quizMap) {
+      const submittedIds = new Set(quizAttempts.filter(a => a.quiz.id === quizId).map(a => a.student.id));
+      for (const [studentId, student] of (courseRoster.get(quiz.courseId) || new Map())) {
+        if (!submittedIds.has(studentId)) {
+          rows.push({
+            id: `ns_quiz_${quizId}_${studentId}`, type: "quiz", studentId,
+            studentName: student.fullName, regNumber: student.regNumber,
+            department: student.department, year: student.year,
+            courseId: quiz.courseId, courseCode: quiz.course.code, courseTitle: quiz.course.title,
+            assessmentId: quizId, assessmentTitle: quiz.title,
+            status: "not_submitted", score: null, totalMarks: null, isGraded: false, submittedAt: null,
+          });
+        }
+      }
+    }
+
+    // Exam rows
+    for (const exam of allExams) {
+      const submitted = examSubmissions.filter(s => s.exam.id === exam.id);
+      const submittedIds = new Set(submitted.map(s => s.student.id));
+      for (const s of submitted) {
+        rows.push({
+          id: s.id, type: "exam", studentId: s.student.id,
+          studentName: s.student.fullName, regNumber: s.student.regNumber,
+          department: s.student.department, year: s.student.year,
+          courseId: exam.courseId, courseCode: exam.course.code, courseTitle: exam.course.title,
+          assessmentId: exam.id, assessmentTitle: exam.title,
+          status: "submitted", score: s.score, totalMarks: s.totalMarks,
+          isGraded: s.isGraded, submittedAt: s.submittedAt,
+        });
+      }
+      for (const [studentId, student] of (courseRoster.get(exam.courseId) || new Map())) {
+        if (!submittedIds.has(studentId)) {
+          rows.push({
+            id: `ns_exam_${exam.id}_${studentId}`, type: "exam", studentId,
+            studentName: student.fullName, regNumber: student.regNumber,
+            department: student.department, year: student.year,
+            courseId: exam.courseId, courseCode: exam.course.code, courseTitle: exam.course.title,
+            assessmentId: exam.id, assessmentTitle: exam.title,
+            status: "not_submitted", score: null, totalMarks: null, isGraded: false, submittedAt: null,
+          });
+        }
+      }
+    }
+
+    // Assignment rows
+    for (const assignment of allAssignments) {
+      const submitted = assignmentSubmissions.filter(s => s.assignment.id === assignment.id);
+      const submittedIds = new Set(submitted.map(s => s.student.id));
+      for (const s of submitted) {
+        rows.push({
+          id: s.id, type: "assignment", studentId: s.student.id,
+          studentName: s.student.fullName, regNumber: s.student.regNumber,
+          department: s.student.department, year: s.student.year,
+          courseId: assignment.courseId, courseCode: assignment.course.code, courseTitle: assignment.course.title,
+          assessmentId: assignment.id, assessmentTitle: assignment.title,
+          status: "submitted", score: s.score, totalMarks: s.totalMarks,
+          isGraded: s.isGraded, submittedAt: s.submittedAt,
+        });
+      }
+      for (const [studentId, student] of (courseRoster.get(assignment.courseId) || new Map())) {
+        if (!submittedIds.has(studentId)) {
+          rows.push({
+            id: `ns_assignment_${assignment.id}_${studentId}`, type: "assignment", studentId,
+            studentName: student.fullName, regNumber: student.regNumber,
+            department: student.department, year: student.year,
+            courseId: assignment.courseId, courseCode: assignment.course.code, courseTitle: assignment.course.title,
+            assessmentId: assignment.id, assessmentTitle: assignment.title,
+            status: "not_submitted", score: null, totalMarks: null, isGraded: false, submittedAt: null,
+          });
+        }
+      }
+    }
+
+    rows.sort((a, b) => {
+      const cc = a.courseCode.localeCompare(b.courseCode);
+      if (cc !== 0) return cc;
+      const at = a.assessmentTitle.localeCompare(b.assessmentTitle);
+      if (at !== 0) return at;
+      return a.studentName.localeCompare(b.studentName);
     });
-    return res.json(attempts);
+
+    return res.json(rows);
   } catch (error: any) {
     console.error("Error fetching gradebook:", error);
     return res.status(500).json({ error: "Error fetching gradebook" });
   }
+});
+
+app.patch("/api/exam-submissions/:id/score", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { score } = req.body;
+  if (score === undefined || score === null) return res.status(400).json({ error: "Score required" });
+  try {
+    const sub = await prisma.examSubmission.findUnique({
+      where: { id: req.params.id },
+      include: { exam: { select: { course: { select: { lecturerId: true } } } } },
+    });
+    if (!sub) return res.status(404).json({ error: "Submission not found" });
+    if (sub.exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied" });
+    await prisma.examSubmission.update({ where: { id: req.params.id }, data: { score: parseFloat(score), isGraded: true } });
+    return res.json({ success: true });
+  } catch { return res.status(500).json({ error: "Failed to update score" }); }
+});
+
+app.patch("/api/assignment-submissions/:id/score", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { score } = req.body;
+  if (score === undefined || score === null) return res.status(400).json({ error: "Score required" });
+  try {
+    const sub = await prisma.assignmentSubmission.findUnique({
+      where: { id: req.params.id },
+      include: { assignment: { select: { course: { select: { lecturerId: true } } } } },
+    });
+    if (!sub) return res.status(404).json({ error: "Submission not found" });
+    if (sub.assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied" });
+    await prisma.assignmentSubmission.update({ where: { id: req.params.id }, data: { score: parseFloat(score), isGraded: true } });
+    return res.json({ success: true });
+  } catch { return res.status(500).json({ error: "Failed to update score" }); }
 });
 
 
