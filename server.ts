@@ -1624,26 +1624,89 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<string> {
   return result.value.trim();
 }
 
+type AnswerKeyItem = { qLabel: string; answer: string; marks: number };
+
+function applyMarkingFormula(similarity: number, maxMarks: number): number {
+  const raw = similarity < 50 ? 0.5 : ((similarity - 50) / 50) * maxMarks;
+  return Math.round(raw * 2) / 2; // nearest 0.5
+}
+
 async function gradeSubmission(
   questionsText: string,
-  answerKeyText: string,
+  answerKeyText: string | null | undefined,
   studentAnswers: string,
   studentName: string,
-  marksText?: string | null
+  marksText?: string | null,
+  answerKeyJson?: string | null
 ): Promise<{ score: number; totalMarks: number | null; feedback: string }> {
   const nvidia = getNvidiaClient();
 
-  const marksArray = marksText
-    ? marksText.split(",").map((m) => parseFloat(m.trim())).filter((m) => !isNaN(m) && m > 0)
-    : [];
-  const usesMarks = marksArray.length > 0;
-  const totalMarks = usesMarks ? marksArray.reduce((a, b) => a + b, 0) : null;
+  // ── Priority 1: Structured per-question answer key ──────────────────
+  if (answerKeyJson) {
+    const keyItems: AnswerKeyItem[] = JSON.parse(answerKeyJson).filter(
+      (q: AnswerKeyItem) => q.answer?.trim() && q.marks > 0
+    );
+    const totalMarks = keyItems.reduce((s, q) => s + q.marks, 0);
 
-  let prompt: string;
+    const prompt = `You are grading a student's written exam answers.
 
-  if (usesMarks) {
-    const marksDesc = marksArray.map((m, i) => `Q${i + 1}: ${m} mark${m !== 1 ? "s" : ""}`).join(", ");
-    prompt = `You are a fair and thorough academic exam grader.
+STUDENT: ${studentName}
+
+STUDENT'S ANSWERS:
+${studentAnswers}
+
+For each question below, find the student's answer (by question label) and estimate how much of the model answer they captured as a similarity percentage (0–100). Be fair — assess meaning, not exact wording.
+
+${keyItems.map((q) => `${q.qLabel} (${q.marks} mark${q.marks !== 1 ? "s" : ""})\nModel answer: ${q.answer}`).join("\n\n")}
+
+Return ONLY valid JSON, no other text:
+{
+  "questions": [
+    {"qLabel": "<label>", "similarity": <0-100>, "comment": "<one sentence>"}
+  ],
+  "overall_feedback": "<2-3 sentences for ${studentName}>"
+}`;
+
+    const response = await nvidia.chat.completions.create({
+      model: "meta/llama-3.1-70b-instruct",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
+      max_tokens: 1024,
+    });
+
+    const raw = response.choices[0]?.message?.content ?? "{}";
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonMatch?.[0] ?? raw);
+
+    if (Array.isArray(parsed.questions)) {
+      const breakdown = (parsed.questions as any[]).map((q) => {
+        const key = keyItems.find((k) => k.qLabel === q.qLabel);
+        const maxM = key?.marks ?? 0;
+        const sim = Math.max(0, Math.min(100, Number(q.similarity)));
+        const awarded = applyMarkingFormula(sim, maxM);
+        return { qLabel: q.qLabel, sim, awarded, max: maxM, comment: String(q.comment ?? "") };
+      });
+      const score = breakdown.reduce((s, b) => s + b.awarded, 0);
+      const breakdownText = breakdown
+        .map((b) => `${b.qLabel}: ${b.awarded}/${b.max} marks (${b.sim}% match) — ${b.comment}`)
+        .join("\n");
+      const feedback = `${String(parsed.overall_feedback ?? "")}\n\nBreakdown:\n${breakdownText}`;
+      return { score, totalMarks, feedback };
+    }
+  }
+
+  // ── Priority 2: Legacy marksText + answerKeyText ─────────────────────
+  if (answerKeyText) {
+    const marksArray = marksText
+      ? marksText.split(",").map((m) => parseFloat(m.trim())).filter((m) => !isNaN(m) && m > 0)
+      : [];
+    const usesMarks = marksArray.length > 0;
+    const totalMarks = usesMarks ? marksArray.reduce((a, b) => a + b, 0) : null;
+
+    let prompt: string;
+    if (usesMarks) {
+      const marksDesc = marksArray.map((m, i) => `Q${i + 1}: ${m} mark${m !== 1 ? "s" : ""}`).join(", ");
+      prompt = `You are a fair and thorough academic exam grader.
 
 EXAM QUESTIONS:
 ${questionsText}
@@ -1657,18 +1720,17 @@ ${studentAnswers}
 
 MARKS ALLOCATION: ${marksDesc} (total: ${totalMarks} marks)
 
-For each question, compare the student's answer to the model answer key and estimate a similarity percentage (0–100) representing how much of the correct answer the student captured. Evaluate semantic understanding, not just exact wording.
+For each question, estimate similarity (0–100) of student answer to model answer.
 
-Respond with ONLY a valid JSON object, no other text:
+Respond with ONLY valid JSON:
 {
   "questions": [
-    {"q": 1, "similarity": <0-100>, "comment": "<one concise sentence about this answer>"},
-    {"q": 2, "similarity": <0-100>, "comment": "<one concise sentence about this answer>"}
+    {"q": 1, "similarity": <0-100>, "comment": "<one sentence>"}
   ],
-  "overall_feedback": "<2-3 sentences of overall feedback for ${studentName}>"
+  "overall_feedback": "<2-3 sentences>"
 }`;
-  } else {
-    prompt = `You are a fair and thorough academic exam grader.
+    } else {
+      prompt = `You are a fair and thorough academic exam grader.
 
 EXAM QUESTIONS:
 ${questionsText}
@@ -1682,50 +1744,100 @@ ${studentAnswers}
 
 Grade this student's answers against the model answer key. Evaluate semantic similarity, not just exact wording.
 
-SCORING CRITERIA:
-- 90–100: Correct or essentially correct (minor wording differences allowed)
-- 70–89: Shows clear understanding, mostly correct or logically equivalent
-- 50–69: Genuine attempt, answer is relevant and shows partial understanding
-- 0–49: No meaningful attempt, completely wrong, irrelevant, or left blank
+SCORING: 90–100 essentially correct; 70–89 mostly correct; 50–69 partial; 0–49 insufficient.
 
-Respond with ONLY a valid JSON object, no other text:
-{"score": <0-100>, "feedback": "<2-4 sentences of specific, constructive feedback>"}`;
-  }
+Respond with ONLY valid JSON:
+{"score": <0-100>, "feedback": "<2-4 sentences>"}`;
+    }
 
-  const response = await nvidia.chat.completions.create({
-    model: "meta/llama-3.1-70b-instruct",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.2,
-    max_tokens: 1024,
-  });
-
-  const raw = response.choices[0]?.message?.content ?? "{}";
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch?.[0] ?? raw);
-
-  if (usesMarks && Array.isArray(parsed.questions)) {
-    const breakdown = (parsed.questions as any[]).map((q, i) => {
-      const maxM = marksArray[i] ?? 0;
-      const sim = Math.max(0, Math.min(100, Number(q.similarity)));
-      // Below 50% → 0.5 (half mark); 50%+ → scales linearly to full marks
-      const raw = sim < 50 ? 0.5 : ((sim - 50) / 50) * maxM;
-      const awarded = Math.round(raw * 2) / 2; // nearest 0.5
-      return { q: q.q ?? i + 1, similarity: sim, awarded, max: maxM, comment: String(q.comment ?? "") };
+    const response = await nvidia.chat.completions.create({
+      model: "meta/llama-3.1-70b-instruct",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
+      max_tokens: 1024,
     });
-    const score = breakdown.reduce((s, b) => s + b.awarded, 0);
-    const breakdownText = breakdown
-      .map((b) => `Q${b.q}: ${b.awarded}/${b.max} marks (${b.similarity}% match) — ${b.comment}`)
-      .join("\n");
-    const feedback = `${String(parsed.overall_feedback ?? "")}\n\nQuestion Breakdown:\n${breakdownText}`;
-    return { score, totalMarks, feedback };
+
+    const raw = response.choices[0]?.message?.content ?? "{}";
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonMatch?.[0] ?? raw);
+
+    if (usesMarks && Array.isArray(parsed.questions)) {
+      const breakdown = (parsed.questions as any[]).map((q, i) => {
+        const maxM = marksArray[i] ?? 0;
+        const sim = Math.max(0, Math.min(100, Number(q.similarity)));
+        const awarded = applyMarkingFormula(sim, maxM);
+        return { q: q.q ?? i + 1, sim, awarded, max: maxM, comment: String(q.comment ?? "") };
+      });
+      const score = breakdown.reduce((s, b) => s + b.awarded, 0);
+      const breakdownText = breakdown
+        .map((b) => `Q${b.q}: ${b.awarded}/${b.max} marks (${b.sim}% match) — ${b.comment}`)
+        .join("\n");
+      const feedback = `${String(parsed.overall_feedback ?? "")}\n\nBreakdown:\n${breakdownText}`;
+      return { score, totalMarks, feedback };
+    }
+
+    const score = Math.max(0, Math.min(100, Number(parsed.score)));
+    return { score, totalMarks: null, feedback: String(parsed.feedback ?? "Grading complete.") };
   }
 
-  // Legacy: no marks scheme — return percentage score
-  const score = Math.max(0, Math.min(100, Number(parsed.score)));
-  return { score, totalMarks: null, feedback: String(parsed.feedback ?? "Grading complete.") };
+  return { score: 0, totalMarks: null, feedback: "No answer key available for grading." };
 }
 
-// Create exam (lecturer uploads questions doc)
+// Parse question structure from uploaded doc
+app.post("/api/parse-questions", authenticateToken, upload.single("file"), async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const questionsText = req.file ? await extractTextFromFile(req.file) : req.body.questionsText;
+    if (!questionsText?.trim()) return res.status(400).json({ error: "Questions text or file required" });
+
+    const nvidia = getNvidiaClient();
+    const prompt = `Parse this exam/assignment question paper and extract the question structure.
+
+QUESTION PAPER:
+${questionsText}
+
+Identify all questions and sub-questions. Common patterns:
+- Main questions: "1." "2." "Q1" "Question 1" "(1)"
+- Sub-questions under a main question: "a." "b." "(a)" "(b)" "(i)" "(ii)"
+- Already combined: "1a" "1(a)" "Q1a"
+
+Return ONLY a JSON array, no other text:
+[
+  {
+    "label": "1",
+    "text": "<brief question text, max 120 chars>",
+    "subqs": [
+      {"label": "a", "text": "<sub-question text, max 120 chars>"},
+      {"label": "b", "text": "<sub-question text, max 120 chars>"}
+    ]
+  },
+  {
+    "label": "2",
+    "text": "<question text>",
+    "subqs": []
+  }
+]
+
+Use empty array for subqs if the question has no sub-parts.`;
+
+    const response = await nvidia.chat.completions.create({
+      model: "meta/llama-3.1-70b-instruct",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 2048,
+    });
+
+    const raw = response.choices[0]?.message?.content ?? "[]";
+    const jsonMatch = raw.match(/\[[\s\S]*\]/);
+    const structure = JSON.parse(jsonMatch?.[0] ?? "[]");
+    return res.json({ questionsText, structure });
+  } catch (err) {
+    console.error("Error parsing questions:", err);
+    return res.status(500).json({ error: "Failed to parse questions" });
+  }
+});
+
+// Create exam
 app.post("/api/exams", authenticateToken, upload.single("file"), async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   const { title, courseId } = req.body;
@@ -1734,12 +1846,14 @@ app.post("/api/exams", authenticateToken, upload.single("file"), async (req: any
 
   try {
     const questionsText = req.file ? await extractTextFromFile(req.file) : req.body.questionsText;
-    const { availableFrom, availableUntil } = req.body;
+    const { availableFrom, availableUntil, answerKeyJson, questionsStructureJson } = req.body;
     const exam = await prisma.exam.create({
       data: {
         title,
         courseId,
         questionsText,
+        questionsStructureJson: questionsStructureJson || null,
+        answerKeyJson: answerKeyJson || null,
         availableFrom: availableFrom ? new Date(availableFrom) : undefined,
         availableUntil: availableUntil ? new Date(availableUntil) : undefined,
       },
@@ -1776,9 +1890,8 @@ app.get("/api/exams/:id", authenticateToken, async (req: any, res) => {
       include: { course: { select: { code: true, title: true, lecturerId: true } } },
     });
     if (!exam) return res.status(404).json({ error: "Exam not found" });
-    // Hide answer key from students
     if (req.user.role === "student") {
-      const { answerKeyText: _omit, ...safe } = exam as any;
+      const { answerKeyText: _a, answerKeyJson: _b, ...safe } = exam as any;
       return res.json(safe);
     }
     return res.json(exam);
@@ -1921,7 +2034,7 @@ app.post("/api/exams/:id/grade", authenticateToken, async (req: any, res) => {
     });
     if (!exam) return res.status(404).json({ error: "Exam not found" });
     if (exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
-    if (!exam.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
+    if (!exam.answerKeyJson && !exam.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
     if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
     if (exam.submissions.length === 0) return res.json({ graded: 0, message: "No submissions to grade" });
     const results = [];
@@ -1929,7 +2042,7 @@ app.post("/api/exams/:id/grade", authenticateToken, async (req: any, res) => {
       try {
         const { score, totalMarks, feedback } = await gradeSubmission(
           exam.questionsText, exam.answerKeyText, submission.answersText,
-          (submission as any).student.fullName, exam.marksText
+          (submission as any).student.fullName, exam.marksText, (exam as any).answerKeyJson
         );
         await prisma.examSubmission.update({ where: { id: submission.id }, data: { score, totalMarks, feedback, isGraded: true } });
         results.push({ studentId: submission.studentId, score, totalMarks });
@@ -1969,12 +2082,15 @@ app.post("/api/assignments", authenticateToken, upload.single("file"), async (re
   if (!req.file && !req.body.questionsText) return res.status(400).json({ error: "Questions file or text is required" });
   try {
     const questionsText = req.file ? await extractTextFromFile(req.file) : req.body.questionsText;
+    const { answerKeyJson, questionsStructureJson } = req.body;
     const assignment = await prisma.assignment.create({
       data: {
         title,
         courseId,
         description: description || null,
         questionsText,
+        questionsStructureJson: questionsStructureJson || null,
+        answerKeyJson: answerKeyJson || null,
         dueDate: dueDate ? new Date(dueDate) : null,
       },
     });
@@ -2008,7 +2124,7 @@ app.get("/api/assignments/:id", authenticateToken, async (req: any, res) => {
     });
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
     if (req.user.role === "student") {
-      const { answerKeyText: _omit, ...safe } = assignment as any;
+      const { answerKeyText: _a, answerKeyJson: _b, ...safe } = assignment as any;
       return res.json(safe);
     }
     return res.json(assignment);
@@ -2145,7 +2261,7 @@ app.post("/api/assignments/:id/grade", authenticateToken, async (req: any, res) 
     });
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
     if (assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
-    if (!assignment.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
+    if (!(assignment as any).answerKeyJson && !assignment.answerKeyText) return res.status(400).json({ error: "Upload an answer key before grading" });
     if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
     if (assignment.submissions.length === 0) return res.json({ graded: 0, message: "No submissions to grade" });
     const results = [];
@@ -2153,7 +2269,7 @@ app.post("/api/assignments/:id/grade", authenticateToken, async (req: any, res) 
       try {
         const { score, totalMarks, feedback } = await gradeSubmission(
           assignment.questionsText, assignment.answerKeyText, submission.answersText,
-          (submission as any).student.fullName, assignment.marksText
+          (submission as any).student.fullName, assignment.marksText, (assignment as any).answerKeyJson
         );
         await prisma.assignmentSubmission.update({ where: { id: submission.id }, data: { score, totalMarks, feedback, isGraded: true } });
         results.push({ studentId: submission.studentId, score, totalMarks });

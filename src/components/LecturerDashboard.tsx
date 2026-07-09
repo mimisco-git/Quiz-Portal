@@ -87,6 +87,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   const [quizList, setQuizList] = useState<any[]>([]);
 
+  // ── Exam state ──────────────────────────────────────────────────
   const [exams, setExams] = useState<any[]>([]);
   const [examTitle, setExamTitle] = useState("");
   const [examCourseId, setExamCourseId] = useState("");
@@ -94,6 +95,11 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [examAvailableUntil, setExamAvailableUntil] = useState("");
   const [examFile, setExamFile] = useState<File | null>(null);
   const [examQText, setExamQText] = useState("");
+  const [isParsingExam, setIsParsingExam] = useState(false);
+  const [examParsedStructure, setExamParsedStructure] = useState<any[] | null>(null);
+  const [examExtractedText, setExamExtractedText] = useState("");
+  const [examQMarks, setExamQMarks] = useState<Record<string, string>>({});
+  const [examQAnswers, setExamQAnswers] = useState<Record<string, string>>({});
   const [selectedExam, setSelectedExam] = useState<any | null>(null);
   const [examSubmissions, setExamSubmissions] = useState<any[]>([]);
   const [answerKeyFile, setAnswerKeyFile] = useState<File | null>(null);
@@ -102,7 +108,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [isGrading, setIsGrading] = useState(false);
   const [expandedSubmission, setExpandedSubmission] = useState<string | null>(null);
 
-  // Assignment state
+  // ── Assignment state ─────────────────────────────────────────────
   const [assignments, setAssignments] = useState<any[]>([]);
   const [assignmentTitle, setAssignmentTitle] = useState("");
   const [assignmentCourseId, setAssignmentCourseId] = useState("");
@@ -110,6 +116,11 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [assignmentDueDate, setAssignmentDueDate] = useState("");
   const [assignmentFile, setAssignmentFile] = useState<File | null>(null);
   const [assignmentQText, setAssignmentQText] = useState("");
+  const [isParsingAssignment, setIsParsingAssignment] = useState(false);
+  const [assignmentParsedStructure, setAssignmentParsedStructure] = useState<any[] | null>(null);
+  const [assignmentExtractedText, setAssignmentExtractedText] = useState("");
+  const [assignmentQMarks, setAssignmentQMarks] = useState<Record<string, string>>({});
+  const [assignmentQAnswers, setAssignmentQAnswers] = useState<Record<string, string>>({});
   const [selectedAssignment, setSelectedAssignment] = useState<any | null>(null);
   const [assignmentSubmissions, setAssignmentSubmissions] = useState<any[]>([]);
   const [assignmentKeyFile, setAssignmentKeyFile] = useState<File | null>(null);
@@ -290,29 +301,49 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
+  const handleParseAssignmentQuestions = async () => {
+    if (!assignmentFile && !assignmentQText.trim()) { showError("Upload a file or paste questions first"); return; }
+    setIsParsingAssignment(true);
+    try {
+      const fd = new FormData();
+      if (assignmentFile) fd.append("file", assignmentFile);
+      else fd.append("questionsText", assignmentQText);
+      const res = await fetch("/api/parse-questions", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      if (res.ok) {
+        const d = await res.json();
+        setAssignmentParsedStructure(d.structure);
+        setAssignmentExtractedText(d.questionsText);
+        setAssignmentQMarks({}); setAssignmentQAnswers({});
+      } else {
+        const d = await res.json(); showError(d.error || "Failed to parse questions");
+      }
+    } catch { showError("Failed to parse questions"); }
+    finally { setIsParsingAssignment(false); }
+  };
+
   const handleCreateAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assignmentTitle.trim() || !assignmentCourseId) { showError("Title and course are required"); return; }
-    if (!assignmentFile && !assignmentQText.trim()) { showError("Upload a file or paste the assignment questions"); return; }
+    if (!assignmentParsedStructure) { showError("Parse questions first before creating the assignment"); return; }
     try {
       const fd = new FormData();
       fd.append("title", assignmentTitle);
       fd.append("courseId", assignmentCourseId);
       if (assignmentDescription.trim()) fd.append("description", assignmentDescription);
-      if (assignmentFile) fd.append("file", assignmentFile);
-      else fd.append("questionsText", assignmentQText);
+      fd.append("questionsText", assignmentExtractedText);
+      fd.append("questionsStructureJson", JSON.stringify(assignmentParsedStructure));
+      fd.append("answerKeyJson", buildAnswerKeyJson(assignmentParsedStructure, assignmentQMarks, assignmentQAnswers));
       if (assignmentDueDate) fd.append("dueDate", new Date(assignmentDueDate).toISOString());
       const res = await fetch("/api/assignments", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
       if (res.ok) {
-        showSuccess("Assignment created successfully!");
+        showSuccess("Assignment created!");
         setAssignmentTitle(""); setAssignmentFile(null); setAssignmentQText(""); setAssignmentDescription(""); setAssignmentDueDate("");
+        setAssignmentParsedStructure(null); setAssignmentExtractedText(""); setAssignmentQMarks({}); setAssignmentQAnswers({});
         fetchAssignments();
       } else {
         const d = await res.json(); showError(d.error || "Failed to create assignment");
       }
-    } catch (err) {
-      showError("Failed to create assignment");
-    }
+    } catch { showError("Failed to create assignment"); }
   };
 
   const handleUploadAssignmentKey = async (assignmentId: string) => {
@@ -777,23 +808,59 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     showSuccess("Exam student list downloaded successfully in Excel/CSV format!");
   };
 
+  const buildAnswerKeyJson = (structure: any[], marks: Record<string, string>, answers: Record<string, string>) => {
+    const items: { qLabel: string; answer: string; marks: number }[] = [];
+    for (const q of structure) {
+      if (q.subqs?.length > 0) {
+        for (const sq of q.subqs) {
+          const key = `${q.label}${sq.label}`;
+          items.push({ qLabel: key, answer: answers[key] ?? "", marks: parseFloat(marks[key] ?? "0") || 0 });
+        }
+      } else {
+        items.push({ qLabel: q.label, answer: answers[q.label] ?? "", marks: parseFloat(marks[q.label] ?? "0") || 0 });
+      }
+    }
+    return JSON.stringify(items);
+  };
+
+  const handleParseExamQuestions = async () => {
+    if (!examFile && !examQText.trim()) { showError("Upload a file or paste questions first"); return; }
+    setIsParsingExam(true);
+    try {
+      const fd = new FormData();
+      if (examFile) fd.append("file", examFile);
+      else fd.append("questionsText", examQText);
+      const res = await fetch("/api/parse-questions", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      if (res.ok) {
+        const d = await res.json();
+        setExamParsedStructure(d.structure);
+        setExamExtractedText(d.questionsText);
+        setExamQMarks({}); setExamQAnswers({});
+      } else {
+        const d = await res.json(); showError(d.error || "Failed to parse questions");
+      }
+    } catch { showError("Failed to parse questions"); }
+    finally { setIsParsingExam(false); }
+  };
+
   const handleCreateExam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!examTitle.trim() || !examCourseId) { showError("Title and course are required"); return; }
-    if (!examFile && !examQText.trim()) { showError("Upload a .docx/.txt file or paste the questions text"); return; }
+    if (!examParsedStructure) { showError("Parse questions first before creating the exam"); return; }
     try {
       const fd = new FormData();
       fd.append("title", examTitle);
       fd.append("courseId", examCourseId);
-      if (examFile) fd.append("file", examFile);
-      else fd.append("questionsText", examQText);
+      fd.append("questionsText", examExtractedText);
+      fd.append("questionsStructureJson", JSON.stringify(examParsedStructure));
+      fd.append("answerKeyJson", buildAnswerKeyJson(examParsedStructure, examQMarks, examQAnswers));
       if (examAvailableFrom) fd.append("availableFrom", new Date(examAvailableFrom).toISOString());
       if (examAvailableUntil) fd.append("availableUntil", new Date(examAvailableUntil).toISOString());
       const res = await fetch("/api/exams", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
       if (res.ok) {
-        showSuccess("Exam created successfully!");
-        setExamTitle(""); setExamFile(null); setExamQText("");
-        setExamAvailableFrom(""); setExamAvailableUntil("");
+        showSuccess("Exam created!");
+        setExamTitle(""); setExamFile(null); setExamQText(""); setExamAvailableFrom(""); setExamAvailableUntil("");
+        setExamParsedStructure(null); setExamExtractedText(""); setExamQMarks({}); setExamQAnswers({});
         fetchExams();
       } else {
         const d = await res.json(); showError(d.error || "Failed to create exam");
@@ -2299,30 +2366,84 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           <input type="datetime-local" value={examAvailableFrom} onChange={e => setExamAvailableFrom(e.target.value)} className="form-input" />
                         </div>
                         <div>
-                          <label className={lbl}>Closes At <span className="normal-case font-normal text-[#6e6e73] dark:text-white/30">(optional — blocks submissions after this)</span></label>
+                          <label className={lbl}>Closes At <span className="normal-case font-normal text-[#6e6e73] dark:text-white/30">(optional)</span></label>
                           <input type="datetime-local" value={examAvailableUntil} onChange={e => setExamAvailableUntil(e.target.value)} className="form-input" />
                         </div>
                       </div>
-                      <div>
-                        <label className={lbl}>Upload Questions Document (.docx or .txt)</label>
+
+                      {/* Step 1: Upload questions */}
+                      <div className="space-y-3 border border-black/[0.07] dark:border-white/[0.07] rounded-[12px] p-4">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Step 1 — Upload Questions</p>
                         <label className="flex items-center gap-3 p-3 border-2 border-dashed border-black/[0.10] dark:border-white/[0.12] rounded-[10px] cursor-pointer hover:border-emerald-400 transition-colors">
                           <Upload className="h-5 w-5 text-[#6e6e73] dark:text-white/40 shrink-0" />
-                          <span className="text-[12.5px] text-[#6e6e73] dark:text-white/50">
-                            {examFile ? examFile.name : "Click to choose file"}
-                          </span>
-                          <input type="file" accept=".docx,.doc,.txt" className="hidden" onChange={e => { setExamFile(e.target.files?.[0] ?? null); setExamQText(""); }} />
+                          <span className="text-[12.5px] text-[#6e6e73] dark:text-white/50">{examFile ? examFile.name : "Click to choose file (.docx or .txt)"}</span>
+                          <input type="file" accept=".docx,.doc,.txt" className="hidden" onChange={e => { setExamFile(e.target.files?.[0] ?? null); setExamQText(""); setExamParsedStructure(null); }} />
                         </label>
+                        <div className="relative flex items-center gap-3">
+                          <div className="flex-1 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
+                          <span className="text-[11px] font-semibold text-[#6e6e73] dark:text-white/40 uppercase tracking-wider">or paste text</span>
+                          <div className="flex-1 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
+                        </div>
+                        <textarea rows={4} value={examQText} onChange={e => { setExamQText(e.target.value); setExamFile(null); setExamParsedStructure(null); }} placeholder="Paste your exam questions here..." className="form-input resize-none" />
+                        <button type="button" onClick={handleParseExamQuestions} disabled={isParsingExam} className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
+                          {isParsingExam ? <><Loader2 className="h-4 w-4 animate-spin" />Parsing questions with AI…</> : <><Star className="h-4 w-4" />Parse Questions with AI →</>}
+                        </button>
                       </div>
-                      <div className="relative flex items-center gap-3">
-                        <div className="flex-1 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
-                        <span className="text-[11px] font-semibold text-[#6e6e73] dark:text-white/40 uppercase tracking-wider">or paste text</span>
-                        <div className="flex-1 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
-                      </div>
-                      <div>
-                        <label className={lbl}>Questions Text</label>
-                        <textarea rows={6} value={examQText} onChange={e => { setExamQText(e.target.value); setExamFile(null); }} placeholder="Paste your exam questions here..." className="form-input resize-none" />
-                      </div>
-                      <button type="submit" className="btn-gradient w-full">Create Exam</button>
+
+                      {/* Step 2: Marks + answers per question */}
+                      {examParsedStructure && examParsedStructure.length > 0 && (
+                        <div className="space-y-4 border border-emerald-200 dark:border-emerald-900/40 rounded-[12px] p-4 bg-emerald-50/30 dark:bg-emerald-950/10">
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Step 2 — Answer Key &amp; Marks</p>
+                          <p className="text-[12px] text-[#6e6e73] dark:text-white/50">For each question, type the model answer and assign marks.</p>
+                          {examParsedStructure.map((q: any) => {
+                            const hasSubqs = q.subqs?.length > 0;
+                            const qTotal = hasSubqs
+                              ? q.subqs.reduce((s: number, sq: any) => s + (parseFloat(examQMarks[`${q.label}${sq.label}`] ?? "0") || 0), 0)
+                              : (parseFloat(examQMarks[q.label] ?? "0") || 0);
+                            return (
+                              <div key={q.label} className="space-y-3 border border-black/[0.07] dark:border-white/[0.07] rounded-[10px] p-3 bg-white/60 dark:bg-white/[0.03]">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-[12px] font-bold text-[#1d1d1f] dark:text-white/90">Q{q.label}: <span className="font-normal text-[#3a3a3c] dark:text-white/60">{q.text}</span></p>
+                                  {hasSubqs && <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">Total: {qTotal} marks</span>}
+                                </div>
+                                {hasSubqs ? q.subqs.map((sq: any) => {
+                                  const key = `${q.label}${sq.label}`;
+                                  return (
+                                    <div key={key} className="pl-3 border-l-2 border-emerald-200 dark:border-emerald-900/40 space-y-1.5">
+                                      <p className="text-[11px] font-semibold text-[#3a3a3c] dark:text-white/70">{key}) {sq.text}</p>
+                                      <div className="flex gap-2 items-start">
+                                        <textarea rows={2} placeholder={`Model answer for ${key}…`} value={examQAnswers[key] ?? ""} onChange={e => setExamQAnswers(p => ({ ...p, [key]: e.target.value }))} className="form-input resize-none flex-1 text-[12px]" />
+                                        <div className="flex flex-col gap-1 w-20 shrink-0">
+                                          <label className="text-[10px] text-[#6e6e73] dark:text-white/40 font-semibold uppercase">Marks</label>
+                                          <input type="number" min="0" step="0.5" placeholder="0" value={examQMarks[key] ?? ""} onChange={e => setExamQMarks(p => ({ ...p, [key]: e.target.value }))} className="form-input text-[12px] text-center" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                }) : (
+                                  <div className="flex gap-2 items-start">
+                                    <textarea rows={2} placeholder={`Model answer for Q${q.label}…`} value={examQAnswers[q.label] ?? ""} onChange={e => setExamQAnswers(p => ({ ...p, [q.label]: e.target.value }))} className="form-input resize-none flex-1 text-[12px]" />
+                                    <div className="flex flex-col gap-1 w-20 shrink-0">
+                                      <label className="text-[10px] text-[#6e6e73] dark:text-white/40 font-semibold uppercase">Marks</label>
+                                      <input type="number" min="0" step="0.5" placeholder="0" value={examQMarks[q.label] ?? ""} onChange={e => setExamQMarks(p => ({ ...p, [q.label]: e.target.value }))} className="form-input text-[12px] text-center" />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          <div className="text-right text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            Grand total: {examParsedStructure.reduce((total: number, q: any) => {
+                              if (q.subqs?.length > 0) return total + q.subqs.reduce((s: number, sq: any) => s + (parseFloat(examQMarks[`${q.label}${sq.label}`] ?? "0") || 0), 0);
+                              return total + (parseFloat(examQMarks[q.label] ?? "0") || 0);
+                            }, 0)} marks
+                          </div>
+                        </div>
+                      )}
+
+                      <button type="submit" disabled={!examParsedStructure} className="btn-gradient w-full disabled:opacity-40">
+                        {examParsedStructure ? "Create Exam & Save Answer Key" : "Parse Questions First (Step 1)"}
+                      </button>
                     </form>
 
                     <div className="space-y-3">
@@ -2532,24 +2653,79 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         <label className={lbl}>Due Date <span className="normal-case font-normal text-[#6e6e73] dark:text-white/30">(optional — blocks submissions after this)</span></label>
                         <input type="datetime-local" value={assignmentDueDate} onChange={e => setAssignmentDueDate(e.target.value)} className="form-input" />
                       </div>
-                      <div>
-                        <label className={lbl}>Upload Questions Document (.docx or .txt)</label>
+                      {/* Step 1: Upload questions */}
+                      <div className="space-y-3 border border-black/[0.07] dark:border-white/[0.07] rounded-[12px] p-4">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Step 1 — Upload Questions</p>
                         <label className="flex items-center gap-3 p-3 border-2 border-dashed border-black/[0.10] dark:border-white/[0.12] rounded-[10px] cursor-pointer hover:border-emerald-400 transition-colors">
                           <Upload className="h-5 w-5 text-[#6e6e73] dark:text-white/40 shrink-0" />
-                          <span className="text-[12.5px] text-[#6e6e73] dark:text-white/50">{assignmentFile ? assignmentFile.name : "Click to choose file"}</span>
-                          <input type="file" accept=".docx,.doc,.txt" className="hidden" onChange={e => { setAssignmentFile(e.target.files?.[0] ?? null); setAssignmentQText(""); }} />
+                          <span className="text-[12.5px] text-[#6e6e73] dark:text-white/50">{assignmentFile ? assignmentFile.name : "Click to choose file (.docx or .txt)"}</span>
+                          <input type="file" accept=".docx,.doc,.txt" className="hidden" onChange={e => { setAssignmentFile(e.target.files?.[0] ?? null); setAssignmentQText(""); setAssignmentParsedStructure(null); }} />
                         </label>
+                        <div className="relative flex items-center gap-3">
+                          <div className="flex-1 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
+                          <span className="text-[11px] font-semibold text-[#6e6e73] dark:text-white/40 uppercase tracking-wider">or paste text</span>
+                          <div className="flex-1 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
+                        </div>
+                        <textarea rows={4} value={assignmentQText} onChange={e => { setAssignmentQText(e.target.value); setAssignmentFile(null); setAssignmentParsedStructure(null); }} placeholder="Paste assignment questions here..." className="form-input resize-none" />
+                        <button type="button" onClick={handleParseAssignmentQuestions} disabled={isParsingAssignment} className="btn-gradient w-full flex items-center justify-center gap-2 disabled:opacity-60">
+                          {isParsingAssignment ? <><Loader2 className="h-4 w-4 animate-spin" />Parsing questions with AI…</> : <><Star className="h-4 w-4" />Parse Questions with AI →</>}
+                        </button>
                       </div>
-                      <div className="relative flex items-center gap-3">
-                        <div className="flex-1 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
-                        <span className="text-[11px] font-semibold text-[#6e6e73] dark:text-white/40 uppercase tracking-wider">or paste text</span>
-                        <div className="flex-1 h-px bg-black/[0.08] dark:bg-white/[0.08]" />
-                      </div>
-                      <div>
-                        <label className={lbl}>Questions Text</label>
-                        <textarea rows={5} value={assignmentQText} onChange={e => { setAssignmentQText(e.target.value); setAssignmentFile(null); }} placeholder="Paste assignment questions here..." className="form-input resize-none" />
-                      </div>
-                      <button type="submit" className="btn-gradient w-full">Post Assignment</button>
+
+                      {/* Step 2: Marks + answers per question */}
+                      {assignmentParsedStructure && assignmentParsedStructure.length > 0 && (
+                        <div className="space-y-4 border border-emerald-200 dark:border-emerald-900/40 rounded-[12px] p-4 bg-emerald-50/30 dark:bg-emerald-950/10">
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Step 2 — Answer Key &amp; Marks</p>
+                          <p className="text-[12px] text-[#6e6e73] dark:text-white/50">For each question, type the model answer and assign marks.</p>
+                          {assignmentParsedStructure.map((q: any) => {
+                            const hasSubqs = q.subqs?.length > 0;
+                            const qTotal = hasSubqs
+                              ? q.subqs.reduce((s: number, sq: any) => s + (parseFloat(assignmentQMarks[`${q.label}${sq.label}`] ?? "0") || 0), 0)
+                              : (parseFloat(assignmentQMarks[q.label] ?? "0") || 0);
+                            return (
+                              <div key={q.label} className="space-y-3 border border-black/[0.07] dark:border-white/[0.07] rounded-[10px] p-3 bg-white/60 dark:bg-white/[0.03]">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-[12px] font-bold text-[#1d1d1f] dark:text-white/90">Q{q.label}: <span className="font-normal text-[#3a3a3c] dark:text-white/60">{q.text}</span></p>
+                                  {hasSubqs && <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">Total: {qTotal} marks</span>}
+                                </div>
+                                {hasSubqs ? q.subqs.map((sq: any) => {
+                                  const key = `${q.label}${sq.label}`;
+                                  return (
+                                    <div key={key} className="pl-3 border-l-2 border-emerald-200 dark:border-emerald-900/40 space-y-1.5">
+                                      <p className="text-[11px] font-semibold text-[#3a3a3c] dark:text-white/70">{key}) {sq.text}</p>
+                                      <div className="flex gap-2 items-start">
+                                        <textarea rows={2} placeholder={`Model answer for ${key}…`} value={assignmentQAnswers[key] ?? ""} onChange={e => setAssignmentQAnswers(p => ({ ...p, [key]: e.target.value }))} className="form-input resize-none flex-1 text-[12px]" />
+                                        <div className="flex flex-col gap-1 w-20 shrink-0">
+                                          <label className="text-[10px] text-[#6e6e73] dark:text-white/40 font-semibold uppercase">Marks</label>
+                                          <input type="number" min="0" step="0.5" placeholder="0" value={assignmentQMarks[key] ?? ""} onChange={e => setAssignmentQMarks(p => ({ ...p, [key]: e.target.value }))} className="form-input text-[12px] text-center" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                }) : (
+                                  <div className="flex gap-2 items-start">
+                                    <textarea rows={2} placeholder={`Model answer for Q${q.label}…`} value={assignmentQAnswers[q.label] ?? ""} onChange={e => setAssignmentQAnswers(p => ({ ...p, [q.label]: e.target.value }))} className="form-input resize-none flex-1 text-[12px]" />
+                                    <div className="flex flex-col gap-1 w-20 shrink-0">
+                                      <label className="text-[10px] text-[#6e6e73] dark:text-white/40 font-semibold uppercase">Marks</label>
+                                      <input type="number" min="0" step="0.5" placeholder="0" value={assignmentQMarks[q.label] ?? ""} onChange={e => setAssignmentQMarks(p => ({ ...p, [q.label]: e.target.value }))} className="form-input text-[12px] text-center" />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          <div className="text-right text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            Grand total: {assignmentParsedStructure.reduce((total: number, q: any) => {
+                              if (q.subqs?.length > 0) return total + q.subqs.reduce((s: number, sq: any) => s + (parseFloat(assignmentQMarks[`${q.label}${sq.label}`] ?? "0") || 0), 0);
+                              return total + (parseFloat(assignmentQMarks[q.label] ?? "0") || 0);
+                            }, 0)} marks
+                          </div>
+                        </div>
+                      )}
+
+                      <button type="submit" disabled={!assignmentParsedStructure} className="btn-gradient w-full disabled:opacity-40">
+                        {assignmentParsedStructure ? "Post Assignment & Save Answer Key" : "Parse Questions First (Step 1)"}
+                      </button>
                     </form>
 
                     <div className="space-y-3">

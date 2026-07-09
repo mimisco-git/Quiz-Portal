@@ -54,18 +54,20 @@ model Course {
 }
 
 model Exam {
-  id            String          @id @default(uuid())
-  title         String
-  courseId      String
-  course        Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  questionsText String          // Extracted text from uploaded questions doc
-  answerKeyText String?         // Extracted text from uploaded answer key doc
-  marksText     String?         // Comma-separated marks per question e.g. "5,10,5,3"
-  isOpen        Boolean         @default(true)
-  availableFrom  DateTime?
-  availableUntil DateTime?
-  createdAt     DateTime        @default(now())
-  submissions   ExamSubmission[]
+  id                    String          @id @default(uuid())
+  title                 String
+  courseId              String
+  course                Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questionsText         String
+  questionsStructureJson String?        // JSON: parsed question tree [{label,text,subqs:[{label,text}]}]
+  answerKeyText         String?
+  answerKeyJson         String?         // JSON: [{qLabel,answer,marks}] — structured key, primary for grading
+  marksText             String?
+  isOpen                Boolean         @default(true)
+  availableFrom         DateTime?
+  availableUntil        DateTime?
+  createdAt             DateTime        @default(now())
+  submissions           ExamSubmission[]
 }
 
 model ExamSubmission {
@@ -200,18 +202,20 @@ model LectureChat {
 }
 
 model Assignment {
-  id            String                 @id @default(uuid())
-  title         String
-  courseId      String
-  course        Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  description   String?
-  questionsText String
-  answerKeyText String?
-  marksText     String?                // Comma-separated marks per question e.g. "5,10,5,3"
-  dueDate       DateTime?
-  isOpen        Boolean                @default(true)
-  createdAt     DateTime               @default(now())
-  submissions   AssignmentSubmission[]
+  id                    String                 @id @default(uuid())
+  title                 String
+  courseId              String
+  course                Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  description           String?
+  questionsText         String
+  questionsStructureJson String?
+  answerKeyText         String?
+  answerKeyJson         String?               // JSON: [{qLabel,answer,marks}]
+  marksText             String?
+  dueDate               DateTime?
+  isOpen                Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  submissions           AssignmentSubmission[]
 }
 
 model AssignmentSubmission {
