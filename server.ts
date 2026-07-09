@@ -650,6 +650,18 @@ app.delete("/api/notes/:id", authenticateToken, async (req: any, res) => {
   }
 });
 
+// Parse DOCX → HTML (lecturer only) — client converts HTML→Markdown with turndown
+app.post("/api/notes/parse-docx", authenticateToken, upload.single("file"), async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  try {
+    const result = await mammoth.convertToHtml({ buffer: req.file.buffer });
+    return res.json({ html: result.value });
+  } catch {
+    return res.status(500).json({ error: "Failed to parse document" });
+  }
+});
+
 // Create Quiz (Lecturer Only)
 app.post("/api/quizzes", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") {

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import TurndownService from "turndown";
 import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
@@ -53,6 +54,11 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [noteCourseId, setNoteCourseId] = useState("");
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
+  const [publishedNotes, setPublishedNotes] = useState<LectureNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [docxImporting, setDocxImporting] = useState(false);
+  const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const docxInputRef = useRef<HTMLInputElement>(null);
 
   const [quizCourseId, setQuizCourseId] = useState("");
   const [quizTitle, setQuizTitle] = useState("");
@@ -184,6 +190,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     fetchCourses();
     fetchGradebook();
     fetchDepartments();
+    fetchPublishedNotes();
     fetch("/api/lecturer/profile", { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setLecturerDepts(d.departments || []); })
@@ -658,6 +665,65 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
+  const fetchPublishedNotes = useCallback(async () => {
+    setNotesLoading(true);
+    try {
+      const r = await fetch("/api/notes", { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) setPublishedNotes(await r.json());
+    } catch {}
+    setNotesLoading(false);
+  }, [token]);
+
+  const handleDeleteNote = async (id: string, title: string) => {
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    try {
+      const r = await fetch(`/api/notes/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) {
+        showSuccess("Note deleted.");
+        setPublishedNotes(prev => prev.filter(n => n.id !== id));
+      } else {
+        showError("Failed to delete note.");
+      }
+    } catch { showError("Failed to delete note."); }
+  };
+
+  const handleDocxImport = async (file: File) => {
+    setDocxImporting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/notes/parse-docx", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!r.ok) { showError("Failed to parse document."); return; }
+      const { html } = await r.json();
+      const td = new TurndownService({ headingStyle: "atx", bulletListMarker: "-", codeBlockStyle: "fenced" });
+      const md = td.turndown(html);
+      setNoteContent(md);
+      showSuccess("Document imported — review and publish.");
+    } catch { showError("Failed to import document."); }
+    setDocxImporting(false);
+  };
+
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const html = e.clipboardData.getData("text/html");
+    if (!html) return;
+    e.preventDefault();
+    const td = new TurndownService({ headingStyle: "atx", bulletListMarker: "-", codeBlockStyle: "fenced" });
+    const md = td.turndown(html);
+    const ta = noteTextareaRef.current;
+    if (!ta) { setNoteContent(prev => prev + md); return; }
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    setNoteContent(prev => prev.slice(0, start) + md + prev.slice(end));
+    // Restore cursor after insertion
+    requestAnimationFrame(() => {
+      ta.selectionStart = ta.selectionEnd = start + md.length;
+    });
+  }, []);
+
   const handlePublishNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!noteCourseId || !noteTitle || !noteContent) {
@@ -675,6 +741,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         setNoteTitle("");
         setNoteContent("");
         fetchCourses();
+        fetchPublishedNotes();
       } else {
         const d = await res.json();
         showError(d.error || "Failed to publish study note");
@@ -2242,85 +2309,157 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── 3. PUBLISH NOTES ── */}
           {activeTab === "notes" && (
-            <motion.div id="notes-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
-              <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
-                <h2 className="apple-title">Publish Course Study Notes</h2>
-                <p className="apple-subtitle">Write in Markdown — live preview shown on the right.</p>
-              </div>
-              <div className="p-5">
-                <form onSubmit={handlePublishNote} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className={lbl}>Target Course Module</label>
-                      <select value={noteCourseId} onChange={(e) => setNoteCourseId(e.target.value)} className="form-input">
-                        {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
-                      </select>
-                      {audienceBadge(noteCourseId)}
-                    </div>
-                    <div>
-                      <label className={lbl}>Lecture Note Title</label>
-                      <input type="text" required value={noteTitle} onChange={(e) => setNoteTitle(e.target.value)} placeholder="e.g. Chapter 3: Normalization…" className="form-input" />
-                    </div>
+            <div className="space-y-4">
+              {/* Published notes list */}
+              <motion.div className="apple-card overflow-hidden" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
+                <div className="px-6 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
+                  <h2 className="apple-title">Published Notes</h2>
+                  <p className="apple-subtitle">Your uploaded materials visible to students.</p>
+                </div>
+                {notesLoading ? (
+                  <div className="py-8 text-center text-[12px] text-[#8e8e93] dark:text-white/35">Loading…</div>
+                ) : publishedNotes.length === 0 ? (
+                  <div className="apple-empty-state py-10">
+                    <div className="apple-empty-state__icon"><FileText className="h-6 w-6 text-[#8e8e93] dark:text-white/30" /></div>
+                    <p className="apple-empty-state__title">No notes published yet</p>
+                    <p className="apple-empty-state__body">Use the form below to publish your first note.</p>
                   </div>
-
-                  {/* Markdown toolbar */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className={lbl}>Content <span className="normal-case font-normal text-[#6e6e73] dark:text-white/30">— Markdown supported</span></label>
-                      <div className="flex items-center gap-0.5">
-                        {([
-                          { label: "B",  insert: "**bold**",      title: "Bold" },
-                          { label: "I",  insert: "_italic_",      title: "Italic" },
-                          { label: "H2", insert: "\n## Heading\n",title: "Heading 2" },
-                          { label: "H3", insert: "\n### Heading\n",title: "Heading 3" },
-                          { label: "• ", insert: "\n- item\n",    title: "Bullet list" },
-                          { label: "1.", insert: "\n1. item\n",   title: "Numbered list" },
-                          { label: "`",  insert: "`code`",        title: "Inline code" },
-                          { label: "```",insert: "\n```\ncode\n```\n", title: "Code block" },
-                        ] as const).map(btn => (
-                          <button key={btn.label} type="button" title={btn.title}
-                            onClick={() => setNoteContent(prev => prev + btn.insert)}
-                            className="px-2 py-1 text-[10.5px] font-bold text-[#3a3a3c] dark:text-white/60 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] rounded-[6px] transition font-mono">
-                            {btn.label}
+                ) : (
+                  <div className="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
+                    {publishedNotes.map(n => {
+                      const c = courses.find(x => x.id === n.courseId);
+                      return (
+                        <div key={n.id} className="flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-black/[0.01] dark:hover:bg-white/[0.02] transition">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {c && <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-1.5 py-0.5 rounded">{c.code}</span>}
+                              <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{n.title}</p>
+                            </div>
+                            <p className="text-[11px] text-[#8e8e93] dark:text-white/35 mt-0.5">
+                              {new Date(n.createdAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteNote(n.id, n.title)}
+                            title="Delete note"
+                            className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-[8px] text-[#8e8e93] dark:text-white/35 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-500 dark:hover:text-red-400 transition cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
-                        ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+
+              {/* Create note form */}
+              <motion.div id="notes-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0.06 }}>
+                <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="apple-title">New Study Note</h2>
+                    <p className="apple-subtitle">Paste from Word, import a .docx, or write in Markdown.</p>
+                  </div>
+                  {/* DOCX import */}
+                  <div>
+                    <input
+                      ref={docxInputRef}
+                      type="file"
+                      accept=".docx,.doc"
+                      className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleDocxImport(f); e.target.value = ""; }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => docxInputRef.current?.click()}
+                      disabled={docxImporting}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] border border-black/[0.10] dark:border-white/[0.12] text-[12px] font-semibold text-[#3a3a3c] dark:text-white/70 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition disabled:opacity-50 cursor-pointer"
+                    >
+                      {docxImporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      {docxImporting ? "Importing…" : "Import .docx"}
+                    </button>
+                  </div>
+                </div>
+                <div className="p-5">
+                  <form onSubmit={handlePublishNote} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className={lbl}>Target Course Module</label>
+                        <select value={noteCourseId} onChange={(e) => setNoteCourseId(e.target.value)} className="form-input">
+                          {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
+                        </select>
+                        {audienceBadge(noteCourseId)}
+                      </div>
+                      <div>
+                        <label className={lbl}>Lecture Note Title</label>
+                        <input type="text" required value={noteTitle} onChange={(e) => setNoteTitle(e.target.value)} placeholder="e.g. Chapter 3: Normalization…" className="form-input" />
                       </div>
                     </div>
 
-                    {/* Split pane */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-[9.5px] font-bold uppercase tracking-widest text-[#8e8e93] dark:text-white/30 mb-1.5">Editor</p>
-                        <textarea
-                          required
-                          rows={18}
-                          value={noteContent}
-                          onChange={(e) => setNoteContent(e.target.value)}
-                          placeholder={"# Introduction\n\nWrite your lecture notes here using **Markdown**.\n\n## Key Concepts\n\n- Point one\n- Point two\n\n## Code Example\n\n```\ncode here\n```"}
-                          className="form-input font-mono text-[12.5px] leading-relaxed resize-none"
-                          style={{ minHeight: "360px" }}
-                        />
+                    {/* Toolbar + paste tip */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+                        <div className="flex items-center gap-1">
+                          <label className={lbl}>Content</label>
+                          <span className="text-[10px] text-[#8e8e93] dark:text-white/30 ml-1">— Markdown · paste from Word preserves formatting</span>
+                        </div>
+                        <div className="flex items-center gap-0.5 flex-wrap">
+                          {([
+                            { label: "B",   insert: "**bold**",           title: "Bold" },
+                            { label: "I",   insert: "_italic_",           title: "Italic" },
+                            { label: "H2",  insert: "\n## Heading\n",     title: "Heading 2" },
+                            { label: "H3",  insert: "\n### Heading\n",    title: "Heading 3" },
+                            { label: "•",   insert: "\n- item\n",         title: "Bullet list" },
+                            { label: "1.",  insert: "\n1. item\n",        title: "Numbered list" },
+                            { label: "`",   insert: "`code`",             title: "Inline code" },
+                            { label: "```", insert: "\n```\ncode\n```\n", title: "Code block" },
+                          ] as const).map(btn => (
+                            <button key={btn.label} type="button" title={btn.title}
+                              onClick={() => setNoteContent(prev => prev + btn.insert)}
+                              className="px-2 py-1 text-[10.5px] font-bold text-[#3a3a3c] dark:text-white/60 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] rounded-[6px] transition font-mono cursor-pointer">
+                              {btn.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[9.5px] font-bold uppercase tracking-widest text-[#8e8e93] dark:text-white/30 mb-1.5">Preview</p>
-                        <div className="rounded-[10px] border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#1c1c1e] p-4 overflow-y-auto" style={{ minHeight: "360px" }}>
-                          {noteContent.trim() ? (
-                            <MarkdownView content={noteContent} />
-                          ) : (
-                            <p className="text-[12.5px] text-[#c7c7cc] dark:text-white/20 italic">Preview will appear here as you type…</p>
-                          )}
+
+                      {/* Split pane */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[9.5px] font-bold uppercase tracking-widest text-[#8e8e93] dark:text-white/30 mb-1.5">Editor</p>
+                          <textarea
+                            ref={noteTextareaRef}
+                            required
+                            rows={18}
+                            value={noteContent}
+                            onChange={(e) => setNoteContent(e.target.value)}
+                            onPaste={handlePaste}
+                            placeholder={"# Introduction\n\nWrite or paste your lecture notes here.\nFormatting from Word (bold, headings, lists) is preserved on paste.\n\n## Key Concepts\n\n- Point one\n- Point two"}
+                            className="form-input font-mono text-[12.5px] leading-relaxed resize-none"
+                            style={{ minHeight: "360px" }}
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[9.5px] font-bold uppercase tracking-widest text-[#8e8e93] dark:text-white/30 mb-1.5">Preview</p>
+                          <div className="rounded-[10px] border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#1c1c1e] p-5 overflow-y-auto" style={{ minHeight: "360px" }}>
+                            {noteContent.trim() ? (
+                              <MarkdownView content={noteContent} />
+                            ) : (
+                              <p className="text-[12.5px] text-[#c7c7cc] dark:text-white/20 italic">Preview will appear here as you type…</p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  <button type="submit" className="btn-gradient flex items-center gap-2">
-                    <PlusCircle className="h-4 w-4" />
-                    Publish Note
-                  </button>
-                </form>
-              </div>
-            </motion.div>
+                    <button type="submit" className="btn-gradient flex items-center gap-2">
+                      <PlusCircle className="h-4 w-4" />
+                      Publish Note
+                    </button>
+                  </form>
+                </div>
+              </motion.div>
+            </div>
           )}
 
           {/* ── 4. DEPLOY QUIZ ── */}

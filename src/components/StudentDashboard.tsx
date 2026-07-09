@@ -1977,10 +1977,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       {new Date(selectedNote.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
                     </span>
                   </div>
-                  <div className="p-5">
-                    <div className="bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-5">
-                      <MarkdownView content={selectedNote.content} />
-                    </div>
+                  <div className="p-5 sm:p-7">
+                    <MarkdownView content={selectedNote.content} />
                   </div>
                 </motion.div>
               )}
