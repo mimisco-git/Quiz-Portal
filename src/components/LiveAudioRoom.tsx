@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
-import { io, Socket } from "socket.io-client";
+import * as Ably from "ably";
 import { Mic, MicOff, Users, Volume2, WifiOff } from "lucide-react";
 
 interface Participant {
-  socketId: string;
+  connectionId: string;
   displayName: string;
   role: string;
   isMuted: boolean;
@@ -23,181 +23,86 @@ interface Props {
   className?: string;
 }
 
-// ICE servers: Google STUN + Open Relay TURN (free, no account needed).
-// Override TURN with your own server via VITE_TURN_URL/USER/PASS env vars.
-const OPEN_RELAY_TURN = {
-  username: "openrelayproject",
-  credential: "openrelayproject",
-};
+// Google STUN + Open Relay TURN (free, no account needed)
+const TURN_CREDS = { username: "openrelayproject", credential: "openrelayproject" };
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-  // Open Relay — free public TURN, covers NAT traversal on all networks
-  { urls: "turn:openrelay.metered.ca:80",            ...OPEN_RELAY_TURN },
-  { urls: "turn:openrelay.metered.ca:80?transport=tcp", ...OPEN_RELAY_TURN },
-  { urls: "turn:openrelay.metered.ca:443",           ...OPEN_RELAY_TURN },
-  { urls: "turn:openrelay.metered.ca:443?transport=tcp", ...OPEN_RELAY_TURN },
-  // Override with your own TURN server via environment variables if desired
+  { urls: "turn:openrelay.metered.ca:80",               ...TURN_CREDS },
+  { urls: "turn:openrelay.metered.ca:80?transport=tcp", ...TURN_CREDS },
+  { urls: "turn:openrelay.metered.ca:443",              ...TURN_CREDS },
+  { urls: "turn:openrelay.metered.ca:443?transport=tcp",...TURN_CREDS },
   ...(import.meta.env.VITE_TURN_URL
-    ? [
-        {
-          urls: import.meta.env.VITE_TURN_URL as string,
-          username: (import.meta.env.VITE_TURN_USER as string) ?? "",
-          credential: (import.meta.env.VITE_TURN_PASS as string) ?? "",
-        },
-      ]
+    ? [{ urls: import.meta.env.VITE_TURN_URL as string,
+         username: import.meta.env.VITE_TURN_USER as string ?? "",
+         credential: import.meta.env.VITE_TURN_PASS as string ?? "" }]
     : []),
 ];
 
 const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
   ({ roomId, displayName, role, isMicAllowed = false, className = "" }, ref) => {
-    const socketRef = useRef<Socket | null>(null);
-    const pcsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
-    const localStreamRef = useRef<MediaStream | null>(null);
+
+    const ablyRef    = useRef<Ably.Realtime | null>(null);
+    const myConnId   = useRef<string>("");
+    const pcsRef     = useRef<Map<string, RTCPeerConnection>>(new Map());
+    const localStreamRef    = useRef<MediaStream | null>(null);
     const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
-    // Stores remote streams so we can attach them after React renders <audio> elements
-    const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
+    const remoteStreamsRef  = useRef<Map<string, MediaStream>>(new Map());
 
     const [participants, setParticipants] = useState<Participant[]>([]);
-    const [isMuted, setIsMuted] = useState(role === "student");
-    const [isConnected, setIsConnected] = useState(false);
-    const [micError, setMicError] = useState<string | null>(null);
-    const [speakingSet, setSpeakingSet] = useState<Set<string>>(new Set());
+    const [isMuted,      setIsMuted]      = useState(role === "student");
+    const [isConnected,  setIsConnected]  = useState(false);
+    const [micError,     setMicError]     = useState<string | null>(null);
+    const [speakingSet,  setSpeakingSet]  = useState<Set<string>>(new Set());
 
-    const analyserRefs = useRef<
-      Map<string, { analyser: AnalyserNode; ctx: AudioContext; raf: number }>
-    >(new Map());
+    const analyserRefs = useRef<Map<string, { ctx: AudioContext; raf: number }>>(new Map());
 
-    // ── After every render: attach any stored remote streams to their <audio> elements.
-    // This fixes the race where ontrack fires before React renders the <audio> element.
+    // ── Attach stored remote streams after every render (fixes race with <audio> elements)
     useEffect(() => {
-      remoteStreamsRef.current.forEach((stream, socketId) => {
-        const el = document.getElementById(`audio-${socketId}`) as HTMLAudioElement | null;
-        if (el && el.srcObject !== stream) {
-          el.srcObject = stream;
-          el.play().catch(() => {});
-        }
+      remoteStreamsRef.current.forEach((stream, connId) => {
+        const el = document.getElementById(`audio-${connId}`) as HTMLAudioElement | null;
+        if (el && el.srcObject !== stream) { el.srcObject = stream; el.play().catch(() => {}); }
       });
     });
 
-    // ── Speaking detection via AnalyserNode ───────────────────────────────
-    const attachAnalyser = useCallback((socketId: string, stream: MediaStream) => {
+    // ── Speaking detection ────────────────────────────────────────────────
+    const attachAnalyser = useCallback((id: string, stream: MediaStream) => {
       try {
-        detachAnalyser(socketId); // clear any existing one first
+        const existing = analyserRefs.current.get(id);
+        if (existing) { cancelAnimationFrame(existing.raf); existing.ctx.close().catch(() => {}); }
         const ctx = new AudioContext();
-        const source = ctx.createMediaStreamSource(stream);
+        const src = ctx.createMediaStreamSource(stream);
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 256;
-        source.connect(analyser);
+        src.connect(analyser);
         const data = new Uint8Array(analyser.frequencyBinCount);
-        let wasSpeaking = false;
+        let was = false;
         let rafId = 0;
         const tick = () => {
           analyser.getByteFrequencyData(data);
-          const avg = data.reduce((a, b) => a + b, 0) / data.length;
-          const speaking = avg > 12;
-          // Only update React state when speaking status actually changes
-          if (speaking !== wasSpeaking) {
-            wasSpeaking = speaking;
-            setSpeakingSet(prev => {
-              const next = new Set(prev);
-              if (speaking) next.add(socketId); else next.delete(socketId);
-              return next;
-            });
+          const speaking = data.reduce((a, b) => a + b, 0) / data.length > 12;
+          if (speaking !== was) {
+            was = speaking;
+            setSpeakingSet(prev => { const n = new Set(prev); speaking ? n.add(id) : n.delete(id); return n; });
           }
-          const entry = analyserRefs.current.get(socketId);
-          if (entry) { rafId = requestAnimationFrame(tick); entry.raf = rafId; }
+          const e = analyserRefs.current.get(id);
+          if (e) { rafId = requestAnimationFrame(tick); e.raf = rafId; }
         };
         rafId = requestAnimationFrame(tick);
-        analyserRefs.current.set(socketId, { analyser, ctx, raf: rafId });
-      } catch { }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    const detachAnalyser = useCallback((socketId: string) => {
-      const entry = analyserRefs.current.get(socketId);
-      if (!entry) return;
-      cancelAnimationFrame(entry.raf);
-      entry.ctx.close().catch(() => {});
-      analyserRefs.current.delete(socketId);
-      setSpeakingSet(prev => { const n = new Set(prev); n.delete(socketId); return n; });
-    }, []);
-
-    // ── Create a peer connection ──────────────────────────────────────────
-    const createPC = useCallback(
-      (peerId: string): RTCPeerConnection => {
-        // Close any stale connection for this peer
-        pcsRef.current.get(peerId)?.close();
-
-        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-        pcsRef.current.set(peerId, pc);
-
-        // Add local tracks
-        if (localStreamRef.current) {
-          localStreamRef.current.getTracks().forEach(t => {
-            pc.addTrack(t, localStreamRef.current!);
-          });
-        }
-
-        // Trickle ICE
-        pc.onicecandidate = ({ candidate }) => {
-          if (candidate) {
-            socketRef.current?.emit("signal", {
-              to: peerId,
-              signal: { type: "candidate", candidate: candidate.toJSON() },
-            });
-          }
-        };
-
-        // Remote audio track — store stream in ref; React's post-render effect attaches it
-        pc.ontrack = (event) => {
-          // event.streams[0] may be undefined in some browsers — build one from the track
-          const stream = event.streams[0] ?? new MediaStream([event.track]);
-          remoteStreamsRef.current.set(peerId, stream);
-          attachAnalyser(peerId, stream);
-          // Force a re-render so the post-render effect can pick up the stream
-          setParticipants(prev => [...prev]);
-        };
-
-        // Auto-restart ICE if the connection fails
-        pc.onconnectionstatechange = () => {
-          if (pc.connectionState === "failed") pc.restartIce();
-        };
-
-        return pc;
-      },
-      [attachAnalyser]
-    );
-
-    // ── Send an offer to a peer (explicit createOffer — required by Safari) ─
-    const sendOffer = useCallback(async (peerId: string) => {
-      const pc = pcsRef.current.get(peerId);
-      if (!pc || !socketRef.current) return;
-      try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socketRef.current.emit("signal", {
-          to: peerId,
-          signal: { type: "offer", sdp: pc.localDescription },
-        });
+        analyserRefs.current.set(id, { ctx, raf: rafId });
       } catch { }
     }, []);
 
-    // ── Close and clean up a peer ─────────────────────────────────────────
-    const closePeer = useCallback(
-      (peerId: string) => {
-        pcsRef.current.get(peerId)?.close();
-        pcsRef.current.delete(peerId);
-        pendingCandidatesRef.current.delete(peerId);
-        remoteStreamsRef.current.delete(peerId);
-        detachAnalyser(peerId);
-        const el = document.getElementById(`audio-${peerId}`) as HTMLAudioElement | null;
-        if (el) el.srcObject = null;
-      },
-      [detachAnalyser]
-    );
+    const detachAnalyser = useCallback((id: string) => {
+      const e = analyserRefs.current.get(id);
+      if (!e) return;
+      cancelAnimationFrame(e.raf);
+      e.ctx.close().catch(() => {});
+      analyserRefs.current.delete(id);
+      setSpeakingSet(prev => { const n = new Set(prev); n.delete(id); return n; });
+    }, []);
 
-    // ── Mic mute helpers ──────────────────────────────────────────────────
+    // ── Mic control ───────────────────────────────────────────────────────
     const applyMute = useCallback((muted: boolean) => {
       localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !muted; });
     }, []);
@@ -206,31 +111,108 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
       setIsMuted(prev => { applyMute(!prev); return !prev; });
     }, [applyMute]);
 
-    // ── isMicAllowed prop → auto mute/unmute student ──────────────────────
     useEffect(() => {
       if (role !== "student") return;
       setIsMuted(!isMicAllowed);
       applyMute(!isMicAllowed);
     }, [isMicAllowed, role, applyMute]);
 
-    // ── Lecturer controls exposed via ref ─────────────────────────────────
-    useImperativeHandle(
-      ref,
-      () => ({
-        muteAll: () => socketRef.current?.emit("mute-all", { roomId }),
-        grantMic: (name: string) => {
-          const peer = participants.find(p => p.displayName === name);
-          if (peer) socketRef.current?.emit("grant-mic", { to: peer.socketId });
-        },
-        revokeMic: (name: string) => {
-          const peer = participants.find(p => p.displayName === name);
-          if (peer) socketRef.current?.emit("mute-peer", { to: peer.socketId });
-        },
-      }),
-      [participants, roomId]
-    );
+    // ── Send signal to a specific peer via their Ably channel ─────────────
+    const sendSignal = useCallback((toConnId: string, signal: unknown) => {
+      const ch = ablyRef.current?.channels.get(`signal:${toConnId}`);
+      ch?.publish("signal", { from: myConnId.current, signal });
+    }, []);
 
-    // ── Main effect: mic + socket + WebRTC ───────────────────────────────
+    // ── Create RTCPeerConnection ───────────────────────────────────────────
+    const createPC = useCallback((peerId: string): RTCPeerConnection => {
+      pcsRef.current.get(peerId)?.close();
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      pcsRef.current.set(peerId, pc);
+
+      localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
+
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) sendSignal(peerId, { type: "candidate", candidate: candidate.toJSON() });
+      };
+
+      pc.ontrack = (ev) => {
+        const stream = ev.streams[0] ?? new MediaStream([ev.track]);
+        remoteStreamsRef.current.set(peerId, stream);
+        attachAnalyser(peerId, stream);
+        setParticipants(prev => [...prev]); // trigger re-render so post-render effect attaches stream
+      };
+
+      pc.onconnectionstatechange = () => { if (pc.connectionState === "failed") pc.restartIce(); };
+      return pc;
+    }, [sendSignal, attachAnalyser]);
+
+    // ── Send WebRTC offer (explicit createOffer — required by Safari) ──────
+    const sendOffer = useCallback(async (peerId: string) => {
+      const pc = pcsRef.current.get(peerId);
+      if (!pc) return;
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        sendSignal(peerId, { type: "offer", sdp: pc.localDescription });
+      } catch { }
+    }, [sendSignal]);
+
+    // ── Clean up one peer ─────────────────────────────────────────────────
+    const closePeer = useCallback((peerId: string) => {
+      pcsRef.current.get(peerId)?.close();
+      pcsRef.current.delete(peerId);
+      pendingCandidatesRef.current.delete(peerId);
+      remoteStreamsRef.current.delete(peerId);
+      detachAnalyser(peerId);
+      const el = document.getElementById(`audio-${peerId}`) as HTMLAudioElement | null;
+      if (el) el.srcObject = null;
+    }, [detachAnalyser]);
+
+    // ── Handle an incoming WebRTC signal ──────────────────────────────────
+    const handleSignal = useCallback(async (from: string, signal: any) => {
+      let pc = pcsRef.current.get(from);
+      if (!pc) pc = createPC(from);
+      try {
+        if (signal.type === "offer") {
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+          for (const c of pendingCandidatesRef.current.get(from) ?? []) {
+            await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+          }
+          pendingCandidatesRef.current.delete(from);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          sendSignal(from, { type: "answer", sdp: pc.localDescription });
+        } else if (signal.type === "answer") {
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+        } else if (signal.type === "candidate" && signal.candidate) {
+          if (pc.remoteDescription) {
+            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
+          } else {
+            const q = pendingCandidatesRef.current.get(from) ?? [];
+            q.push(signal.candidate);
+            pendingCandidatesRef.current.set(from, q);
+          }
+        }
+      } catch { }
+    }, [createPC, sendSignal]);
+
+    // ── Lecturer controls via ref ─────────────────────────────────────────
+    useImperativeHandle(ref, () => ({
+      muteAll: () => {
+        if (!ablyRef.current) return;
+        ablyRef.current.channels.get(`room:${roomId}`).publish("mute-all", {});
+      },
+      grantMic: (name: string) => {
+        const peer = participants.find(p => p.displayName === name);
+        if (peer) ablyRef.current?.channels.get(`signal:${peer.connectionId}`).publish("mic-granted", {});
+      },
+      revokeMic: (name: string) => {
+        const peer = participants.find(p => p.displayName === name);
+        if (peer) ablyRef.current?.channels.get(`signal:${peer.connectionId}`).publish("force-mute", {});
+      },
+    }), [participants, roomId]);
+
+    // ── Main effect: mic + Ably + WebRTC ─────────────────────────────────
     useEffect(() => {
       let destroyed = false;
 
@@ -238,17 +220,11 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
         // 1. Get microphone
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              sampleRate: 48000,
-            },
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
             video: false,
           });
           if (destroyed) { stream.getTracks().forEach(t => t.stop()); return; }
           localStreamRef.current = stream;
-          // Lecturers start live; students start muted until granted permission
           stream.getAudioTracks().forEach(t => { t.enabled = role === "lecturer"; });
           attachAnalyser("self", stream);
         } catch {
@@ -256,111 +232,89 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
           return;
         }
 
-        // 2. Connect to Socket.io signaling server
-        const socket = io({ path: "/socket.io", transports: ["websocket", "polling"] });
-        socketRef.current = socket;
+        // 2. Connect to Ably (signaling server — free, no persistent backend needed)
+        const token = localStorage.getItem("edu_token");
+        const ably = new Ably.Realtime({
+          authUrl: "/api/ably-token",
+          authHeaders: { Authorization: `Bearer ${token}` },
+          authMethod: "GET",
+        });
+        ablyRef.current = ably;
 
-        socket.on("connect", () => {
+        const roomChannel = ably.channels.get(`room:${roomId}`);
+
+        ably.connection.on("connected", async () => {
           if (destroyed) return;
+          myConnId.current = ably.connection.id!;
           setIsConnected(true);
-          socket.emit("join-room", { roomId, displayName, role });
-        });
 
-        socket.on("disconnect", () => setIsConnected(false));
+          // 3. Subscribe to MY personal signal channel
+          const myChannel = ably.channels.get(`signal:${myConnId.current}`);
 
-        // 3. Server sends us the list of peers already in the room.
-        //    We are the newcomer → we initiate offers to all existing peers.
-        socket.on(
-          "room-peers",
-          async (peers: { socketId: string; displayName: string; role: string }[]) => {
-            if (destroyed) return;
-            setParticipants(peers.map(p => ({ ...p, isMuted: false })));
-            for (const p of peers) {
-              createPC(p.socketId);
-              await sendOffer(p.socketId);
+          myChannel.subscribe("signal", (msg: Ably.Message) => {
+            const { from, signal } = msg.data;
+            handleSignal(from, signal);
+          });
+          myChannel.subscribe("force-mute", () => { setIsMuted(true); applyMute(true); });
+          myChannel.subscribe("mic-granted", () => { setIsMuted(false); applyMute(false); });
+
+          // 4. Listen for room-wide mute-all (students only)
+          roomChannel.subscribe("mute-all", () => {
+            if (role === "student") { setIsMuted(true); applyMute(true); }
+          });
+
+          // 5. Enter presence (announces us to the room)
+          await roomChannel.presence.enter({ displayName, role });
+
+          // 6. Get existing peers → we are the newcomer → send offers to all
+          const existing = await roomChannel.presence.get();
+          const others = existing.filter((m: Ably.PresenceMessage) => m.connectionId !== myConnId.current);
+          if (others.length > 0) {
+            setParticipants(others.map((m: Ably.PresenceMessage) => ({
+              connectionId: m.connectionId!,
+              displayName: (m.data as any).displayName,
+              role: (m.data as any).role,
+              isMuted: false,
+            })));
+            for (const m of others) {
+              createPC(m.connectionId!);
+              await sendOffer(m.connectionId!);
             }
           }
-        );
 
-        // 4. A new peer just joined → we are an existing peer.
-        //    We create a PC for them but DO NOT offer — they will offer us.
-        socket.on(
-          "peer-joined",
-          ({ socketId, displayName: pName, role: pRole }: {
-            socketId: string; displayName: string; role: string;
-          }) => {
-            if (destroyed) return;
+          // 7. New peer enters → we already exist → create PC, wait for their offer
+          roomChannel.presence.subscribe("enter", (m: Ably.PresenceMessage) => {
+            if (m.connectionId === myConnId.current || destroyed) return;
             setParticipants(prev => [
-              ...prev.filter(p => p.socketId !== socketId),
-              { socketId, displayName: pName, role: pRole, isMuted: false },
+              ...prev.filter(p => p.connectionId !== m.connectionId),
+              { connectionId: m.connectionId!, displayName: (m.data as any).displayName, role: (m.data as any).role, isMuted: false },
             ]);
-            createPC(socketId); // wait for their offer
-          }
-        );
+            createPC(m.connectionId!);
+          });
 
-        // 5. A peer disconnected
-        socket.on("peer-left", ({ socketId }: { socketId: string }) => {
-          closePeer(socketId);
-          setParticipants(prev => prev.filter(p => p.socketId !== socketId));
+          // 8. Peer leaves
+          roomChannel.presence.subscribe("leave", (m: Ably.PresenceMessage) => {
+            closePeer(m.connectionId!);
+            setParticipants(prev => prev.filter(p => p.connectionId !== m.connectionId));
+          });
         });
 
-        // 6. WebRTC signaling relay
-        socket.on("signal", async ({ from, signal }: { from: string; signal: any }) => {
-          if (destroyed) return;
-          let pc = pcsRef.current.get(from);
-          if (!pc) pc = createPC(from);
-
-          try {
-            if (signal.type === "offer") {
-              // Explicit createAnswer — required by Safari (setLocalDescription() with no args is Chrome-only)
-              await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-              // Flush ICE candidates that arrived before the remote description
-              for (const c of pendingCandidatesRef.current.get(from) ?? []) {
-                await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
-              }
-              pendingCandidatesRef.current.delete(from);
-              const answer = await pc.createAnswer();
-              await pc.setLocalDescription(answer);
-              socket.emit("signal", {
-                to: from,
-                signal: { type: "answer", sdp: pc.localDescription },
-              });
-
-            } else if (signal.type === "answer") {
-              await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-
-            } else if (signal.type === "candidate" && signal.candidate) {
-              if (pc.remoteDescription) {
-                await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
-              } else {
-                // Queue: remote description not set yet (offer hasn't arrived)
-                const q = pendingCandidatesRef.current.get(from) ?? [];
-                q.push(signal.candidate);
-                pendingCandidatesRef.current.set(from, q);
-              }
-            }
-          } catch { }
-        });
-
-        // 7. Lecturer mute commands
-        socket.on("force-mute", () => { setIsMuted(true); applyMute(true); });
-        socket.on("mic-granted", () => { setIsMuted(false); applyMute(false); });
+        ably.connection.on("disconnected", () => setIsConnected(false));
+        ably.connection.on("failed",       () => setIsConnected(false));
       })();
 
       return () => {
         destroyed = true;
-        socketRef.current?.disconnect();
-        socketRef.current = null;
+        ablyRef.current?.channels.get(`room:${roomId}`).presence.leave().catch(() => {});
+        ablyRef.current?.close();
+        ablyRef.current = null;
         pcsRef.current.forEach(pc => pc.close());
         pcsRef.current.clear();
         pendingCandidatesRef.current.clear();
         remoteStreamsRef.current.clear();
         localStreamRef.current?.getTracks().forEach(t => t.stop());
         localStreamRef.current = null;
-        analyserRefs.current.forEach(({ ctx, raf }) => {
-          cancelAnimationFrame(raf);
-          ctx.close().catch(() => {});
-        });
+        analyserRefs.current.forEach(({ ctx, raf }) => { cancelAnimationFrame(raf); ctx.close().catch(() => {}); });
         analyserRefs.current.clear();
         setSpeakingSet(new Set());
         setParticipants([]);
@@ -368,19 +322,13 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
       };
     }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const selfIsSpeaking = speakingSet.has("self") && !isMuted;
+    const selfSpeaking = speakingSet.has("self") && !isMuted;
 
     return (
       <div className={`flex flex-col gap-3 ${className}`}>
-        {/* Hidden audio playback elements — one per remote participant */}
+        {/* Hidden audio elements — attached to remote streams after render */}
         {participants.map(p => (
-          <audio
-            key={p.socketId}
-            id={`audio-${p.socketId}`}
-            autoPlay
-            playsInline
-            style={{ display: "none" }}
-          />
+          <audio key={p.connectionId} id={`audio-${p.connectionId}`} autoPlay playsInline style={{ display: "none" }} />
         ))}
 
         {micError ? (
@@ -390,10 +338,9 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
           </div>
         ) : (
           <>
-            {/* ── Status bar ─────────────────────────────────────────── */}
+            {/* Status bar */}
             <div className="flex items-center justify-between px-4 py-3 bg-slate-900 dark:bg-black/60 rounded-[14px] border border-white/[0.06]">
               <div className="flex items-center gap-3">
-                {/* Live/connecting dot */}
                 <div className="relative flex items-center justify-center w-4 h-4">
                   {isConnected ? (
                     <>
@@ -408,48 +355,31 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
                   {isConnected ? "Audio Room · Live" : "Connecting…"}
                 </span>
                 <span className="flex items-center gap-1 text-[11px] text-slate-500 font-mono">
-                  <Users className="h-3 w-3" />
-                  {participants.length + 1}
+                  <Users className="h-3 w-3" />{participants.length + 1}
                 </span>
               </div>
 
-              {/* Mic toggle button */}
               <button
                 type="button"
                 onClick={role === "student" && !isMicAllowed ? undefined : toggleMute}
                 disabled={role === "student" && !isMicAllowed}
-                title={
-                  role === "student" && !isMicAllowed
-                    ? "Raise your hand to request the mic"
-                    : isMuted
-                    ? "Unmute (click to go live)"
-                    : "Mute"
-                }
+                title={role === "student" && !isMicAllowed ? "Raise hand to request mic" : isMuted ? "Unmute" : "Mute"}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[9px] text-[11px] font-semibold transition-all cursor-pointer disabled:cursor-not-allowed select-none ${
-                  isMuted
-                    ? "bg-red-600/80 hover:bg-red-600 text-white"
-                    : "bg-emerald-500/90 hover:bg-emerald-500 text-white"
+                  isMuted ? "bg-red-600/80 hover:bg-red-600 text-white" : "bg-emerald-500/90 hover:bg-emerald-500 text-white"
                 }`}
               >
-                {isMuted ? (
-                  <MicOff className="h-3.5 w-3.5" />
-                ) : (
-                  <Mic className={`h-3.5 w-3.5 ${selfIsSpeaking ? "animate-pulse" : ""}`} />
-                )}
+                {isMuted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className={`h-3.5 w-3.5 ${selfSpeaking ? "animate-pulse" : ""}`} />}
                 {isMuted ? "Muted" : "Live"}
               </button>
             </div>
 
-            {/* ── Speaking indicator for self ─────────────────────────── */}
-            {selfIsSpeaking && (
+            {/* Speaking indicator */}
+            {selfSpeaking && (
               <div className="flex items-center gap-2 px-3 py-2 bg-emerald-950/30 border border-emerald-700/30 rounded-[10px]">
                 <span className="flex gap-[3px] items-end h-4">
-                  {[1, 2, 3].map(i => (
-                    <span
-                      key={i}
-                      className="w-[3px] bg-emerald-400 rounded-full animate-pulse"
-                      style={{ height: `${8 + i * 4}px`, animationDelay: `${i * 0.1}s` }}
-                    />
+                  {[1,2,3].map(i => (
+                    <span key={i} className="w-[3px] bg-emerald-400 rounded-full animate-pulse"
+                      style={{ height: `${8+i*4}px`, animationDelay: `${i*0.1}s` }} />
                   ))}
                 </span>
                 <Volume2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
@@ -457,7 +387,7 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
               </div>
             )}
 
-            {/* ── Participant list ────────────────────────────────────── */}
+            {/* Participant list */}
             <div className="space-y-1">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-white/30 px-1 pb-0.5">
                 In Room ({participants.length + 1})
@@ -465,86 +395,56 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
 
               {/* Self */}
               <div className="flex items-center gap-2.5 px-3 py-2 bg-white/[0.03] rounded-[10px]">
-                <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ring-1 ${
-                    role === "lecturer"
-                      ? "bg-emerald-900/50 text-emerald-300 ring-emerald-700/40"
-                      : "bg-blue-900/50 text-blue-300 ring-blue-700/40"
-                  } ${selfIsSpeaking ? "ring-2 ring-emerald-400" : ""}`}
-                >
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ring-1 ${
+                  role === "lecturer" ? "bg-emerald-900/50 text-emerald-300 ring-emerald-700/40" : "bg-blue-900/50 text-blue-300 ring-blue-700/40"
+                } ${selfSpeaking ? "ring-2 ring-emerald-400" : ""}`}>
                   {displayName.trim().charAt(0).toUpperCase()}
                 </div>
                 <span className="text-[12px] font-semibold text-slate-200 flex-1 truncate">
-                  {displayName}{" "}
-                  <span className="text-[10px] font-normal text-slate-500">(you)</span>
+                  {displayName} <span className="text-[10px] font-normal text-slate-500">(you)</span>
                 </span>
                 <div className="flex items-center gap-1.5">
-                  {selfIsSpeaking && <Volume2 className="h-3 w-3 text-emerald-400 animate-pulse" />}
-                  {isMuted ? (
-                    <MicOff className="h-3.5 w-3.5 text-red-400" />
-                  ) : (
-                    <Mic className="h-3.5 w-3.5 text-emerald-400" />
-                  )}
+                  {selfSpeaking && <Volume2 className="h-3 w-3 text-emerald-400 animate-pulse" />}
+                  {isMuted ? <MicOff className="h-3.5 w-3.5 text-red-400" /> : <Mic className="h-3.5 w-3.5 text-emerald-400" />}
                 </div>
               </div>
 
               {/* Remote participants */}
               {participants.map(p => {
-                const isSpeaking = speakingSet.has(p.socketId);
+                const speaking = speakingSet.has(p.connectionId);
                 return (
-                  <div
-                    key={p.socketId}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-[10px] border transition-all ${
-                      isSpeaking
-                        ? "bg-emerald-950/20 border-emerald-700/30"
-                        : "bg-white/[0.02] border-white/[0.04]"
-                    }`}
-                  >
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ring-1 ${
-                        p.role === "lecturer"
-                          ? "bg-emerald-900/50 text-emerald-300 ring-emerald-700/40"
-                          : "bg-slate-800 text-slate-300 ring-slate-700/40"
-                      } ${isSpeaking ? "ring-2 ring-emerald-400" : ""}`}
-                    >
+                  <div key={p.connectionId} className={`flex items-center gap-2.5 px-3 py-2 rounded-[10px] border transition-all ${
+                    speaking ? "bg-emerald-950/20 border-emerald-700/30" : "bg-white/[0.02] border-white/[0.04]"
+                  }`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ring-1 ${
+                      p.role === "lecturer" ? "bg-emerald-900/50 text-emerald-300 ring-emerald-700/40" : "bg-slate-800 text-slate-300 ring-slate-700/40"
+                    } ${speaking ? "ring-2 ring-emerald-400" : ""}`}>
                       {p.displayName.trim().charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <span className="text-[12px] text-slate-300 truncate block">{p.displayName}</span>
-                      {p.role === "lecturer" && (
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-500">
-                          Lecturer
-                        </span>
-                      )}
+                      {p.role === "lecturer" && <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-500">Lecturer</span>}
                     </div>
                     <div className="flex items-center gap-1.5">
-                      {isSpeaking && <Volume2 className="h-3 w-3 text-emerald-400 animate-pulse" />}
-                      {p.isMuted ? (
-                        <MicOff className="h-3 w-3 text-red-400/70" />
-                      ) : (
-                        <Mic className="h-3 w-3 text-slate-500" />
-                      )}
+                      {speaking && <Volume2 className="h-3 w-3 text-emerald-400 animate-pulse" />}
+                      {p.isMuted ? <MicOff className="h-3 w-3 text-red-400/70" /> : <Mic className="h-3 w-3 text-slate-500" />}
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* ── Empty state ─────────────────────────────────────────── */}
             {participants.length === 0 && isConnected && (
-              <div className="flex flex-col items-center justify-center py-6 gap-2">
+              <div className="flex flex-col items-center py-6 gap-2">
                 <div className="w-10 h-10 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
                   <Users className="h-4 w-4 text-slate-500" />
                 </div>
                 <p className="text-[12px] text-slate-500 text-center">
-                  {role === "lecturer"
-                    ? "Waiting for students to join the room…"
-                    : "Connected — waiting for class to start"}
+                  {role === "lecturer" ? "Waiting for students to join…" : "Connected — waiting for class to start"}
                 </p>
               </div>
             )}
 
-            {/* ── Not connected fallback ──────────────────────────────── */}
             {!isConnected && (
               <div className="flex items-center gap-2 px-3 py-2 bg-amber-950/20 border border-amber-800/30 rounded-[10px]">
                 <WifiOff className="h-3.5 w-3.5 text-amber-400 shrink-0" />
