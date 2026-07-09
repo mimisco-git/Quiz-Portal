@@ -12,6 +12,7 @@ import AvatarModal from "./AvatarModal";
 import { motion, AnimatePresence } from "motion/react";
 import SlideView from "./SlideView";
 import LiveAudioRoom from "./LiveAudioRoom";
+import SecureContent from "./SecureContent";
 
 interface StudentDashboardProps {
   token: string;
@@ -1092,7 +1093,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             </div>
           )}
 
-          <div className="space-y-4">
+          <SecureContent studentName={user.fullName} regNumber={user.regNumber} mode="light" className="space-y-4">
             {quizQuestions.map((q, qIdx) => {
               const options: string[] = JSON.parse(q.optionsJson);
               const isAnswered = selectedAnswers[q.id] !== undefined;
@@ -1138,7 +1139,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 </div>
               );
             })}
-          </div>
+          </SecureContent>
         </div>
 
         <div className="bg-slate-900/95 backdrop-blur-xl border-t border-slate-800/80 px-6 py-4 space-y-3">
@@ -2431,7 +2432,9 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   <div className="p-5 space-y-5">
                     <div>
                       <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">Exam Questions</p>
-                      <pre className="text-[13px] text-[#1d1d1f] dark:text-white/80 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto">{activeExam.questionsText}</pre>
+                      <SecureContent studentName={user.fullName} regNumber={user.regNumber} mode="dark" className="rounded-[10px]">
+                        <pre className="text-[13px] text-[#1d1d1f] dark:text-white/80 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto">{activeExam.questionsText}</pre>
+                      </SecureContent>
                     </div>
 
                     {(() => {
@@ -2608,7 +2611,9 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                     )}
                     <div>
                       <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2">Assignment Questions</p>
-                      <pre className="text-[13px] text-[#1d1d1f] dark:text-white/80 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto">{activeAssignment.questionsText}</pre>
+                      <SecureContent studentName={user.fullName} regNumber={user.regNumber} mode="dark" className="rounded-[10px]">
+                        <pre className="text-[13px] text-[#1d1d1f] dark:text-white/80 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-4 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto">{activeAssignment.questionsText}</pre>
+                      </SecureContent>
                     </div>
                     <div className="space-y-3">
                       <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">Your Answers</p>
