@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Bell, Award, FileText, Pencil, CheckCircle, X } from "lucide-react";
+import { Bell, Award, FileText, Pencil, CheckCircle, X, BellOff } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 interface Notification {
@@ -82,77 +82,101 @@ export default function NotificationBell({ token, onRequestPush }: Props) {
     <div ref={ref} className="relative">
       <button
         onClick={handleOpen}
-        className="relative flex items-center justify-center w-9 h-9 rounded-[10px] text-[#6e6e73] dark:text-white/50 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition"
+        className="relative flex items-center justify-center w-9 h-9 rounded-[10px] text-[#3a3a3c] dark:text-white/80 hover:bg-black/[0.06] dark:hover:bg-white/[0.10] transition"
         aria-label="Notifications"
       >
-        <Bell className="h-4 w-4" strokeWidth={1.6} />
+        <Bell className="h-[18px] w-[18px]" strokeWidth={1.8} />
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 ring-[1.5px] ring-white dark:ring-[#141416]" />
+          <span className="absolute top-1 right-1 min-w-[16px] h-[16px] px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold ring-[1.5px] ring-white dark:ring-[#141416]">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
         )}
       </button>
 
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            initial={{ opacity: 0, y: -8, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.97 }}
-            transition={{ type: "spring", stiffness: 380, damping: 30 }}
-            className="absolute right-0 top-[calc(100%+6px)] w-[320px] sm:w-[360px] z-[300] rounded-[16px] shadow-2xl border border-black/[0.07] dark:border-white/[0.08] bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-xl overflow-hidden"
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            className="absolute right-0 top-[calc(100%+8px)] w-[320px] sm:w-[370px] z-[500] rounded-[18px] overflow-hidden"
+            style={{ boxShadow: "0 4px 6px -1px rgba(0,0,0,0.08), 0 20px 40px -8px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.07)" }}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-black/[0.06] dark:border-white/[0.06]">
-              <span className="text-[13px] font-bold text-[#1d1d1f] dark:text-white/90 tracking-[-0.01em]">Notifications</span>
-              {unreadCount > 0 && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
-                  {unreadCount} new
-                </span>
-              )}
-            </div>
+            {/* Solid opaque container — avoids backdrop-blur transparency bugs on mobile */}
+            <div className="bg-white dark:bg-[#1c1c1e] rounded-[18px] overflow-hidden border border-black/[0.06] dark:border-white/[0.10]">
 
-            {/* List */}
-            <div className="max-h-[380px] overflow-y-auto">
-              {notifications.length === 0 ? (
-                <div className="py-10 text-center">
-                  <Bell className="h-8 w-8 mx-auto text-[#c7c7cc] dark:text-white/15 mb-2" strokeWidth={1.4} />
-                  <p className="text-[12.5px] text-[#8e8e93] dark:text-white/35">No notifications yet</p>
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-black/[0.06] dark:border-white/[0.08] bg-white dark:bg-[#1c1c1e]">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-3.5 w-3.5 text-emerald-500" strokeWidth={2} />
+                  <span className="text-[13px] font-bold text-[#1d1d1f] dark:text-white/90 tracking-[-0.01em]">Notifications</span>
                 </div>
-              ) : (
-                notifications.map(n => {
-                  const isNew = new Date(n.time).getTime() > lastSeen;
-                  return (
-                    <div
-                      key={n.id}
-                      className={`flex items-start gap-3 px-4 py-3 border-b border-black/[0.04] dark:border-white/[0.04] last:border-0 transition ${
-                        isNew ? "bg-emerald-500/[0.04] dark:bg-emerald-500/[0.06]" : ""
-                      }`}
-                    >
-                      <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center mt-0.5 ${colorFor(n.icon)}`}>
-                        {iconFor(n.icon)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/88 leading-snug">{n.title}</p>
-                        <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5 leading-snug">{n.body}</p>
-                      </div>
-                      <span className="text-[10px] text-[#8e8e93] dark:text-white/30 flex-shrink-0 mt-0.5">{timeAgo(n.time)}</span>
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400">
+                      {unreadCount} new
+                    </span>
+                  )}
+                  <button
+                    onClick={() => setOpen(false)}
+                    className="flex items-center justify-center w-6 h-6 rounded-full hover:bg-black/[0.06] dark:hover:bg-white/[0.10] transition text-[#8e8e93] dark:text-white/40 cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* List */}
+              <div className="max-h-[360px] overflow-y-auto bg-white dark:bg-[#1c1c1e]">
+                {notifications.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <div className="w-12 h-12 rounded-full bg-[#f2f2f7] dark:bg-white/[0.07] flex items-center justify-center mx-auto mb-3">
+                      <BellOff className="h-5 w-5 text-[#8e8e93] dark:text-white/30" strokeWidth={1.5} />
                     </div>
-                  );
-                })
+                    <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/70 mb-0.5">You're all caught up</p>
+                    <p className="text-[11.5px] text-[#8e8e93] dark:text-white/35">No notifications yet</p>
+                  </div>
+                ) : (
+                  notifications.map(n => {
+                    const isNew = new Date(n.time).getTime() > lastSeen;
+                    return (
+                      <div
+                        key={n.id}
+                        className={`flex items-start gap-3 px-4 py-3.5 border-b border-black/[0.04] dark:border-white/[0.05] last:border-0 ${
+                          isNew ? "bg-emerald-50 dark:bg-emerald-500/[0.07]" : "bg-white dark:bg-[#1c1c1e]"
+                        }`}
+                      >
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5 ${colorFor(n.icon)}`}>
+                          {iconFor(n.icon)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/90 leading-snug">{n.title}</p>
+                            {isNew && <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5" />}
+                          </div>
+                          <p className="text-[11px] text-[#6e6e73] dark:text-white/45 mt-0.5 leading-snug">{n.body}</p>
+                          <p className="text-[10.5px] text-[#8e8e93] dark:text-white/30 mt-1">{timeAgo(n.time)}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Push-enable prompt */}
+              {onRequestPush && (
+                <div className="px-4 py-3 border-t border-black/[0.06] dark:border-white/[0.08] bg-[#f9f9fb] dark:bg-white/[0.04] flex items-center justify-between gap-3">
+                  <p className="text-[11px] text-[#6e6e73] dark:text-white/45 leading-snug">Get push alerts for quizzes &amp; assignments</p>
+                  <button
+                    onClick={() => { onRequestPush(); setOpen(false); }}
+                    className="flex-shrink-0 px-3 py-1.5 rounded-[8px] bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-[11px] font-bold transition cursor-pointer"
+                  >
+                    Enable
+                  </button>
+                </div>
               )}
             </div>
-
-            {/* Push-enable prompt — shown when browser notifications not yet granted */}
-            {onRequestPush && (
-              <div className="px-4 py-3 border-t border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between gap-3">
-                <p className="text-[11px] text-[#6e6e73] dark:text-white/40 leading-snug">Get notified about new quizzes and assignments</p>
-                <button
-                  onClick={() => { onRequestPush(); setOpen(false); }}
-                  className="flex-shrink-0 px-3 py-1.5 rounded-[8px] bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition cursor-pointer"
-                >
-                  Enable
-                </button>
-              </div>
-            )}
           </motion.div>
         )}
       </AnimatePresence>
