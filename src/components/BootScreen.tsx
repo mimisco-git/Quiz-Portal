@@ -60,8 +60,13 @@ export default function BootScreen({ onDone }: Props) {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.65, ease: [0.25, 0, 0.25, 1] }}
           className="fixed inset-0 z-50"
+          style={{
+            backgroundColor: "#e8ddd5",
+            backgroundImage: "url('/loader-wallpaper.png')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
         >
-          <img src="/loader-wallpaper.png" alt="" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
           {/* Dark overlay so logo and progress bar stay visible */}
           <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.45)" }} />
 
