@@ -224,33 +224,16 @@ export default function LandingScreen({
   return (
     <div className="fixed inset-0 overflow-hidden font-sans antialiased">
 
-      {/* ══ LAYER 0 — wallpaper with 10-layer Apple radial gradients ══ */}
+      {/* ══ LAYER 0 — wallpaper image ══ */}
       <motion.div
         className="absolute inset-0"
         initial={{ opacity: alreadyBooted ? 1 : 0 }}
         animate={{ opacity: phase === "login" ? 1 : 0 }}
         transition={{ duration: 1.1, ease: [0.25, 0, 0.25, 1] }}
-        style={{ background: "#050a07" }}
       >
-        {/* 10 radial gradient colour pools — mixed, blurred, layered */}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 70% 60% at 12% 18%, rgba(4,120,87,0.28) 0%, transparent 65%)" }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 55% 50% at 88% 82%, rgba(29,78,216,0.16) 0%, transparent 65%)" }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 40% 35% at 50% 50%, rgba(4,120,87,0.11) 0%, transparent 60%)" }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 50% 40% at 75% 20%, rgba(16,185,129,0.08) 0%, transparent 60%)" }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 50% at 25% 75%, rgba(6,95,70,0.18) 0%, transparent 65%)" }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 35% 30% at 90% 10%, rgba(52,211,153,0.06) 0%, transparent 55%)" }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 45% 40% at 5% 90%, rgba(4,120,87,0.10) 0%, transparent 60%)" }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 30% 25% at 60% 85%, rgba(37,99,235,0.07) 0%, transparent 55%)" }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 80% 30% at 50% 0%, rgba(0,0,0,0.40) 0%, transparent 100%)" }} />
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 100% 50% at 50% 100%, rgba(0,0,0,0.50) 0%, transparent 80%)" }} />
-        {/* Film grain noise — adds natural richness to the gradients */}
-        <div className="absolute inset-0 pointer-events-none" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-          backgroundSize: "220px 220px",
-          opacity: 0.058,
-        }} />
-        {/* Edge vignette */}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 130% 130% at 50% 48%, transparent 50%, rgba(0,0,0,0.60) 100%)" }} />
+        <img src="/login-wallpaper.png" alt="" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+        {/* Dark overlay so white UI elements stay readable */}
+        <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.38)" }} />
       </motion.div>
 
       {/* ══ LAYER 1 — boot screen ══ */}
