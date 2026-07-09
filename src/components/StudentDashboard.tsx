@@ -506,7 +506,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   const fetchCourseDetail = async (courseId: string) => {
     try {
-      const res = await fetch(`/api/courses/${courseId}`);
+      const res = await fetch(`/api/courses/${courseId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
         setSelectedCourse(data);

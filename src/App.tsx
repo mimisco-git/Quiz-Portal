@@ -117,10 +117,18 @@ export default function App() {
         try {
           const response = await originalFetch(...(args as [RequestInfo | URL, RequestInit?]));
           if (response.status === 401) {
-            if (!showSessionExpired) {
-              setShowSessionExpired(true);
-              setSessionCountdown(10);
-            }
+            // Only treat as session expiry when the server says the token itself is bad.
+            // A 401 from a missing auth header in frontend code is a bug, not expiry.
+            const clone = response.clone();
+            clone.json().then((body: any) => {
+              const msg: string = body?.error ?? "";
+              if (msg.toLowerCase().includes("expired") || msg.toLowerCase().includes("invalid")) {
+                if (!showSessionExpired) {
+                  setShowSessionExpired(true);
+                  setSessionCountdown(10);
+                }
+              }
+            }).catch(() => {});
           }
           return response;
         } catch (err) {
