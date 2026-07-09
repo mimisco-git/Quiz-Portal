@@ -1876,7 +1876,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                     {mySubmission.isGraded ? (
                       <div className="space-y-4">
                         {(() => {
-                          const pct = mySubmission.totalMarks ? (mySubmission.score / mySubmission.totalMarks) * 100 : mySubmission.score;
+                          const pct = mySubmission.totalMarks ? ((mySubmission.score ?? 0) / mySubmission.totalMarks) * 100 : (mySubmission.score ?? 0);
                           const pass = pct >= 50;
                           return (
                             <div className={`rounded-[12px] p-6 text-center border ${pass ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30" : "bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30"}`}>
@@ -2036,7 +2036,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                     {myAssignmentSubmission.isGraded ? (
                       <div className="space-y-4">
                         {(() => {
-                          const pct = myAssignmentSubmission.totalMarks ? (myAssignmentSubmission.score / myAssignmentSubmission.totalMarks) * 100 : myAssignmentSubmission.score;
+                          const pct = myAssignmentSubmission.totalMarks ? ((myAssignmentSubmission.score ?? 0) / myAssignmentSubmission.totalMarks) * 100 : (myAssignmentSubmission.score ?? 0);
                           const pass = pct >= 50;
                           return (
                             <div className={`rounded-[12px] p-6 text-center border ${pass ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30" : "bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30"}`}>

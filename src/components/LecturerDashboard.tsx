@@ -325,6 +325,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     e.preventDefault();
     if (!assignmentTitle.trim() || !assignmentCourseId) { showError("Title and course are required"); return; }
     if (!assignmentParsedStructure) { showError("Parse questions first before creating the assignment"); return; }
+    const hasMarks = (Object.values(assignmentQMarks) as string[]).some((v) => parseFloat(v) > 0);
+    if (!hasMarks) { showError("Enter marks for at least one question before creating the assignment"); return; }
     try {
       const fd = new FormData();
       fd.append("title", assignmentTitle);
@@ -714,7 +716,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         setQuizDuration("10");
         setQuizAvailableFrom("");
         setQuizAvailableUntil("");
-        setQuizQuestions([{ text: "", options: ["", "", "", ""], correctOption: "" }]);
+        setQuizQuestions([{ uid: crypto.randomUUID(), text: "", options: ["", "", "", ""], correctOption: "" }]);
         fetchGradebook();
         fetchQuizList();
       } else {
@@ -847,6 +849,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     e.preventDefault();
     if (!examTitle.trim() || !examCourseId) { showError("Title and course are required"); return; }
     if (!examParsedStructure) { showError("Parse questions first before creating the exam"); return; }
+    const hasMarks = (Object.values(examQMarks) as string[]).some((v) => parseFloat(v) > 0);
+    if (!hasMarks) { showError("Enter marks for at least one question before creating the exam"); return; }
     try {
       const fd = new FormData();
       fd.append("title", examTitle);

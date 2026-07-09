@@ -1627,6 +1627,7 @@ async function extractTextFromFile(file: Express.Multer.File): Promise<string> {
 type AnswerKeyItem = { qLabel: string; answer: string; marks: number };
 
 function applyMarkingFormula(similarity: number, maxMarks: number): number {
+  if (maxMarks <= 0) return 0;
   const raw = similarity < 50 ? 0.5 : ((similarity - 50) / 50) * maxMarks;
   return Math.round(raw * 2) / 2; // nearest 0.5
 }
@@ -1643,7 +1644,13 @@ async function gradeSubmission(
 
   // ── Priority 1: Structured per-question answer key ──────────────────
   if (answerKeyJson) {
-    const keyItems: AnswerKeyItem[] = JSON.parse(answerKeyJson).filter(
+    let parsedKey: AnswerKeyItem[];
+    try {
+      parsedKey = JSON.parse(answerKeyJson);
+    } catch {
+      parsedKey = [];
+    }
+    const keyItems: AnswerKeyItem[] = parsedKey.filter(
       (q: AnswerKeyItem) => q.answer?.trim() && q.marks > 0
     );
     const totalMarks = keyItems.reduce((s, q) => s + q.marks, 0);
@@ -2012,8 +2019,9 @@ app.post("/api/exams/:examId/submissions/:subId/grade", authenticateToken, async
     if (exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     const existing = await prisma.examSubmission.findUnique({ where: { id: req.params.subId } });
     if (!existing) return res.status(404).json({ error: "Submission not found" });
+    if (existing.examId !== req.params.examId) return res.status(403).json({ error: "Submission does not belong to this exam" });
     const newScore = (existing.score ?? 0) + added;
-    const finalScore = existing.totalMarks ? Math.min(newScore, existing.totalMarks) : newScore;
+    const finalScore = existing.totalMarks ? Math.min(newScore, existing.totalMarks) : Math.min(newScore, 100);
     const updated = await prisma.examSubmission.update({
       where: { id: req.params.subId },
       data: { score: finalScore },
@@ -2038,7 +2046,7 @@ app.post("/api/exams/:id/grade", authenticateToken, async (req: any, res) => {
     if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
     if (exam.submissions.length === 0) return res.json({ graded: 0, message: "No submissions to grade" });
     const results = [];
-    for (const submission of exam.submissions) {
+    for (const submission of exam.submissions.filter((s) => !s.isGraded)) {
       try {
         const { score, totalMarks, feedback } = await gradeSubmission(
           exam.questionsText, exam.answerKeyText, submission.answersText,
@@ -2239,8 +2247,9 @@ app.post("/api/assignments/:assignmentId/submissions/:subId/grade", authenticate
     if (assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     const existing = await prisma.assignmentSubmission.findUnique({ where: { id: req.params.subId } });
     if (!existing) return res.status(404).json({ error: "Submission not found" });
+    if (existing.assignmentId !== req.params.assignmentId) return res.status(403).json({ error: "Submission does not belong to this assignment" });
     const newScore = (existing.score ?? 0) + added;
-    const finalScore = existing.totalMarks ? Math.min(newScore, existing.totalMarks) : newScore;
+    const finalScore = existing.totalMarks ? Math.min(newScore, existing.totalMarks) : Math.min(newScore, 100);
     const updated = await prisma.assignmentSubmission.update({
       where: { id: req.params.subId },
       data: { score: finalScore },
@@ -2265,7 +2274,7 @@ app.post("/api/assignments/:id/grade", authenticateToken, async (req: any, res) 
     if (!process.env.NVIDIA_API_KEY) return res.status(400).json({ error: "NVIDIA_API_KEY not configured" });
     if (assignment.submissions.length === 0) return res.json({ graded: 0, message: "No submissions to grade" });
     const results = [];
-    for (const submission of assignment.submissions) {
+    for (const submission of assignment.submissions.filter((s) => !s.isGraded)) {
       try {
         const { score, totalMarks, feedback } = await gradeSubmission(
           assignment.questionsText, assignment.answerKeyText, submission.answersText,
