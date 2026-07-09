@@ -1756,15 +1756,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 <Flame className="h-3 w-3" /> {streak}d
               </span>
             )}
-            {/* Push notification subscription (hidden once granted) */}
-            {!pushGranted && "Notification" in window && Notification.permission !== "granted" && (
-              <button onClick={subscribeToPush} title="Enable push notifications"
-                className="flex items-center justify-center w-9 h-9 rounded-[10px] text-[#6e6e73] dark:text-white/50 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition">
-                <Bell className="h-4 w-4" strokeWidth={1.6} />
-              </button>
-            )}
-            {/* In-app notification bell */}
-            <NotificationBell token={token} />
+            {/* In-app notification bell (push prompt embedded inside on all screens) */}
+            <NotificationBell token={token} onRequestPush={(!pushGranted && "Notification" in window && Notification.permission !== "granted") ? subscribeToPush : undefined} />
             {/* Mobile-only: theme + logout */}
             <button
               onClick={onToggleTheme}

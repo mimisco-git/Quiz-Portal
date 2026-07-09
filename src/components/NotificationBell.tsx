@@ -13,6 +13,7 @@ interface Notification {
 
 interface Props {
   token: string;
+  onRequestPush?: () => void;
 }
 
 function timeAgo(iso: string): string {
@@ -28,7 +29,7 @@ function timeAgo(iso: string): string {
 
 const STORAGE_KEY = "notif_last_seen";
 
-export default function NotificationBell({ token }: Props) {
+export default function NotificationBell({ token, onRequestPush }: Props) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
@@ -139,6 +140,19 @@ export default function NotificationBell({ token }: Props) {
                 })
               )}
             </div>
+
+            {/* Push-enable prompt — shown when browser notifications not yet granted */}
+            {onRequestPush && (
+              <div className="px-4 py-3 border-t border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between gap-3">
+                <p className="text-[11px] text-[#6e6e73] dark:text-white/40 leading-snug">Get notified about new quizzes and assignments</p>
+                <button
+                  onClick={() => { onRequestPush(); setOpen(false); }}
+                  className="flex-shrink-0 px-3 py-1.5 rounded-[8px] bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold transition cursor-pointer"
+                >
+                  Enable
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
