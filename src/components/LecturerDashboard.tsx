@@ -357,9 +357,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     finally { setIsGradingAssignment(false); }
   };
 
-  const handleManualGrade = async (type: "exam" | "assignment", parentId: string, subId: string) => {
-    const scoreStr = manualScoreInputs[subId];
-    if (!scoreStr || isNaN(parseFloat(scoreStr))) { showError("Enter a valid score"); return; }
+  const handleAddMarks = async (type: "exam" | "assignment", parentId: string, subId: string) => {
+    const addedStr = manualScoreInputs[subId];
+    if (!addedStr || isNaN(parseFloat(addedStr)) || parseFloat(addedStr) < 0) { showError("Enter a valid number of marks to add"); return; }
     try {
       const url = type === "exam"
         ? `/api/exams/${parentId}/submissions/${subId}/grade`
@@ -367,17 +367,17 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       const res = await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ score: parseFloat(scoreStr) }),
+        body: JSON.stringify({ added: parseFloat(addedStr) }),
       });
       if (res.ok) {
-        showSuccess("Mark saved!");
+        showSuccess("Marks added!");
         setManualScoreInputs(prev => { const n = { ...prev }; delete n[subId]; return n; });
         if (type === "exam") fetchExamSubmissions(parentId);
         else fetchAssignmentSubmissions(parentId);
       } else {
-        const d = await res.json(); showError(d.error || "Failed to save mark");
+        const d = await res.json(); showError(d.error || "Failed to add marks");
       }
-    } catch { showError("Failed to save mark"); }
+    } catch { showError("Failed to add marks"); }
   };
 
   const handleToggleAssignment = async (assignmentId: string) => {
@@ -2468,15 +2468,20 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                                     <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-3 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{sub.answersText}</pre>
                                   </div>
                                   <div className="flex items-center gap-2 pt-1 border-t border-black/[0.06] dark:border-white/[0.05]">
+                                    {sub.isGraded && sub.score != null && (
+                                      <span className="text-[12px] text-[#6e6e73] dark:text-white/50 shrink-0">
+                                        Current: <strong className="text-[#1d1d1f] dark:text-white/80">{sub.score}{sub.totalMarks ? ` / ${sub.totalMarks}` : ""}</strong>
+                                      </span>
+                                    )}
                                     <input
                                       type="number" min="0" step="0.5"
-                                      placeholder={selectedExam.marksText ? `Score / ${selectedExam.marksText.split(",").map(Number).reduce((a:number,b:number)=>a+b,0)}` : "Score"}
-                                      value={manualScoreInputs[sub.id] ?? (sub.isGraded && sub.score != null ? String(sub.score) : "")}
+                                      placeholder="Add marks"
+                                      value={manualScoreInputs[sub.id] ?? ""}
                                       onChange={e => setManualScoreInputs(prev => ({ ...prev, [sub.id]: e.target.value }))}
-                                      className="form-input w-28 text-[13px]"
+                                      className="form-input w-24 text-[13px]"
                                     />
-                                    <button onClick={() => handleManualGrade("exam", selectedExam.id, sub.id)} className="btn-gradient px-4 py-2 text-[12px] font-semibold">
-                                      Save Mark
+                                    <button onClick={() => handleAddMarks("exam", selectedExam.id, sub.id)} className="btn-gradient px-4 py-2 text-[12px] font-semibold">
+                                      Add
                                     </button>
                                   </div>
                                 </div>
@@ -2692,15 +2697,20 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                                     <pre className="text-[12px] text-[#3a3a3c] dark:text-white/60 bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[10px] p-3 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{sub.answersText}</pre>
                                   </div>
                                   <div className="flex items-center gap-2 pt-1 border-t border-black/[0.06] dark:border-white/[0.05]">
+                                    {sub.isGraded && sub.score != null && (
+                                      <span className="text-[12px] text-[#6e6e73] dark:text-white/50 shrink-0">
+                                        Current: <strong className="text-[#1d1d1f] dark:text-white/80">{sub.score}{sub.totalMarks ? ` / ${sub.totalMarks}` : ""}</strong>
+                                      </span>
+                                    )}
                                     <input
                                       type="number" min="0" step="0.5"
-                                      placeholder={selectedAssignment.marksText ? `Score / ${selectedAssignment.marksText.split(",").map(Number).reduce((a:number,b:number)=>a+b,0)}` : "Score"}
-                                      value={manualScoreInputs[sub.id] ?? (sub.isGraded && sub.score != null ? String(sub.score) : "")}
+                                      placeholder="Add marks"
+                                      value={manualScoreInputs[sub.id] ?? ""}
                                       onChange={e => setManualScoreInputs(prev => ({ ...prev, [sub.id]: e.target.value }))}
-                                      className="form-input w-28 text-[13px]"
+                                      className="form-input w-24 text-[13px]"
                                     />
-                                    <button onClick={() => handleManualGrade("assignment", selectedAssignment.id, sub.id)} className="btn-gradient px-4 py-2 text-[12px] font-semibold">
-                                      Save Mark
+                                    <button onClick={() => handleAddMarks("assignment", selectedAssignment.id, sub.id)} className="btn-gradient px-4 py-2 text-[12px] font-semibold">
+                                      Add
                                     </button>
                                   </div>
                                 </div>

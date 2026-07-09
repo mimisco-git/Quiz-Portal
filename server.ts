@@ -1885,11 +1885,11 @@ app.get("/api/exams/:id/my-submission", authenticateToken, async (req: any, res)
   }
 });
 
-// Lecturer: manually grade a single exam submission
+// Lecturer: add bonus marks on top of AI score for a single exam submission
 app.post("/api/exams/:examId/submissions/:subId/grade", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
-  const score = parseFloat(req.body.score);
-  if (isNaN(score) || score < 0) return res.status(400).json({ error: "Invalid score" });
+  const added = parseFloat(req.body.added);
+  if (isNaN(added) || added < 0) return res.status(400).json({ error: "Invalid marks value" });
   try {
     const exam = await prisma.exam.findUnique({
       where: { id: req.params.examId },
@@ -1897,16 +1897,17 @@ app.post("/api/exams/:examId/submissions/:subId/grade", authenticateToken, async
     });
     if (!exam) return res.status(404).json({ error: "Exam not found" });
     if (exam.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
-    const totalMarks = exam.marksText
-      ? exam.marksText.split(",").map((m) => parseFloat(m.trim())).filter((m) => !isNaN(m) && m > 0).reduce((a, b) => a + b, 0)
-      : null;
+    const existing = await prisma.examSubmission.findUnique({ where: { id: req.params.subId } });
+    if (!existing) return res.status(404).json({ error: "Submission not found" });
+    const newScore = (existing.score ?? 0) + added;
+    const finalScore = existing.totalMarks ? Math.min(newScore, existing.totalMarks) : newScore;
     const updated = await prisma.examSubmission.update({
       where: { id: req.params.subId },
-      data: { score, totalMarks, feedback: null, isGraded: true },
+      data: { score: finalScore },
     });
     return res.json(updated);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to save grade" });
+    return res.status(500).json({ error: "Failed to add marks" });
   }
 });
 
@@ -2108,11 +2109,11 @@ app.get("/api/assignments/:id/submissions", authenticateToken, async (req: any, 
   }
 });
 
-// Lecturer: manually grade a single assignment submission
+// Lecturer: add bonus marks on top of AI score for a single assignment submission
 app.post("/api/assignments/:assignmentId/submissions/:subId/grade", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
-  const score = parseFloat(req.body.score);
-  if (isNaN(score) || score < 0) return res.status(400).json({ error: "Invalid score" });
+  const added = parseFloat(req.body.added);
+  if (isNaN(added) || added < 0) return res.status(400).json({ error: "Invalid marks value" });
   try {
     const assignment = await prisma.assignment.findUnique({
       where: { id: req.params.assignmentId },
@@ -2120,16 +2121,17 @@ app.post("/api/assignments/:assignmentId/submissions/:subId/grade", authenticate
     });
     if (!assignment) return res.status(404).json({ error: "Assignment not found" });
     if (assignment.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
-    const totalMarks = assignment.marksText
-      ? assignment.marksText.split(",").map((m) => parseFloat(m.trim())).filter((m) => !isNaN(m) && m > 0).reduce((a, b) => a + b, 0)
-      : null;
+    const existing = await prisma.assignmentSubmission.findUnique({ where: { id: req.params.subId } });
+    if (!existing) return res.status(404).json({ error: "Submission not found" });
+    const newScore = (existing.score ?? 0) + added;
+    const finalScore = existing.totalMarks ? Math.min(newScore, existing.totalMarks) : newScore;
     const updated = await prisma.assignmentSubmission.update({
       where: { id: req.params.subId },
-      data: { score, totalMarks, feedback: null, isGraded: true },
+      data: { score: finalScore },
     });
     return res.json(updated);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to save grade" });
+    return res.status(500).json({ error: "Failed to add marks" });
   }
 });
 
