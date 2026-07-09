@@ -302,162 +302,104 @@ export default function LandingScreen({
             </div>
 
             {/* ── main content ── */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center px-4">
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 gap-[52px]">
+
+              {/* Logo — always visible, shrinks slightly when form is open */}
+              <motion.div
+                className="flex flex-col items-center gap-4 pointer-events-none select-none"
+                animate={{
+                  scale: selectedUser !== null ? 0.72 : 1,
+                  opacity: selectedUser !== null ? 0.55 : 1,
+                  y: selectedUser !== null ? -8 : 0,
+                }}
+                transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <div className="relative flex items-center justify-center">
+                  <motion.div className="absolute pointer-events-none" animate={{ opacity: [0.7, 0.38, 0.7] }} transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+                    style={{ width: 440, height: 440, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(10,148,99,0.16) 0%, rgba(4,120,87,0.06) 50%, transparent 75%)", transform: "translateY(12px)", filter: "blur(28px)" }} />
+                  <motion.div className="absolute pointer-events-none" animate={{ opacity: [0.8, 0.45, 0.8] }} transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+                    style={{ width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(18,184,122,0.13) 0%, rgba(4,120,87,0.05) 55%, transparent 75%)", filter: "blur(14px)" }} />
+                  <div className="absolute pointer-events-none" style={{ width: 160, height: 160, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(52,211,153,0.09) 0%, transparent 70%)", filter: "blur(6px)" }} />
+                  <img src="/logo-dark.png" alt="QuizOS" draggable={false} className="relative rounded-[22px]"
+                    style={{ height: 152, width: "auto", filter: "drop-shadow(0 2px 24px rgba(4,120,87,0.32)) drop-shadow(0 1px 5px rgba(0,0,0,0.60)) brightness(1.06) contrast(1.02)" }} />
+                </div>
+                <p className="text-white/35 text-[11px] font-mono tracking-[0.27em] uppercase">FUTO Academic Portal</p>
+              </motion.div>
+
+              {/* Interactive zone — circles or inline form */}
               <AnimatePresence mode="wait">
 
-                {/* USER SELECTION */}
+                {/* USER SELECTION — two circles */}
                 {selectedUser === null && (
                   <motion.div
                     key="user-select"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0, y: -14, scale: 0.97 }}
-                    transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                    className="flex flex-col items-center gap-[84px]"
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12, scale: 0.96 }}
+                    transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+                    className="flex items-start gap-10 sm:gap-16"
                   >
-                    {/* Logo — anchor composition */}
-                    <motion.div
-                      className="flex flex-col items-center gap-4"
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                    >
-                      <div className="relative flex items-center justify-center">
-                        {/* Outermost ambient bloom — wide, very soft, breathes */}
-                        <motion.div
-                          className="absolute pointer-events-none"
-                          animate={{ opacity: [0.7, 0.38, 0.7] }}
-                          transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
-                          style={{ width: 440, height: 440, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(10,148,99,0.16) 0%, rgba(4,120,87,0.06) 50%, transparent 75%)", transform: "translateY(12px)", filter: "blur(28px)" }}
-                        />
-                        {/* Mid glow — softer, breathes slightly offset */}
-                        <motion.div
-                          className="absolute pointer-events-none"
-                          animate={{ opacity: [0.8, 0.45, 0.8] }}
-                          transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
-                          style={{ width: 280, height: 280, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(18,184,122,0.13) 0%, rgba(4,120,87,0.05) 55%, transparent 75%)", filter: "blur(14px)" }}
-                        />
-                        {/* Tight inner glow */}
-                        <div className="absolute pointer-events-none" style={{ width: 160, height: 160, borderRadius: "50%", background: "radial-gradient(ellipse at center, rgba(52,211,153,0.09) 0%, transparent 70%)", filter: "blur(6px)" }} />
-                        <img
-                          src="/logo-dark.png"
-                          alt="QuizOS"
-                          draggable={false}
-                          className="relative select-none rounded-[22px]"
-                          style={{
-                            height: 152,
-                            width: "auto",
-                            filter: "drop-shadow(0 2px 24px rgba(4,120,87,0.32)) drop-shadow(0 1px 5px rgba(0,0,0,0.60)) brightness(1.06) contrast(1.02)",
-                          }}
-                        />
-                      </div>
-                      <p className="text-white/35 text-[11px] font-mono tracking-[0.27em] uppercase select-none">
-                        FUTO Academic Portal
-                      </p>
-                    </motion.div>
-
-                    {/* User circles */}
-                    <div className="flex items-start gap-10 sm:gap-16">
-                      {USERS.map((u, idx) => {
-                        const Icon = u.icon;
-                        return (
-                          <motion.button
-                            key={u.id}
-                            onClick={() => handleSelectUser(u.id)}
-                            initial={{ opacity: 0, y: 18 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            whileHover={{ scale: 1.06, y: -3 }}
-                            whileTap={{ scale: 0.97 }}
-                            transition={{ type: "spring", stiffness: 400, damping: 24, delay: 0.18 + idx * 0.07 }}
-                            className="group flex flex-col items-center gap-4 cursor-pointer outline-none"
+                    {USERS.map((u, idx) => {
+                      const Icon = u.icon;
+                      return (
+                        <motion.button
+                          key={u.id}
+                          onClick={() => handleSelectUser(u.id)}
+                          initial={{ opacity: 0, y: 18 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          whileHover={{ scale: 1.06, y: -3 }}
+                          whileTap={{ scale: 0.97 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 24, delay: 0.08 + idx * 0.07 }}
+                          className="flex flex-col items-center gap-4 cursor-pointer outline-none"
+                        >
+                          <div className="relative h-[108px] w-[108px] rounded-full flex items-center justify-center"
+                            style={{ background: u.gradient, boxShadow: `0 2px 4px rgba(0,0,0,0.40), 0 8px 32px rgba(0,0,0,0.55), 0 24px 60px rgba(0,0,0,0.26), 0 0 0 1px rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`, transition: "box-shadow 0.28s cubic-bezier(0.34,1.56,0.64,1)" }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 4px rgba(0,0,0,0.40), 0 14px 48px rgba(0,0,0,0.62), 0 36px 80px rgba(0,0,0,0.32), 0 0 0 2px ${u.ring} inset, 0 0 0 1px rgba(255,255,255,0.16) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 4px rgba(0,0,0,0.40), 0 8px 32px rgba(0,0,0,0.55), 0 24px 60px rgba(0,0,0,0.26), 0 0 0 1px rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`; }}
                           >
-                            <div
-                              className="relative h-[108px] w-[108px] rounded-full flex items-center justify-center"
-                              style={{
-                                background: u.gradient,
-                                boxShadow: `0 2px 4px rgba(0,0,0,0.40), 0 8px 32px rgba(0,0,0,0.55), 0 24px 60px rgba(0,0,0,0.26), 0 0 0 1px rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`,
-                                transition: "box-shadow 0.28s cubic-bezier(0.34,1.56,0.64,1)",
-                              }}
-                              onMouseEnter={e => {
-                                (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 4px rgba(0,0,0,0.40), 0 14px 48px rgba(0,0,0,0.62), 0 36px 80px rgba(0,0,0,0.32), 0 0 0 2px ${u.ring} inset, 0 0 0 1px rgba(255,255,255,0.16) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`;
-                              }}
-                              onMouseLeave={e => {
-                                (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 4px rgba(0,0,0,0.40), 0 8px 32px rgba(0,0,0,0.55), 0 24px 60px rgba(0,0,0,0.26), 0 0 0 1px rgba(255,255,255,0.14) inset, 0 -1px 0 rgba(0,0,0,0.30) inset`;
-                              }}
-                            >
-                              {/* Physical sphere layers */}
-                              <div className="absolute inset-0 rounded-full pointer-events-none overflow-hidden">
-                                {/* Main top highlight — diffuse */}
-                                <div style={{ position: "absolute", top: "-8%", left: "8%", right: "8%", height: "52%", background: "linear-gradient(180deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.08) 55%, transparent 100%)", borderRadius: "50% 50% 58% 58% / 58% 58% 42% 42%", filter: "blur(1.5px)" }} />
-                                {/* Tight rim light at top edge */}
-                                <div style={{ position: "absolute", top: "3%", left: "20%", right: "20%", height: "6%", background: "rgba(255,255,255,0.22)", borderRadius: "50%", filter: "blur(2px)" }} />
-                                {/* Subtle inner gradient — darker at sides */}
-                                <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 75% 75% at 50% 50%, transparent 55%, rgba(0,0,0,0.18) 100%)", borderRadius: "50%" }} />
-                                {/* Bottom soft reflection */}
-                                <div style={{ position: "absolute", bottom: "6%", left: "22%", right: "22%", height: "20%", background: "linear-gradient(0deg, rgba(255,255,255,0.09) 0%, transparent 100%)", borderRadius: "50%", filter: "blur(2px)" }} />
-                              </div>
-                              <Icon className="h-12 w-12 text-white relative z-10 drop-shadow-sm" strokeWidth={1.4} />
+                            <div className="absolute inset-0 rounded-full pointer-events-none overflow-hidden">
+                              <div style={{ position: "absolute", top: "-8%", left: "8%", right: "8%", height: "52%", background: "linear-gradient(180deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.08) 55%, transparent 100%)", borderRadius: "50% 50% 58% 58% / 58% 58% 42% 42%", filter: "blur(1.5px)" }} />
+                              <div style={{ position: "absolute", top: "3%", left: "20%", right: "20%", height: "6%", background: "rgba(255,255,255,0.22)", borderRadius: "50%", filter: "blur(2px)" }} />
+                              <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 75% 75% at 50% 50%, transparent 55%, rgba(0,0,0,0.18) 100%)", borderRadius: "50%" }} />
+                              <div style={{ position: "absolute", bottom: "6%", left: "22%", right: "22%", height: "20%", background: "linear-gradient(0deg, rgba(255,255,255,0.09) 0%, transparent 100%)", borderRadius: "50%", filter: "blur(2px)" }} />
                             </div>
-                            <div className="text-center">
-                              <p className="text-white text-[15px] font-semibold leading-tight select-none">{u.label}</p>
-                              <p className="text-white/30 text-[11px] mt-0.5 select-none">{u.sub}</p>
-                            </div>
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-
+                            <Icon className="h-12 w-12 text-white relative z-10 drop-shadow-sm" strokeWidth={1.4} />
+                          </div>
+                          <div className="text-center">
+                            <p className="text-white text-[15px] font-semibold leading-tight select-none">{u.label}</p>
+                            <p className="text-white/30 text-[11px] mt-0.5 select-none">{u.sub}</p>
+                          </div>
+                        </motion.button>
+                      );
+                    })}
                   </motion.div>
                 )}
 
-                {/* FORM VIEW */}
+                {/* INLINE FORM — appears where the circles were */}
                 {selectedUser !== null && (
                   <motion.div
                     key="form-view"
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 16 }}
-                    transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                    className="flex flex-col items-center gap-7 w-full max-w-[360px]"
+                    initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.97 }}
+                    transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+                    className="w-full max-w-[340px]"
                   >
-                    {/* Selected user avatar (hidden during security-fix) */}
-                    {mode !== "security-fix" && activeUser && (
-                      <motion.div
-                        initial={{ scale: 0.85, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: 0.05, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                        className="flex flex-col items-center gap-3"
-                      >
-                        <div
-                          className="h-[90px] w-[90px] rounded-full flex items-center justify-center relative overflow-hidden"
-                          style={{
-                            background: activeUser.gradient,
-                            boxShadow: `0 4px 8px rgba(0,0,0,0.30), 0 12px 40px rgba(0,0,0,0.55), 0 0 0 2.5px ${activeUser.ring} inset, 0 0 0 1px rgba(255,255,255,0.12) inset`,
-                          }}
-                        >
-                          <div style={{ position: "absolute", top: "-10%", left: "10%", right: "10%", height: "55%", background: "linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.06) 60%, transparent 100%)", borderRadius: "50% 50% 60% 60% / 60% 60% 40% 40%", filter: "blur(1px)" }} />
-                          {React.createElement(activeUser.icon, { className: "h-10 w-10 text-white relative z-10 drop-shadow-sm", strokeWidth: 1.4 })}
-                        </div>
-                        <div className="text-center">
-                          <p className="text-white text-[18px] font-semibold leading-tight tracking-[-0.01em]">{activeUser.label}</p>
-                          <p className="text-white/38 text-[12px] mt-0.5">{activeUser.sub}</p>
-                        </div>
-                      </motion.div>
-                    )}
+                    {/* Glass panel */}
+                    <div className="rounded-[22px] overflow-hidden" style={{ background: "rgba(8,13,10,0.76)", backdropFilter: "blur(52px) saturate(180%)", WebkitBackdropFilter: "blur(52px) saturate(180%)", border: "1px solid rgba(255,255,255,0.10)", boxShadow: "0 24px 64px rgba(0,0,0,0.72), 0 1px 0 rgba(255,255,255,0.08) inset" }}>
 
-                    {/* Glass form panel */}
-                    <div
-                      className="w-full rounded-[22px] overflow-hidden"
-                      style={{
-                        background: "rgba(10,18,13,0.74)",
-                        backdropFilter: "blur(48px) saturate(180%)",
-                        WebkitBackdropFilter: "blur(48px) saturate(180%)",
-                        border: "1px solid rgba(255,255,255,0.10)",
-                        boxShadow: "0 24px 64px rgba(0,0,0,0.70), 0 1px 0 rgba(255,255,255,0.08) inset",
-                      }}
-                    >
-                      <div className="px-7 py-7 space-y-5">
+                      {/* Panel header — role badge + back */}
+                      <div className="flex items-center justify-between px-6 pt-5 pb-0">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: activeUser?.id === "student" ? "#10b981" : "#3b82f6", boxShadow: activeUser?.id === "student" ? "0 0 6px rgba(16,185,129,0.7)" : "0 0 6px rgba(59,130,246,0.7)" }} />
+                          <span className="text-white/60 text-[11px] font-bold uppercase tracking-[0.14em]">{activeUser?.label} Sign In</span>
+                        </div>
+                        <button onClick={handleBack} className="flex items-center gap-1 text-white/30 hover:text-white/60 text-[12px] transition cursor-pointer">
+                          <ArrowLeft className="h-3 w-3" /> Back
+                        </button>
+                      </div>
 
+                      <div className="px-6 py-5 space-y-4">
                         {/* Alerts */}
                         <AnimatePresence>
                           {error && (
@@ -533,7 +475,7 @@ export default function LandingScreen({
                                 <select id="login-student-year" value={studentYear} onChange={e => setStudentYear(e.target.value)} className={inp + " [&>option]:bg-slate-900"}>
                                   {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
                                 </select></div>
-                              <button id="student-submit-btn" type="submit" disabled={loading} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer mt-1 ${USERS[0].btn}`}>
+                              <button id="student-submit-btn" type="submit" disabled={loading} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${USERS[0].btn}`}>
                                 {loading ? "Signing in…" : "Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
                               </button>
                               <div className="flex items-center justify-between pt-0.5">
@@ -592,7 +534,7 @@ export default function LandingScreen({
                                 <input id="login-lecturer-email" type="email" required value={lecturerEmail} onChange={e => setLecturerEmail(e.target.value)} placeholder="xavier@futo.edu.ng" className={inp} autoFocus /></div>
                               <div><label className={lbl}>Password</label>
                                 <input id="login-lecturer-pwd" type="password" required value={lecturerPassword} onChange={e => setLecturerPassword(e.target.value)} placeholder="••••••••••" className={inp} /></div>
-                              <button id="lecturer-submit-btn" type="submit" disabled={loading} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer mt-1 ${USERS[1].btn}`}>
+                              <button id="lecturer-submit-btn" type="submit" disabled={loading} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${USERS[1].btn}`}>
                                 {loading ? "Signing in…" : "Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
                               </button>
                               <button type="button" onClick={() => { setMode("register"); setError(null); }} className={link}>New staff? Register</button>
@@ -619,14 +561,6 @@ export default function LandingScreen({
                         </AnimatePresence>
                       </div>
                     </div>
-
-                    {/* Back to user selection */}
-                    <button
-                      onClick={handleBack}
-                      className="flex items-center gap-1.5 text-white/35 hover:text-white/65 text-[13px] font-medium transition cursor-pointer"
-                    >
-                      <ArrowLeft className="h-3.5 w-3.5" /> Other Users
-                    </button>
                   </motion.div>
                 )}
 
