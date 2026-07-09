@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp } from "lucide-react";
+import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import NotificationBell from "./NotificationBell";
+import CalendarView from "./CalendarView";
 import AvatarModal from "./AvatarModal";
 import { motion, AnimatePresence } from "motion/react";
 import SlideView from "./SlideView";
@@ -20,7 +21,7 @@ interface LecturerDashboardProps {
 }
 
 export default function LecturerDashboard({ token, user, theme, onToggleTheme, onLogout }: LecturerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture" | "exams" | "assignments" | "announcements" | "analytics">("gradebook");
+  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture" | "exams" | "assignments" | "announcements" | "analytics" | "calendar">("gradebook");
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [attempts, setAttempts] = useState<StudentAttempt[]>([]);
@@ -58,6 +59,13 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [isParsing, setIsParsing] = useState(false);
   const [parseDocError, setParseDocError] = useState<string | null>(null);
   const parseFileInputRef = useRef<HTMLInputElement>(null);
+
+  // AI question generation
+  const [aiGenOpen, setAiGenOpen] = useState(false);
+  const [aiGenTopic, setAiGenTopic] = useState("");
+  const [aiGenCount, setAiGenCount] = useState("10");
+  const [aiGenLoading, setAiGenLoading] = useState(false);
+  const [aiGenError, setAiGenError] = useState<string | null>(null);
 
   // Edit quiz
   const [editingQuiz, setEditingQuiz] = useState<any | null>(null);
@@ -722,6 +730,35 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     setQuizQuestions((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleAiGenerateQuestions = async () => {
+    if (!aiGenTopic.trim()) return;
+    setAiGenLoading(true);
+    setAiGenError(null);
+    try {
+      const res = await fetch("/api/ai/generate-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ topic: aiGenTopic, count: parseInt(aiGenCount, 10) }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Generation failed");
+      const data: Array<{ text: string; options: string[]; correctOption: string }> = await res.json();
+      if (!Array.isArray(data) || data.length === 0) throw new Error("No questions returned");
+      const newQs = data.map(q => ({ uid: crypto.randomUUID(), text: q.text, options: q.options, correctOption: q.correctOption }));
+      setQuizQuestions(prev => {
+        // Replace default empty question if that's the only one
+        if (prev.length === 1 && !prev[0].text.trim()) return newQs;
+        return [...prev, ...newQs];
+      });
+      setAiGenOpen(false);
+      setAiGenTopic("");
+      showSuccess(`${data.length} questions generated!`);
+    } catch (err: any) {
+      setAiGenError(err.message || "Failed to generate questions");
+    } finally {
+      setAiGenLoading(false);
+    }
+  };
+
   const openEditQuiz = (quiz: any) => {
     setEditingQuiz(quiz);
     setEditQuizTitle(quiz.title);
@@ -1327,6 +1364,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     announcements: "Announcements",
     departments: "Departments",
     analytics: "Analytics",
+    calendar: "Calendar",
   };
 
   // Badge showing which dept/year students will receive a piece of content
@@ -1408,6 +1446,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         <nav className="flex-1 px-2 space-y-0.5 overflow-y-auto min-h-0 pb-2">
           {navBtn("gradebook",    "Gradebook",      <ClipboardList className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("analytics",    "Analytics",      <TrendingUp className="h-4 w-4" strokeWidth={1.6} />)}
+          {navBtn("calendar",     "Calendar",       <Calendar className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("live-lecture", "Live Lecture",   <Radio className={`h-4 w-4 ${broadcastingSession ? "text-red-500 animate-pulse" : ""}`} strokeWidth={1.6} />, true)}
           {navBtn("notes",        "Publish Notes",  <PlusCircle className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("quizzes",      "Deploy Quiz",    <Award className="h-4 w-4" strokeWidth={1.6} />)}
@@ -2225,9 +2264,21 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   </div>
 
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
                       <h3 className="text-[12px] font-bold text-[#3a3a3c] dark:text-white/70 uppercase tracking-wider">Questions ({quizQuestions.length})</h3>
-                      <div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setAiGenOpen(o => !o); setAiGenError(null); }}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-semibold rounded-[8px] transition cursor-pointer border ${
+                            aiGenOpen
+                              ? "bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-700/50 text-purple-700 dark:text-purple-400"
+                              : "border-purple-300 dark:border-purple-700/50 text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/20"
+                          }`}
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Generate with AI
+                        </button>
                         <input
                           ref={parseFileInputRef}
                           type="file"
@@ -2249,6 +2300,58 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         </button>
                       </div>
                     </div>
+
+                    {/* AI generation panel */}
+                    <AnimatePresence>
+                      {aiGenOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="p-4 rounded-[12px] border border-purple-200 dark:border-purple-800/40 bg-purple-50/60 dark:bg-purple-950/20 space-y-3">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                              <span className="text-[11.5px] font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider">AI Question Generator</span>
+                            </div>
+                            <div>
+                              <label className={lbl}>Topic / Prompt</label>
+                              <textarea
+                                rows={2}
+                                value={aiGenTopic}
+                                onChange={e => setAiGenTopic(e.target.value)}
+                                placeholder="e.g. Photosynthesis in C3 plants, or 'Basic SQL queries and joins'"
+                                className="form-input resize-none"
+                              />
+                            </div>
+                            <div className="flex items-end gap-3">
+                              <div className="flex-1">
+                                <label className={lbl}>Number of Questions</label>
+                                <select value={aiGenCount} onChange={e => setAiGenCount(e.target.value)} className="form-input">
+                                  {["5","10","15","20"].map(n => <option key={n} value={n}>{n} questions</option>)}
+                                </select>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={aiGenLoading || !aiGenTopic.trim()}
+                                onClick={handleAiGenerateQuestions}
+                                className="flex items-center gap-1.5 px-4 py-2 text-[12px] font-semibold bg-purple-600 hover:bg-purple-500 text-white rounded-[8px] transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+                              >
+                                {aiGenLoading ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</> : <><Sparkles className="h-3.5 w-3.5" /> Generate</>}
+                              </button>
+                            </div>
+                            {aiGenError && (
+                              <div className="flex items-center gap-2 text-[11.5px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-[8px] px-3 py-2">
+                                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                                {aiGenError}
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                     {parseDocError && (
                       <div className="flex items-center gap-2 text-[11.5px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-[8px] px-3 py-2">
                         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
@@ -2661,6 +2764,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
               })()}
             </motion.div>
           )}
+
+          {/* ── CALENDAR TAB ── */}
+          {activeTab === "calendar" && <CalendarView token={token} />}
 
           {/* ── ANNOUNCEMENTS TAB ── */}
           {activeTab === "announcements" && (
@@ -3571,6 +3677,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                 {([
                   { id: "gradebook",     label: "Gradebook",      icon: <ClipboardList className="h-4 w-4" strokeWidth={1.6} /> },
                   { id: "analytics",     label: "Analytics",      icon: <TrendingUp className="h-4 w-4" strokeWidth={1.6} /> },
+                  { id: "calendar",      label: "Calendar",       icon: <Calendar className="h-4 w-4" strokeWidth={1.6} /> },
                   { id: "live-lecture",  label: "Live Lecture",   icon: <Radio className={`h-4 w-4 ${broadcastingSession ? "text-red-500 animate-pulse" : ""}`} strokeWidth={1.6} /> },
                   { id: "notes",         label: "Publish Notes",  icon: <PlusCircle className="h-4 w-4" strokeWidth={1.6} /> },
                   { id: "quizzes",       label: "Deploy Quiz",    icon: <Award className="h-4 w-4" strokeWidth={1.6} /> },

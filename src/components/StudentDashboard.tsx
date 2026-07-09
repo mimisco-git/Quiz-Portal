@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download } from "lucide-react";
 import NotificationBell from "./NotificationBell";
+import CalendarView from "./CalendarView";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import MarkdownView from "./MarkdownView";
 import UserAvatar from "./UserAvatar";
@@ -41,7 +42,7 @@ function formatCountdown(target: Date): string {
 }
 
 export default function StudentDashboard({ token, user, theme, onToggleTheme, onLogout }: StudentDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "assignments" | "history">("notes");
+  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "assignments" | "history" | "calendar">("notes");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [periodTick, setPeriodTick] = useState(0);
   const [currentYear, setCurrentYear] = useState(user.year);
@@ -1224,7 +1225,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             { id: "quizzes",        icon: Award,         label: "Quizzes",      live: false },
             { id: "exams",          icon: Upload,        label: "Exams",        live: false },
             { id: "assignments",    icon: Pencil,        label: "Assignments",  live: false },
-            { id: "history",        icon: ClipboardList, label: "My Grades",   live: false },
+            { id: "history",        icon: ClipboardList, label: "My Grades",    live: false },
+            { id: "calendar",       icon: Calendar,      label: "Calendar",     live: false },
             { id: "live-classroom", icon: Radio,         label: "Live Class",   live: true  },
           ].map((item) => {
             const isActive = activeTab === (item.id as typeof activeTab);
@@ -1418,7 +1420,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 { id: "quizzes",        icon: Award,         label: "Quizzes"     },
                 { id: "exams",          icon: Upload,        label: "Exams"       },
                 { id: "assignments",    icon: Pencil,        label: "Assignments" },
-                { id: "history",        icon: ClipboardList, label: "My Grades"  },
+                { id: "history",        icon: ClipboardList, label: "My Grades"   },
+                { id: "calendar",       icon: Calendar,      label: "Calendar"    },
                 { id: "live-classroom", icon: Radio,         label: "Live Class"  },
               ].map((item) => {
                 const isActive = activeTab === (item.id as typeof activeTab);
@@ -1526,6 +1529,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               : activeTab === "exams" ? "Written Examinations"
               : activeTab === "assignments" ? "Assignments"
               : activeTab === "history" ? "My Grades"
+              : activeTab === "calendar" ? "Calendar"
               : "Virtual Classroom"}
           </h1>
           <div className="flex items-center gap-1">
@@ -2521,6 +2525,60 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 <div className="apple-card overflow-hidden">
                   <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center gap-2 flex-wrap">
                     <h2 className="apple-title flex-1">All Grades</h2>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const rows = allRows;
+                        const letterGrade = avgPct !== null ? gradeLetter(avgPct).letter : "—";
+                        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Grade Report — ${user.fullName}</title><style>
+                          body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:32px;color:#1d1d1f;max-width:720px;margin:auto}
+                          h1{font-size:22px;font-weight:700;margin:0 0 4px}
+                          .sub{color:#6e6e73;font-size:13px;margin-bottom:24px}
+                          .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+                          .stat{border:1px solid #e5e5e5;border-radius:10px;padding:12px 14px}
+                          .stat-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8e8e93;margin-bottom:4px}
+                          .stat-value{font-size:20px;font-weight:700}
+                          table{width:100%;border-collapse:collapse;font-size:12.5px}
+                          th{text-align:left;padding:8px 10px;background:#f5f5f7;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6e6e73}
+                          td{padding:9px 10px;border-bottom:1px solid #f0f0f0}
+                          .badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase}
+                          .quiz{background:#d1fae5;color:#065f46}.exam{background:#dbeafe;color:#1e3a8a}.assignment{background:#fef3c7;color:#92400e}
+                          .pass{color:#059669}.fail{color:#dc2626}.pending{color:#8e8e93}
+                          .footer{margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5;font-size:11px;color:#8e8e93}
+                          @media print{body{padding:24px}}
+                        </style></head><body>
+                          <h1>Academic Grade Report</h1>
+                          <div class="sub">${user.fullName} · ${user.regNumber} · ${user.department} · ${user.year} · Generated ${new Date().toLocaleDateString("en-US",{day:"numeric",month:"long",year:"numeric"})}</div>
+                          <div class="stats">
+                            <div class="stat"><div class="stat-label">Overall Average</div><div class="stat-value">${avgPct !== null ? avgPct.toFixed(1)+"%" : "—"}</div><div style="font-size:11px;color:#8e8e93;margin-top:2px">Grade ${letterGrade}</div></div>
+                            <div class="stat"><div class="stat-label">Total</div><div class="stat-value">${rows.length}</div><div style="font-size:11px;color:#8e8e93;margin-top:2px">${graded.length} graded</div></div>
+                            <div class="stat"><div class="stat-label">Passed</div><div class="stat-value">${passCount}</div><div style="font-size:11px;color:#8e8e93;margin-top:2px">${graded.length ? ((passCount/graded.length)*100).toFixed(0)+"% pass rate" : "—"}</div></div>
+                            <div class="stat"><div class="stat-label">Pending</div><div class="stat-value">${rows.filter(r=>!r.isGraded).length}</div><div style="font-size:11px;color:#8e8e93;margin-top:2px">awaiting grade</div></div>
+                          </div>
+                          <table><thead><tr><th>#</th><th>Assessment</th><th>Type</th><th>Course</th><th>Date</th><th>Score</th><th>Grade</th></tr></thead><tbody>
+                          ${rows.map((r,i)=>{
+                            const gl = r.pct !== null ? gradeLetter(r.pct) : null;
+                            return `<tr>
+                              <td style="color:#8e8e93">${i+1}</td>
+                              <td><strong>${r.title}</strong></td>
+                              <td><span class="badge ${r.type}">${r.type}</span></td>
+                              <td style="font-family:monospace;font-size:11px">${r.courseCode}</td>
+                              <td style="color:#6e6e73">${new Date(r.date).toLocaleDateString("en-US",{day:"numeric",month:"short",year:"numeric"})}</td>
+                              <td class="${!r.isGraded?"pending":r.pct!>=50?"pass":"fail"}">${r.isGraded?r.scoreLabel:"Pending"}</td>
+                              <td style="font-weight:700">${gl?gl.letter:"—"}</td>
+                            </tr>`;
+                          }).join("")}
+                          </tbody></table>
+                          <div class="footer">Quiz Portal · ${user.department} · This is an auto-generated grade summary and does not constitute an official transcript.</div>
+                        </body></html>`;
+                        const w = window.open("", "_blank");
+                        if (w) { w.document.write(html); w.document.close(); w.print(); }
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-semibold border border-black/[0.10] dark:border-white/[0.10] text-[#3a3a3c] dark:text-white/60 hover:bg-black/[0.04] dark:hover:bg-white/[0.05] rounded-[8px] transition"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download Report
+                    </button>
                     {(["all", "quiz", "exam", "assignment"] as const).map(f => (
                       <button key={f} onClick={() => setGradeFilter(f)}
                         className={`px-3 py-1 rounded-full text-[11px] font-semibold transition border ${
@@ -2637,6 +2695,9 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               </motion.div>
             );
           })()}
+
+          {/* ── CALENDAR TAB ── */}
+          {activeTab === "calendar" && <CalendarView token={token} />}
 
           </div>{/* /max-w-5xl */}
         </main>

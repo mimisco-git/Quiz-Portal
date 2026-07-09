@@ -3007,6 +3007,138 @@ app.get("/api/quizzes/:id/leaderboard", authenticateToken, async (req: any, res)
 });
 
 // -------------------------------------------------------------
+// CALENDAR API
+// -------------------------------------------------------------
+app.get("/api/calendar", authenticateToken, async (req: any, res) => {
+  const { role, id } = req.user;
+  try {
+    const events: Array<{ id: string; type: string; title: string; courseCode: string; date: string; label: string }> = [];
+
+    if (role === "student") {
+      const { depts, year } = await getStudentFilter(id);
+      const courseFilter = {
+        AND: [
+          { OR: [{ departmentId: null }, { department: { name: { in: depts } } }] },
+          { OR: [{ targetYear: null }, { targetYear: year }] },
+        ],
+      };
+      const [quizzes, exams, assignments] = await Promise.all([
+        prisma.quiz.findMany({
+          where: { course: courseFilter },
+          include: { course: { select: { code: true } } },
+        }),
+        prisma.exam.findMany({
+          where: { isOpen: true, course: courseFilter },
+          include: { course: { select: { code: true } } },
+        }),
+        prisma.assignment.findMany({
+          where: { isOpen: true, dueDate: { not: null }, course: courseFilter },
+          include: { course: { select: { code: true } } },
+        }),
+      ]);
+      quizzes.forEach(q => {
+        if (q.availableFrom) events.push({ id: `qo_${q.id}`, type: "quiz", title: q.title, courseCode: q.course.code, date: q.availableFrom.toISOString(), label: "Opens" });
+        if (q.availableUntil) events.push({ id: `qc_${q.id}`, type: "quiz", title: q.title, courseCode: q.course.code, date: q.availableUntil.toISOString(), label: "Closes" });
+      });
+      exams.forEach(e => {
+        if (e.availableFrom) events.push({ id: `eo_${e.id}`, type: "exam", title: e.title, courseCode: e.course.code, date: e.availableFrom.toISOString(), label: "Opens" });
+        if (e.availableUntil) events.push({ id: `ec_${e.id}`, type: "exam", title: e.title, courseCode: e.course.code, date: e.availableUntil.toISOString(), label: "Closes" });
+      });
+      assignments.forEach(a => {
+        if (a.dueDate) events.push({ id: `ad_${a.id}`, type: "assignment", title: a.title, courseCode: a.course.code, date: a.dueDate.toISOString(), label: "Due" });
+      });
+    } else if (role === "lecturer") {
+      const [quizzes, exams, assignments] = await Promise.all([
+        prisma.quiz.findMany({
+          where: { course: { lecturerId: id } },
+          include: { course: { select: { code: true } } },
+        }),
+        prisma.exam.findMany({
+          where: { course: { lecturerId: id } },
+          include: { course: { select: { code: true } } },
+        }),
+        prisma.assignment.findMany({
+          where: { dueDate: { not: null }, course: { lecturerId: id } },
+          include: { course: { select: { code: true } } },
+        }),
+      ]);
+      quizzes.forEach(q => {
+        if (q.availableFrom) events.push({ id: `qo_${q.id}`, type: "quiz", title: q.title, courseCode: q.course.code, date: q.availableFrom.toISOString(), label: "Quiz Opens" });
+        if (q.availableUntil) events.push({ id: `qc_${q.id}`, type: "quiz", title: q.title, courseCode: q.course.code, date: q.availableUntil.toISOString(), label: "Quiz Closes" });
+      });
+      exams.forEach(e => {
+        if (e.availableFrom) events.push({ id: `eo_${e.id}`, type: "exam", title: e.title, courseCode: e.course.code, date: e.availableFrom.toISOString(), label: "Exam Opens" });
+        if (e.availableUntil) events.push({ id: `ec_${e.id}`, type: "exam", title: e.title, courseCode: e.course.code, date: e.availableUntil.toISOString(), label: "Exam Closes" });
+      });
+      assignments.forEach(a => {
+        if (a.dueDate) events.push({ id: `ad_${a.id}`, type: "assignment", title: a.title, courseCode: a.course.code, date: a.dueDate.toISOString(), label: "Assignment Due" });
+      });
+    }
+
+    events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return res.json(events);
+  } catch (err) {
+    console.error("Calendar error:", err);
+    return res.status(500).json({ error: "Failed to fetch calendar" });
+  }
+});
+
+// -------------------------------------------------------------
+// AI QUESTION GENERATION
+// -------------------------------------------------------------
+app.post("/api/ai/generate-questions", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { topic, count = 5, courseContext } = req.body;
+  if (!topic || typeof topic !== "string" || topic.trim().length < 3) {
+    return res.status(400).json({ error: "A topic of at least 3 characters is required" });
+  }
+  const n = Math.min(Math.max(parseInt(String(count)) || 5, 1), 20);
+  try {
+    const nvidia = getNvidiaClient();
+    const prompt = `You are an academic question setter. Generate exactly ${n} multiple-choice questions about: "${topic.trim()}"${courseContext ? ` in the context of ${courseContext}` : ""}.
+
+Return ONLY a JSON array — no markdown, no commentary. Each element must have:
+- "text": the question text (string)
+- "options": array of exactly 4 answer strings labeled like "A. ...", "B. ...", "C. ...", "D. ..."
+- "correctOption": the full text of the correct option (must match one of the 4 options exactly)
+
+Example format:
+[{"text":"What is ...?","options":["A. Yes","B. No","C. Maybe","D. Always"],"correctOption":"A. Yes"}]`;
+
+    const response = await nvidia.chat.completions.create({
+      model: "meta/llama-3.1-70b-instruct",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.6,
+      max_tokens: 3000,
+    });
+
+    const raw = response.choices[0]?.message?.content?.trim() ?? "";
+    // Strip potential markdown code fences
+    const jsonStr = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+    let questions: any[];
+    try {
+      questions = JSON.parse(jsonStr);
+    } catch {
+      // Try to extract JSON array
+      const match = jsonStr.match(/\[[\s\S]*\]/);
+      if (!match) return res.status(502).json({ error: "AI returned invalid JSON — please try again" });
+      questions = JSON.parse(match[0]);
+    }
+    if (!Array.isArray(questions)) return res.status(502).json({ error: "AI response was not a list" });
+    // Validate and clean each question
+    const cleaned = questions.slice(0, n).map((q: any, i: number) => ({
+      text: String(q.text || `Question ${i + 1}`),
+      options: Array.isArray(q.options) ? q.options.slice(0, 4).map(String) : ["A. ", "B. ", "C. ", "D. "],
+      correctOption: String(q.correctOption || ""),
+    }));
+    return res.json({ questions: cleaned });
+  } catch (err: any) {
+    console.error("AI question generation error:", err);
+    return res.status(500).json({ error: "AI generation failed — check NVIDIA_API_KEY" });
+  }
+});
+
+// -------------------------------------------------------------
 // LECTURER ANALYTICS API
 // -------------------------------------------------------------
 app.get("/api/lecturer/analytics", authenticateToken, async (req: any, res) => {
