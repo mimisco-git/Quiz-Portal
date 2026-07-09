@@ -518,7 +518,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   const fetchAllNotes = async () => {
     try {
-      const res = await fetch("/api/notes");
+      const res = await fetch("/api/notes", { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
         setAllNotes(data);

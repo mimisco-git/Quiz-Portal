@@ -553,7 +553,7 @@ app.get("/api/courses/:id", async (req, res) => {
 });
 
 // Fetch all lecture notes (optionally filter by course)
-app.get("/api/notes", async (req, res) => {
+app.get("/api/notes", authenticateToken, async (req: any, res) => {
   const { courseId } = req.query;
   try {
     const where: any = {};
