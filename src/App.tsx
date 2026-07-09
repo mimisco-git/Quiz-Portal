@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import LandingScreen from "./components/LandingScreen";
 import StudentDashboard from "./components/StudentDashboard";
 import LecturerDashboard from "./components/LecturerDashboard";
@@ -19,6 +19,8 @@ export default function App() {
   // Global Session Expiration States
   const [showSessionExpired, setShowSessionExpired] = useState(false);
   const [sessionCountdown, setSessionCountdown] = useState(10);
+  // Ref so closures in fetch interceptor and proactive check never read stale state
+  const sessionExpiredRef = useRef(false);
 
   // Sync Theme with DOM root
   useEffect(() => {
@@ -60,6 +62,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    sessionExpiredRef.current = false;
+    setShowSessionExpired(false);
     setToken(null);
     setUser(null);
     localStorage.removeItem("edu_token");
@@ -69,107 +73,91 @@ export default function App() {
   // 1. Proactive Client-Side JWT Expiration Check (Runs every 5s)
   useEffect(() => {
     if (!token) {
+      sessionExpiredRef.current = false;
       setShowSessionExpired(false);
       return;
     }
+
+    const triggerExpiry = () => {
+      if (sessionExpiredRef.current) return;
+      sessionExpiredRef.current = true;
+      setShowSessionExpired(true);
+      setSessionCountdown(10);
+    };
 
     const checkTokenExpiration = () => {
       try {
         const parts = token.split(".");
         if (parts.length === 3) {
-          const base64Url = parts[1];
-          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-          const payload = JSON.parse(atob(base64));
-          
-          if (payload && payload.exp) {
-            const expTime = payload.exp * 1000;
-            const currentTime = Date.now();
-            
-            if (currentTime >= expTime) {
-              if (!showSessionExpired) {
-                setShowSessionExpired(true);
-                setSessionCountdown(10);
-              }
-            }
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+          if (payload?.exp && Date.now() >= payload.exp * 1000) {
+            triggerExpiry();
           }
         }
-      } catch (err) {
-        console.error("Error inspecting token for expiration", err);
+      } catch {
+        // malformed token — silently ignore, server will reject it
       }
     };
 
-    // Run immediately on token change
-    checkTokenExpiration();
-
+    // Give a 3-second grace period before first check so a freshly-minted token
+    // is never flagged by a small device-clock skew on mobile.
+    const grace = setTimeout(checkTokenExpiration, 3000);
     const interval = setInterval(checkTokenExpiration, 5000);
-    return () => clearInterval(interval);
-  }, [token, showSessionExpired]);
+    return () => { clearTimeout(grace); clearInterval(interval); };
+  }, [token]); // only re-run when the token itself changes
 
-  // 2. Reactive Network Response Interceptor (Catching 401 & 403 status codes)
+  // 2. Reactive Network Response Interceptor
   useEffect(() => {
     if (!token) return;
 
     let restored = false;
     const originalFetch = window.fetch;
 
-    try {
-      const customFetch = async (...args: any[]) => {
-        try {
-          const response = await originalFetch(...(args as [RequestInfo | URL, RequestInit?]));
-          if (response.status === 401) {
-            // Only treat as session expiry when the server says the token itself is bad.
-            // A 401 from a missing auth header in frontend code is a bug, not expiry.
-            const clone = response.clone();
-            clone.json().then((body: any) => {
-              const msg: string = body?.error ?? "";
-              if (msg.toLowerCase().includes("expired") || msg.toLowerCase().includes("invalid")) {
-                if (!showSessionExpired) {
-                  setShowSessionExpired(true);
-                  setSessionCountdown(10);
-                }
-              }
-            }).catch(() => {});
-          }
-          return response;
-        } catch (err) {
-          return Promise.reject(err);
-        }
-      };
+    const triggerExpiry = () => {
+      if (sessionExpiredRef.current) return;
+      sessionExpiredRef.current = true;
+      setShowSessionExpired(true);
+      setSessionCountdown(10);
+    };
 
+    const customFetch = async (...args: any[]) => {
       try {
-        // Try direct assignment first
-        (window as any).fetch = customFetch;
-      } catch {
-        // If direct assignment fails, try Object.defineProperty
-        Object.defineProperty(window, "fetch", {
-          value: customFetch,
-          configurable: true,
-          writable: true,
-        });
+        const response = await originalFetch(...(args as [RequestInfo | URL, RequestInit?]));
+        // 401 = missing token, 403 = invalid/expired token (both returned by authenticateToken)
+        if (response.status === 401 || response.status === 403) {
+          const clone = response.clone();
+          clone.json().then((body: any) => {
+            const msg: string = (body?.error ?? "").toLowerCase();
+            if (msg.includes("expired") || msg.includes("invalid")) {
+              triggerExpiry();
+            }
+          }).catch(() => {});
+        }
+        return response;
+      } catch (err) {
+        return Promise.reject(err);
       }
-    } catch (err) {
-      console.warn("FUTO Platform: Global fetch interceptor disabled due to browser container restrictions:", err);
+    };
+
+    try {
+      (window as any).fetch = customFetch;
+    } catch {
+      try {
+        Object.defineProperty(window, "fetch", { value: customFetch, configurable: true, writable: true });
+      } catch {
+        console.warn("FUTO Platform: Global fetch interceptor could not be installed.");
+      }
     }
 
     return () => {
       if (!restored) {
-        try {
-          (window as any).fetch = originalFetch;
-        } catch {
-          try {
-            Object.defineProperty(window, "fetch", {
-              value: originalFetch,
-              configurable: true,
-              writable: true,
-            });
-          } catch {
-            // ignore
-          }
+        try { (window as any).fetch = originalFetch; } catch {
+          try { Object.defineProperty(window, "fetch", { value: originalFetch, configurable: true, writable: true }); } catch {}
         }
         restored = true;
       }
     };
-  }, [token, showSessionExpired]);
+  }, [token]); // only re-run when the token itself changes
 
   // 3. Graceful Logout Countdown Handler
   useEffect(() => {
