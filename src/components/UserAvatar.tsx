@@ -34,7 +34,10 @@ export default function UserAvatar({
     }
 
     // Always fetch from the backend to ensure synchronization and support of other users
-    fetch(`/api/user/avatar/${role}/${userId}`)
+    const token = localStorage.getItem("edu_token");
+    fetch(`/api/user/avatar/${role}/${userId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((res) => {
         if (!res.ok) {
           throw new Error("Avatar not found");

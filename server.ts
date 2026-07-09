@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import path from "path";
 import fs from "fs";
 // vite is imported dynamically inside startServer() so it's excluded from the Vercel Lambda bundle
@@ -62,6 +63,9 @@ async function getStudentFilter(studentId: string): Promise<{ depts: string[]; y
 
 const app = express();
 const PORT = 3000;
+
+// Explicit CORS policy — restricts cross-origin requests to the configured frontend origin
+app.use(cors({ origin: process.env.FRONTEND_URL ?? true, credentials: true }));
 
 if (!process.env.JWT_SECRET) {
   console.warn("[WARN] JWT_SECRET env var is not set. Set it in Vercel → Settings → Environment Variables for production security.");
@@ -521,7 +525,7 @@ app.get("/api/courses", optionalAuth, async (req: any, res) => {
 });
 
 // Fetch detailed course view with its notes and quizzes
-app.get("/api/courses/:id", async (req, res) => {
+app.get("/api/courses/:id", authenticateToken, async (req: any, res) => {
   const { id } = req.params;
   try {
     const course = await prisma.course.findUnique({
@@ -654,6 +658,8 @@ app.delete("/api/notes/:id", authenticateToken, async (req: any, res) => {
 app.post("/api/notes/parse-docx", authenticateToken, upload.single("file"), async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  const docxMimes = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"];
+  if (!docxMimes.includes(req.file.mimetype)) return res.status(400).json({ error: "Only .docx / .doc files are accepted." });
   try {
     const result = await mammoth.convertToHtml({ buffer: req.file.buffer });
     return res.json({ html: result.value });
@@ -700,7 +706,7 @@ app.post("/api/quizzes", authenticateToken, async (req: any, res) => {
     return res.status(201).json(quiz);
   } catch (error: any) {
     console.error("Error creating quiz:", error);
-    return res.status(500).json({ error: "Error creating quiz", detail: error?.message ?? String(error) });
+    return res.status(500).json({ error: "Error creating quiz" });
   }
 });
 
@@ -1075,7 +1081,9 @@ app.post("/api/quiz/submit", authenticateToken, async (req: any, res) => {
     }
 
     const correctAnswers: Record<string, string> = {};
-    questions.forEach((q) => { correctAnswers[q.id] = q.correctOption; });
+    questions.forEach((q) => {
+      if (submissionAnswers[q.id]) { correctAnswers[q.id] = q.correctOption; }
+    });
 
     return res.json({
       message: "Quiz submitted successfully",
@@ -1583,6 +1591,10 @@ app.post("/api/lectures/:id/chat", authenticateToken, async (req: any, res) => {
   }
 
   try {
+    const session = await prisma.lectureSession.findUnique({ where: { id }, include: { course: { select: { lecturerId: true } } } });
+    if (!session) return res.status(404).json({ error: "Session not found." });
+    if (req.user.role === "lecturer" && session.course.lecturerId !== req.user.id)
+      return res.status(403).json({ error: "Access denied." });
     const chat = await prisma.lectureChat.create({
       data: {
         lectureSessionId: id,
@@ -1602,6 +1614,10 @@ app.post("/api/lectures/:id/chat", authenticateToken, async (req: any, res) => {
 app.get("/api/lectures/:id/chat", authenticateToken, async (req: any, res) => {
   const { id } = req.params;
   try {
+    const session = await prisma.lectureSession.findUnique({ where: { id }, include: { course: { select: { lecturerId: true } } } });
+    if (!session) return res.status(404).json({ error: "Session not found." });
+    if (req.user.role === "lecturer" && session.course.lecturerId !== req.user.id)
+      return res.status(403).json({ error: "Access denied." });
     const chats = await prisma.lectureChat.findMany({
       where: { lectureSessionId: id },
       orderBy: { createdAt: "asc" },
@@ -1675,7 +1691,14 @@ app.post("/api/lectures/:id/join", authenticateToken, async (req: any, res) => {
 
 // Get attendance list (lecturer)
 app.get("/api/lectures/:id/attendance", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   try {
+    const session = await prisma.lectureSession.findUnique({
+      where: { id: req.params.id },
+      include: { course: { select: { lecturerId: true } } },
+    });
+    if (!session || session.course.lecturerId !== req.user.id)
+      return res.status(403).json({ error: "Access denied." });
     const list = await prisma.lectureAttendance.findMany({
       where: { sessionId: req.params.id },
       orderBy: { joinedAt: "asc" },
@@ -1709,6 +1732,8 @@ app.post("/api/lectures/:id/hand-raise", authenticateToken, async (req: any, res
 // Lecturer dismisses a hand raise
 app.delete("/api/lectures/:id/hand-raises/:raiseId", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const ownerCheck = await requireLectureOwner(req.params.id, req.user.id);
+  if (ownerCheck !== "ok") return res.status(ownerCheck === "not_found" ? 404 : 403).json({ error: "Access denied." });
   try {
     await prisma.handRaise.update({ where: { id: req.params.raiseId }, data: { isResolved: true, allowedToSpeak: false } });
     return res.json({ ok: true });
@@ -1720,6 +1745,8 @@ app.delete("/api/lectures/:id/hand-raises/:raiseId", authenticateToken, async (r
 // Lecturer grants mic permission to a student
 app.post("/api/lectures/:id/hand-raises/:raiseId/allow", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const ownerCheck = await requireLectureOwner(req.params.id, req.user.id);
+  if (ownerCheck !== "ok") return res.status(ownerCheck === "not_found" ? 404 : 403).json({ error: "Access denied." });
   try {
     const raise = await prisma.handRaise.update({
       where: { id: req.params.raiseId },
@@ -1734,6 +1761,8 @@ app.post("/api/lectures/:id/hand-raises/:raiseId/allow", authenticateToken, asyn
 // Lecturer revokes mic permission (mutes student)
 app.post("/api/lectures/:id/hand-raises/:raiseId/mute", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const ownerCheck = await requireLectureOwner(req.params.id, req.user.id);
+  if (ownerCheck !== "ok") return res.status(ownerCheck === "not_found" ? 404 : 403).json({ error: "Access denied." });
   try {
     const raise = await prisma.handRaise.update({
       where: { id: req.params.raiseId },
@@ -1870,6 +1899,8 @@ async function extractPptxSlides(buffer: Buffer): Promise<string[]> {
 app.post("/api/lectures/parse-pptx", authenticateToken, upload.single("file"), async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   if (!req.file) return res.status(400).json({ error: "File required" });
+  const pptxMimes = ["application/vnd.openxmlformats-officedocument.presentationml.presentation"];
+  if (!pptxMimes.includes(req.file.mimetype)) return res.status(400).json({ error: "Only .pptx files are accepted." });
   try {
     const slides = await extractPptxSlides(req.file.buffer);
     if (slides.length === 0) return res.status(400).json({ error: "No slide content found in file" });
@@ -1951,6 +1982,13 @@ app.patch("/api/attempts/:id/score", authenticateToken, async (req: any, res) =>
   }
 
   try {
+    const attempt = await prisma.studentAttempt.findUnique({
+      where: { id },
+      include: { quiz: { include: { course: { select: { lecturerId: true } } } } },
+    });
+    if (!attempt) return res.status(404).json({ error: "Attempt not found." });
+    if (attempt.quiz?.course?.lecturerId !== req.user.id)
+      return res.status(403).json({ error: "You do not own this quiz." });
     const updated = await prisma.studentAttempt.update({
       where: { id },
       data: { score: numScore },
@@ -2504,7 +2542,7 @@ app.post("/api/assignments", authenticateToken, upload.single("file"), async (re
     return res.status(201).json(assignment);
   } catch (err: any) {
     console.error("Error creating assignment:", err);
-    return res.status(500).json({ error: "Failed to create assignment", detail: err?.message ?? String(err) });
+    return res.status(500).json({ error: "Failed to create assignment" });
   }
 });
 
@@ -2622,7 +2660,7 @@ app.post("/api/assignments/:id/submit", authenticateToken, async (req: any, res)
     });
     return res.status(201).json(submission);
   } catch (err: any) {
-    return res.status(500).json({ error: "Failed to submit assignment", detail: err?.message });
+    return res.status(500).json({ error: "Failed to submit assignment" });
   }
 });
 
@@ -2641,6 +2679,12 @@ app.get("/api/assignments/:id/my-submission", authenticateToken, async (req: any
 app.get("/api/assignments/:id/submissions", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   try {
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: req.params.id },
+      include: { course: { select: { lecturerId: true } } },
+    });
+    if (!assignment || assignment.course.lecturerId !== req.user.id)
+      return res.status(403).json({ error: "Access denied." });
     const subs = await prisma.assignmentSubmission.findMany({
       where: { assignmentId: req.params.id },
       include: { student: { select: { fullName: true, regNumber: true } } },
@@ -2778,7 +2822,7 @@ app.post("/api/user/avatar", authenticateToken, async (req: any, res) => {
 });
 
 // Fetch Avatar Base64 — authenticated; users can only fetch their own avatar
-app.get("/api/user/avatar/:role/:id", async (req: any, res) => {
+app.get("/api/user/avatar/:role/:id", authenticateToken, async (req: any, res) => {
   const { role, id } = req.params;
   if (role !== "lecturer" && role !== "student") {
     return res.status(400).json({ error: "Invalid role." });
@@ -3473,8 +3517,9 @@ app.post("/api/threads/:id/replies", authenticateToken, async (req: any, res) =>
 app.patch("/api/threads/:id/pin", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
   try {
-    const thread = await prisma.discussionThread.findUnique({ where: { id: req.params.id } });
+    const thread = await prisma.discussionThread.findUnique({ where: { id: req.params.id }, include: { course: { select: { lecturerId: true } } } });
     if (!thread) return res.status(404).json({ error: "Thread not found" });
+    if (thread.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     const updated = await prisma.discussionThread.update({ where: { id: req.params.id }, data: { isPinned: !thread.isPinned } });
     return res.json(updated);
   } catch { return res.status(500).json({ error: "Failed to update thread" }); }
