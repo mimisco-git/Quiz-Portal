@@ -1041,7 +1041,8 @@ app.post("/api/quiz/submit", authenticateToken, async (req: any, res) => {
 
     finalScore = questions.length > 0 ? (correctCount / questions.length) * 100 : 0;
 
-    // Update attempt
+    // Update attempt — include violation count from client if provided
+    const violationsFromClient = typeof req.body.violations === "number" ? Math.max(0, Math.min(req.body.violations, 100)) : undefined;
     const updatedAttempt = await prisma.studentAttempt.update({
       where: { id: attemptId },
       data: {
@@ -1049,6 +1050,7 @@ app.post("/api/quiz/submit", authenticateToken, async (req: any, res) => {
         submittedAt: now,
         score: timedOut ? Math.max(0, finalScore - 10) : finalScore, // minor penalty or lock score
         answersJson: JSON.stringify(submissionAnswers),
+        ...(violationsFromClient !== undefined ? { violations: violationsFromClient } : {}),
       },
     });
 
@@ -3379,6 +3381,162 @@ async function startServer() {
     console.log(`Server is running at http://localhost:${PORT}`);
   });
 }
+
+// -------------------------------------------------------------
+// DISCUSSION BOARD
+// -------------------------------------------------------------
+
+// List threads for a course (student filtered by dept+year, lecturer by ownership)
+app.get("/api/courses/:id/threads", authenticateToken, async (req: any, res) => {
+  try {
+    const threads = await prisma.discussionThread.findMany({
+      where: { courseId: req.params.id },
+      include: { _count: { select: { replies: true } } },
+      orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+    });
+    return res.json(threads);
+  } catch { return res.status(500).json({ error: "Failed to fetch threads" }); }
+});
+
+// Create thread
+app.post("/api/courses/:id/threads", authenticateToken, async (req: any, res) => {
+  const { title, body } = req.body;
+  if (!title?.trim() || !body?.trim()) return res.status(400).json({ error: "Title and body are required" });
+  try {
+    const authorName = req.user.role === "lecturer"
+      ? (await prisma.lecturer.findUnique({ where: { id: req.user.id }, select: { name: true } }))?.name ?? "Lecturer"
+      : (await prisma.student.findUnique({ where: { id: req.user.id }, select: { fullName: true } }))?.fullName ?? "Student";
+    const thread = await prisma.discussionThread.create({
+      data: { courseId: req.params.id, authorId: req.user.id, authorRole: req.user.role, authorName, title: title.trim(), body: body.trim() },
+    });
+    return res.status(201).json(thread);
+  } catch { return res.status(500).json({ error: "Failed to create thread" }); }
+});
+
+// Get single thread with replies
+app.get("/api/threads/:id", authenticateToken, async (req: any, res) => {
+  try {
+    const thread = await prisma.discussionThread.findUnique({
+      where: { id: req.params.id },
+      include: { replies: { orderBy: { createdAt: "asc" } } },
+    });
+    if (!thread) return res.status(404).json({ error: "Thread not found" });
+    return res.json(thread);
+  } catch { return res.status(500).json({ error: "Failed to fetch thread" }); }
+});
+
+// Post reply
+app.post("/api/threads/:id/replies", authenticateToken, async (req: any, res) => {
+  const { body } = req.body;
+  if (!body?.trim()) return res.status(400).json({ error: "Reply body is required" });
+  try {
+    const thread = await prisma.discussionThread.findUnique({ where: { id: req.params.id } });
+    if (!thread) return res.status(404).json({ error: "Thread not found" });
+    const authorName = req.user.role === "lecturer"
+      ? (await prisma.lecturer.findUnique({ where: { id: req.user.id }, select: { name: true } }))?.name ?? "Lecturer"
+      : (await prisma.student.findUnique({ where: { id: req.user.id }, select: { fullName: true } }))?.fullName ?? "Student";
+    const reply = await prisma.discussionReply.create({
+      data: { threadId: req.params.id, authorId: req.user.id, authorRole: req.user.role, authorName, body: body.trim() },
+    });
+    return res.status(201).json(reply);
+  } catch { return res.status(500).json({ error: "Failed to post reply" }); }
+});
+
+// Pin/unpin thread (lecturer only)
+app.patch("/api/threads/:id/pin", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const thread = await prisma.discussionThread.findUnique({ where: { id: req.params.id } });
+    if (!thread) return res.status(404).json({ error: "Thread not found" });
+    const updated = await prisma.discussionThread.update({ where: { id: req.params.id }, data: { isPinned: !thread.isPinned } });
+    return res.json(updated);
+  } catch { return res.status(500).json({ error: "Failed to update thread" }); }
+});
+
+// Delete thread or reply (own posts, or lecturer for any)
+app.delete("/api/threads/:id", authenticateToken, async (req: any, res) => {
+  try {
+    const thread = await prisma.discussionThread.findUnique({ where: { id: req.params.id } });
+    if (!thread) return res.status(404).json({ error: "Thread not found" });
+    if (thread.authorId !== req.user.id && req.user.role !== "lecturer") return res.status(403).json({ error: "Access denied" });
+    await prisma.discussionThread.delete({ where: { id: req.params.id } });
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: "Failed to delete thread" }); }
+});
+
+// List all threads across courses the user can access (for dashboard discussions tab)
+app.get("/api/discussions", authenticateToken, async (req: any, res) => {
+  try {
+    let courseIds: string[] = [];
+    if (req.user.role === "student") {
+      const { depts, year } = await getStudentFilter(req.user.id);
+      const courses = await prisma.course.findMany({
+        where: {
+          AND: [
+            { OR: [{ departmentId: null }, { department: { name: { in: depts } } }] },
+            { OR: [{ targetYear: null }, { targetYear: year }] },
+          ],
+        },
+        select: { id: true },
+      });
+      courseIds = courses.map(c => c.id);
+    } else {
+      const courses = await prisma.course.findMany({ where: { lecturerId: req.user.id }, select: { id: true } });
+      courseIds = courses.map(c => c.id);
+    }
+    const threads = await prisma.discussionThread.findMany({
+      where: { courseId: { in: courseIds } },
+      include: { course: { select: { code: true, title: true } }, _count: { select: { replies: true } } },
+      orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+      take: 100,
+    });
+    return res.json(threads);
+  } catch { return res.status(500).json({ error: "Failed to fetch discussions" }); }
+});
+
+// -------------------------------------------------------------
+// QUESTION BANK
+// -------------------------------------------------------------
+
+app.get("/api/question-bank", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { topic } = req.query;
+  try {
+    const questions = await prisma.bankQuestion.findMany({
+      where: { lecturerId: req.user.id, ...(topic ? { topic: { contains: String(topic) } } : {}) },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.json(questions);
+  } catch { return res.status(500).json({ error: "Failed to fetch question bank" }); }
+});
+
+app.post("/api/question-bank", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { questions, topic } = req.body;
+  if (!Array.isArray(questions) || questions.length === 0) return res.status(400).json({ error: "questions array required" });
+  try {
+    const created = await prisma.bankQuestion.createMany({
+      data: questions.map((q: any) => ({
+        lecturerId: req.user.id,
+        text: String(q.text || ""),
+        optionsJson: typeof q.optionsJson === "string" ? q.optionsJson : JSON.stringify(q.options ?? []),
+        correctOption: String(q.correctOption || ""),
+        topic: topic ? String(topic).trim() : null,
+      })),
+    });
+    return res.status(201).json({ saved: created.count });
+  } catch { return res.status(500).json({ error: "Failed to save to question bank" }); }
+});
+
+app.delete("/api/question-bank/:id", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const q = await prisma.bankQuestion.findUnique({ where: { id: req.params.id } });
+    if (!q || q.lecturerId !== req.user.id) return res.status(404).json({ error: "Not found" });
+    await prisma.bankQuestion.delete({ where: { id: req.params.id } });
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: "Failed to delete" }); }
+});
 
 // Global JSON error handler — 4-param signature required for Express error middleware
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

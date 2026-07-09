@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import CalendarView from "./CalendarView";
+import DiscussionBoard from "./DiscussionBoard";
+import OnboardingTour from "./OnboardingTour";
+import MathText from "./MathText";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import MarkdownView from "./MarkdownView";
 import UserAvatar from "./UserAvatar";
@@ -42,7 +45,7 @@ function formatCountdown(target: Date): string {
 }
 
 export default function StudentDashboard({ token, user, theme, onToggleTheme, onLogout }: StudentDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "assignments" | "history" | "calendar">("notes");
+  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "assignments" | "history" | "calendar" | "discussions">("notes");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [periodTick, setPeriodTick] = useState(0);
   const [currentYear, setCurrentYear] = useState(user.year);
@@ -103,6 +106,31 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [assignmentSubmissionHistory, setAssignmentSubmissionHistory] = useState<any[]>([]);
   const [gradeFilter, setGradeFilter] = useState<"all" | "quiz" | "exam" | "assignment">("all");
   const [expandedGradeId, setExpandedGradeId] = useState<string | null>(null);
+
+  // Onboarding tour
+  const [showTour, setShowTour] = useState<boolean>(() => {
+    try { return !localStorage.getItem("tour_done_student"); } catch { return false; }
+  });
+
+  // Study streak
+  const [streak, setStreak] = useState<number>(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem("study_streak") || "{}");
+      const today = new Date().toDateString();
+      if (s.lastDate === today) return s.count ?? 1;
+      const yesterday = new Date(Date.now() - 86400000).toDateString();
+      if (s.lastDate === yesterday) return s.count ?? 1;
+      return 0;
+    } catch { return 0; }
+  });
+
+  // Proctoring violation counter for active quiz
+  const [violations, setViolations] = useState(0);
+  const [showViolationWarning, setShowViolationWarning] = useState(false);
+  const violationsRef = useRef(0);
+
+  // Offline indicator
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   const fetchAllLiveSessions = async () => {
     try {
@@ -457,6 +485,25 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       .then(r => r.ok ? r.json() : null)
       .then(p => { if (p) { setCurrentDepartment(p.department); setAdditionalDepts(p.additionalDepartments || []); } })
       .catch(() => {});
+
+    // Update study streak on login
+    try {
+      const raw = JSON.parse(localStorage.getItem("study_streak") || "{}");
+      const today = new Date().toDateString();
+      const yesterday = new Date(Date.now() - 86400000).toDateString();
+      let newCount = 1;
+      if (raw.lastDate === today) { newCount = raw.count ?? 1; }
+      else if (raw.lastDate === yesterday) { newCount = (raw.count ?? 0) + 1; }
+      localStorage.setItem("study_streak", JSON.stringify({ lastDate: today, count: newCount }));
+      setStreak(newCount);
+    } catch {}
+
+    // Online/offline listeners
+    const goOffline = () => setIsOffline(true);
+    const goOnline  = () => setIsOffline(false);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online",  goOnline);
+    return () => { window.removeEventListener("offline", goOffline); window.removeEventListener("online", goOnline); };
   }, []);
 
   useEffect(() => {
@@ -615,6 +662,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       const initialSeconds = quiz.durationMinutes * 60;
       setRemainingSeconds(initialSeconds);
       startTimerSystem(data.attempt.id, initialSeconds);
+      startProctoring(data.attempt.id, () => handleAutoSubmitBackground(data.attempt.id));
     } catch (err: any) {
       setSubmitError(err.message);
     }
@@ -671,6 +719,42 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const stopTimerSystem = () => {
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
+  };
+
+  const proctoringCleanupRef = useRef<(() => void) | null>(null);
+
+  const startProctoring = (attemptId: string, autoSubmitFn: () => void) => {
+    violationsRef.current = 0;
+    setViolations(0);
+
+    const handleViolation = () => {
+      violationsRef.current += 1;
+      setViolations(violationsRef.current);
+      setShowViolationWarning(true);
+      if (violationsRef.current >= 3) {
+        document.removeEventListener("visibilitychange", handleVis);
+        window.removeEventListener("blur", handleBlur);
+        autoSubmitFn();
+      }
+    };
+    const handleVis = () => { if (document.visibilityState === "hidden") handleViolation(); };
+    const handleBlur = () => handleViolation();
+
+    document.addEventListener("visibilitychange", handleVis);
+    window.addEventListener("blur", handleBlur);
+
+    proctoringCleanupRef.current = () => {
+      document.removeEventListener("visibilitychange", handleVis);
+      window.removeEventListener("blur", handleBlur);
+    };
+  };
+
+  const stopProctoring = () => {
+    proctoringCleanupRef.current?.();
+    proctoringCleanupRef.current = null;
+    violationsRef.current = 0;
+    setViolations(0);
+    setShowViolationWarning(false);
   };
 
   const triggerQuizExpired = (attemptId: string) => {
@@ -743,6 +827,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     setExamResult(pendingExamResult);
     setShowExamExpiredModal(false);
     setPendingExamResult(null);
+    stopProctoring();
     setActiveQuiz(null);
     setActiveAttempt(null);
     fetchAttempts();
@@ -760,7 +845,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     setSkippedCount(0);
     setShowSubmitConfirm(false);
     try {
-      const body: any = { attemptId: activeAttempt.id, answers: selectedAnswers };
+      const body: any = { attemptId: activeAttempt.id, answers: selectedAnswers, violations: violationsRef.current };
       if (forceSkipped) body.confirmSkipped = true;
 
       const res = await fetch("/api/quiz/submit", {
@@ -786,6 +871,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       }
 
       stopTimerSystem();
+      stopProctoring();
       try { localStorage.removeItem(`exam_draft_${activeAttempt.id}`); } catch { /* ignore */ }
       setActiveQuiz(null);
       setActiveAttempt(null);
@@ -945,6 +1031,38 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+        {/* Proctoring violation warning */}
+        <AnimatePresence>
+          {showViolationWarning && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+              onClick={() => setShowViolationWarning(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, y: -20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9 }}
+                transition={{ type: "spring", stiffness: 360, damping: 28 }}
+                className="bg-red-950 border border-red-700/60 rounded-2xl p-6 max-w-sm w-full text-center"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="text-4xl mb-3">⚠️</div>
+                <h2 className="text-[16px] font-bold text-white mb-1">Tab-switch Detected</h2>
+                <p className="text-[12.5px] text-red-300 mb-1">
+                  This is warning <strong className="text-white">{violations} of 3</strong>.
+                </p>
+                <p className="text-[12px] text-red-400 mb-4">
+                  {violations >= 3 ? "Your quiz has been auto-submitted." : "A third violation will automatically submit your quiz."}
+                </p>
+                {violations < 3 && (
+                  <button onClick={() => setShowViolationWarning(false)}
+                    className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white text-[13px] font-bold rounded-xl transition cursor-pointer">
+                    Return to Quiz
+                  </button>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="sticky top-0 z-20 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800/80 px-6 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-[12px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-900/40 px-2.5 py-1 rounded-lg uppercase tracking-widest font-bold">
@@ -976,6 +1094,12 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 {autoSaveStatus === "saving" ? "Saving…" : "Saved"}
               </div>
             )}
+            {violations > 0 && (
+              <div className="flex items-center gap-1.5 border-l border-slate-700/50 pl-3 text-[11px] font-mono text-red-400 uppercase tracking-wider">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                {violations}/3 warn
+              </div>
+            )}
           </div>
         </div>
 
@@ -1003,7 +1127,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       {qIdx + 1}
                     </span>
                     <div className="space-y-3.5 w-full">
-                      <h3 className="text-[13.5px] font-semibold text-slate-100 leading-relaxed">{q.text}</h3>
+                      <h3 className="text-[13.5px] font-semibold text-slate-100 leading-relaxed"><MathText text={q.text} /></h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         {options.map((opt) => {
                           const isSelected = selectedAnswers[q.id] === opt;
@@ -1023,7 +1147,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                               }`}>
                                 {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
                               </span>
-                              <span className="flex-1">{opt}</span>
+                              <span className="flex-1"><MathText text={opt} /></span>
                             </button>
                           );
                         })}
@@ -1172,6 +1296,14 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   return (
     <div className="flex h-screen overflow-hidden apple-window-bg dark:bg-[#141416] font-sans relative">
 
+      {/* Onboarding tour — shown once to new users */}
+      {showTour && (
+        <OnboardingTour role="student" onDone={() => {
+          setShowTour(false);
+          try { localStorage.setItem("tour_done_student", "1"); } catch { /* noop */ }
+        }} />
+      )}
+
       {/* Subtle radial bg gradients — barely visible, add depth */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div style={{ position: "absolute", width: 800, height: 800, top: -200, right: -150, background: "radial-gradient(ellipse at center, rgba(10,148,99,0.055) 0%, transparent 62%)" }} />
@@ -1236,6 +1368,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             { id: "assignments",    icon: Pencil,        label: "Assignments",  live: false },
             { id: "history",        icon: ClipboardList, label: "My Grades",    live: false },
             { id: "calendar",       icon: Calendar,      label: "Calendar",     live: false },
+            { id: "discussions",    icon: MessageSquare, label: "Discussions",  live: false },
             { id: "live-classroom", icon: Radio,         label: "Live Class",   live: true  },
           ].map((item) => {
             const isActive = activeTab === (item.id as typeof activeTab);
@@ -1431,6 +1564,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 { id: "assignments",    icon: Pencil,        label: "Assignments" },
                 { id: "history",        icon: ClipboardList, label: "My Grades"   },
                 { id: "calendar",       icon: Calendar,      label: "Calendar"    },
+                { id: "discussions",    icon: MessageSquare, label: "Discussions" },
                 { id: "live-classroom", icon: Radio,         label: "Live Class"  },
               ].map((item) => {
                 const isActive = activeTab === (item.id as typeof activeTab);
@@ -1539,12 +1673,25 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               : activeTab === "assignments" ? "Assignments"
               : activeTab === "history" ? "My Grades"
               : activeTab === "calendar" ? "Calendar"
+              : activeTab === "discussions" ? "Discussions"
               : "Virtual Classroom"}
           </h1>
           <div className="flex items-center gap-1">
             {selectedCourse && (
               <span className="hidden md:inline px-2.5 py-1 rounded-full bg-black/[0.05] dark:bg-white/[0.07] text-[11px] font-mono font-bold text-[#6e6e73] dark:text-white/45 uppercase tracking-wider">
                 {selectedCourse.code}
+              </span>
+            )}
+            {/* Offline indicator */}
+            {isOffline && (
+              <span className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-[10.5px] font-bold text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40">
+                <Zap className="h-3 w-3" /> Offline
+              </span>
+            )}
+            {/* Streak badge */}
+            {streak >= 2 && (
+              <span className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full bg-orange-50 dark:bg-orange-950/20 text-[10.5px] font-bold text-orange-600 dark:text-orange-400 border border-orange-100 dark:border-orange-900/30">
+                <Flame className="h-3 w-3" /> {streak}d
               </span>
             )}
             {/* Push notification subscription (hidden once granted) */}
@@ -2598,6 +2745,42 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                   </div>
                 )}
 
+                {/* Trend chart — score over time for graded assessments */}
+                {graded.length >= 2 && (() => {
+                  const pts = graded.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                  const W = 340, H = 90, PAD = 12;
+                  const minP = 0, maxP = 100;
+                  const xStep = (W - PAD * 2) / (pts.length - 1);
+                  const toY = (p: number) => PAD + (1 - (p - minP) / (maxP - minP)) * (H - PAD * 2);
+                  const toX = (i: number) => PAD + i * xStep;
+                  const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(p.pct ?? 0).toFixed(1)}`).join(" ");
+                  const fillD = `${pathD} L${toX(pts.length - 1).toFixed(1)},${(H - PAD).toFixed(1)} L${PAD},${(H - PAD).toFixed(1)} Z`;
+                  return (
+                    <div className="apple-card px-5 py-4">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/35 mb-3">Score Trend</p>
+                      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" style={{ height: 90 }}>
+                        {/* 50% line */}
+                        <line x1={PAD} y1={toY(50)} x2={W - PAD} y2={toY(50)} stroke="currentColor" strokeWidth="0.5" strokeDasharray="3,3" className="text-black/10 dark:text-white/10" />
+                        <defs>
+                          <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                            <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+                          </linearGradient>
+                        </defs>
+                        <path d={fillD} fill="url(#trendFill)" />
+                        <path d={pathD} fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                        {pts.map((p, i) => (
+                          <circle key={i} cx={toX(i)} cy={toY(p.pct ?? 0)} r="3" fill="#10b981" />
+                        ))}
+                      </svg>
+                      <div className="flex justify-between mt-1">
+                        <span className="text-[9.5px] text-[#8e8e93] dark:text-white/30 truncate max-w-[45%]">{pts[0].title}</span>
+                        <span className="text-[9.5px] text-[#8e8e93] dark:text-white/30 truncate max-w-[45%] text-right">{pts[pts.length - 1].title}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Filter pills + list */}
                 <div className="apple-card overflow-hidden">
                   <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center gap-2 flex-wrap">
@@ -2775,6 +2958,11 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
           {/* ── CALENDAR TAB ── */}
           {activeTab === "calendar" && <CalendarView token={token} />}
+
+          {/* ── DISCUSSIONS TAB ── */}
+          {activeTab === "discussions" && (
+            <DiscussionBoard token={token} userId={user.id} userRole="student" userName={user.fullName} />
+          )}
 
           </div>{/* /max-w-5xl */}
         </main>

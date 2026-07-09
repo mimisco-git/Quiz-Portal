@@ -1,4 +1,8 @@
+import React from "react";
 import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 interface MarkdownViewProps {
   content: string;
@@ -8,6 +12,8 @@ export default function MarkdownView({ content }: MarkdownViewProps) {
   return (
     <div className="prose prose-slate max-w-none dark:prose-invert">
       <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
         components={{
           h1: ({ children }) => (
             <h1 className="text-2xl font-bold tracking-tight text-gray-900 mt-6 mb-4 font-sans border-b border-gray-100 pb-2">

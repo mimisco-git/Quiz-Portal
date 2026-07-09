@@ -8,6 +8,8 @@ import MarkdownView from "./MarkdownView";
 import AvatarModal from "./AvatarModal";
 import { motion, AnimatePresence } from "motion/react";
 import SlideView from "./SlideView";
+import DiscussionBoard from "./DiscussionBoard";
+import OnboardingTour from "./OnboardingTour";
 
 interface LecturerDashboardProps {
   token: string;
@@ -22,7 +24,10 @@ interface LecturerDashboardProps {
 }
 
 export default function LecturerDashboard({ token, user, theme, onToggleTheme, onLogout }: LecturerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture" | "exams" | "assignments" | "announcements" | "analytics" | "calendar">("gradebook");
+  const [activeTab, setActiveTab] = useState<"gradebook" | "notes" | "quizzes" | "courses" | "departments" | "live-lecture" | "exams" | "assignments" | "announcements" | "analytics" | "calendar" | "discussions">("gradebook");
+  const [showTour, setShowTour] = useState<boolean>(() => {
+    try { return !localStorage.getItem("tour_done_lecturer"); } catch { return false; }
+  });
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [attempts, setAttempts] = useState<StudentAttempt[]>([]);
@@ -67,6 +72,11 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [aiGenCount, setAiGenCount] = useState("10");
   const [aiGenLoading, setAiGenLoading] = useState(false);
   const [aiGenError, setAiGenError] = useState<string | null>(null);
+
+  // Question bank
+  const [bankOpen, setBankOpen] = useState(false);
+  const [bankQuestions, setBankQuestions] = useState<any[]>([]);
+  const [bankLoading, setBankLoading] = useState(false);
 
   // Edit quiz
   const [editingQuiz, setEditingQuiz] = useState<any | null>(null);
@@ -760,6 +770,35 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
+  const fetchBank = async () => {
+    setBankLoading(true);
+    try {
+      const res = await fetch("/api/question-bank", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setBankQuestions(await res.json());
+    } finally {
+      setBankLoading(false);
+    }
+  };
+
+  const saveQuestionToBank = async (q: { text: string; options: string[]; correctOption: string }, topic?: string) => {
+    await fetch("/api/question-bank", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ text: q.text, optionsJson: JSON.stringify(q.options), correctOption: q.correctOption, topic: topic ?? "" }),
+    });
+    showSuccess("Question saved to bank!");
+  };
+
+  const addFromBank = (bq: any) => {
+    const opts: string[] = JSON.parse(bq.optionsJson);
+    setQuizQuestions(prev => {
+      if (prev.length === 1 && !prev[0].text.trim()) {
+        return [{ uid: crypto.randomUUID(), text: bq.text, options: opts, correctOption: bq.correctOption }];
+      }
+      return [...prev, { uid: crypto.randomUUID(), text: bq.text, options: opts, correctOption: bq.correctOption }];
+    });
+  };
+
   const openEditQuiz = (quiz: any) => {
     setEditingQuiz(quiz);
     setEditQuizTitle(quiz.title);
@@ -1366,6 +1405,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     departments: "Departments",
     analytics: "Analytics",
     calendar: "Calendar",
+    discussions: "Discussions",
   };
 
   // Badge showing which dept/year students will receive a piece of content
@@ -1389,6 +1429,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   return (
     <div className="flex h-screen overflow-hidden apple-window-bg dark:bg-[#141416] font-sans relative">
+
+      {/* Onboarding tour — shown once to new lecturers */}
+      {showTour && (
+        <OnboardingTour role="lecturer" onDone={() => {
+          setShowTour(false);
+          try { localStorage.setItem("tour_done_lecturer", "1"); } catch { /* noop */ }
+        }} />
+      )}
 
       {/* Subtle radial bg gradients */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -1454,6 +1502,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {navBtn("exams",        "Written Exams",  <FileText className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("assignments",  "Assignments",    <Pencil className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("courses",       "Courses",        <BookOpen className="h-4 w-4" strokeWidth={1.6} />)}
+          {navBtn("discussions",   "Discussions",    <MessageSquare className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("announcements","Announcements",  <Megaphone className="h-4 w-4" strokeWidth={1.6} />)}
           {navBtn("departments",  "Departments",    <Users className="h-4 w-4" strokeWidth={1.6} />)}
 
@@ -2347,8 +2396,62 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                             <><Upload className="h-3.5 w-3.5" /> Upload Word Doc</>
                           )}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => { setBankOpen(o => !o); if (!bankOpen) fetchBank(); }}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-semibold rounded-[8px] transition cursor-pointer border ${
+                            bankOpen
+                              ? "bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700/50 text-blue-700 dark:text-blue-400"
+                              : "border-blue-300 dark:border-blue-700/50 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                          }`}
+                        >
+                          <Layers className="h-3.5 w-3.5" />
+                          My Bank
+                        </button>
                       </div>
                     </div>
+
+                    {/* Question bank panel */}
+                    <AnimatePresence>
+                      {bankOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="p-4 rounded-[12px] border border-blue-200 dark:border-blue-800/40 bg-blue-50/60 dark:bg-blue-950/20 space-y-2">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Layers className="h-3.5 w-3.5 text-blue-500" />
+                              <span className="text-[11.5px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">Question Bank ({bankQuestions.length})</span>
+                            </div>
+                            {bankLoading ? (
+                              <div className="flex items-center gap-2 text-[12px] text-[#6e6e73] dark:text-white/40 py-2">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+                              </div>
+                            ) : bankQuestions.length === 0 ? (
+                              <p className="text-[12px] text-[#6e6e73] dark:text-white/40 italic py-1">No saved questions yet. Use "Save to Bank" on any question below.</p>
+                            ) : (
+                              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                                {bankQuestions.map((bq: any) => (
+                                  <div key={bq.id} className="flex items-start justify-between gap-3 p-2.5 rounded-[8px] bg-white/60 dark:bg-white/[0.04] border border-blue-100 dark:border-blue-900/30">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-[12px] font-medium text-[#1d1d1f] dark:text-white/80 truncate">{bq.text}</p>
+                                      {bq.topic && <p className="text-[10px] text-[#6e6e73] dark:text-white/35 mt-0.5">{bq.topic}</p>}
+                                    </div>
+                                    <button type="button" onClick={() => addFromBank(bq)}
+                                      className="flex-shrink-0 px-2.5 py-1 text-[11px] font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-[6px] transition cursor-pointer">
+                                      Add
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
                     {/* AI generation panel */}
                     <AnimatePresence>
@@ -2411,11 +2514,19 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       <div key={q.uid} className="p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] space-y-3">
                         <div className="flex items-center justify-between pb-1.5 border-b border-black/[0.06] dark:border-white/[0.06]">
                           <span className="text-[12px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Question {qIdx + 1}</span>
-                          {quizQuestions.length > 1 && (
-                            <button type="button" onClick={() => handleRemoveQuestionRow(qIdx)} className="p-1 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600 transition rounded-[8px] cursor-pointer">
-                              <Trash2 className="h-3.5 w-3.5" />
+                          <div className="flex items-center gap-1.5">
+                            <button type="button"
+                              onClick={() => saveQuestionToBank(q)}
+                              title="Save to Question Bank"
+                              className="flex items-center gap-1 px-2 py-1 text-[10.5px] font-semibold border border-blue-200 dark:border-blue-800/40 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-[7px] transition cursor-pointer">
+                              <Save className="h-3 w-3" /> Bank
                             </button>
-                          )}
+                            {quizQuestions.length > 1 && (
+                              <button type="button" onClick={() => handleRemoveQuestionRow(qIdx)} className="p-1 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600 transition rounded-[8px] cursor-pointer">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <label className={lbl}>Question Text</label>
@@ -2816,6 +2927,11 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── CALENDAR TAB ── */}
           {activeTab === "calendar" && <CalendarView token={token} />}
+
+          {/* ── DISCUSSIONS TAB ── */}
+          {activeTab === "discussions" && (
+            <DiscussionBoard token={token} userId={user.id} userRole="lecturer" userName={user.name} />
+          )}
 
           {/* ── ANNOUNCEMENTS TAB ── */}
           {activeTab === "announcements" && (

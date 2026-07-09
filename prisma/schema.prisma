@@ -17,6 +17,7 @@ model Lecturer {
   departments   String         @default("[]") // JSON array of dept names this lecturer teaches
   courses       Course[]
   announcements Announcement[]
+  bankQuestions BankQuestion[]
 }
 
 model Student {
@@ -57,6 +58,7 @@ model Course {
   exams         Exam[]
   assignments   Assignment[]
   announcements Announcement[]
+  discussions   DiscussionThread[]
 }
 
 model Exam {
@@ -131,6 +133,7 @@ model StudentAttempt {
   isCompleted Boolean   @default(false)
   score       Float?    // Calculated score percentage or count
   answersJson String?   // Serialized JSON of selected answers: {"questionId": "answer"}
+  violations  Int       @default(0) // Proctoring: tab-switch / focus-loss count
 }
 
 model LectureSession {
@@ -262,4 +265,40 @@ model PushSubscription {
   p256dh    String
   auth      String
   createdAt DateTime @default(now())
+}
+
+model DiscussionThread {
+  id         String            @id @default(uuid())
+  courseId   String
+  course     Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  authorId   String
+  authorRole String            // "student" | "lecturer"
+  authorName String
+  title      String
+  body       String
+  isPinned   Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+  replies    DiscussionReply[]
+}
+
+model DiscussionReply {
+  id         String           @id @default(uuid())
+  threadId   String
+  thread     DiscussionThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorId   String
+  authorRole String
+  authorName String
+  body       String
+  createdAt  DateTime         @default(now())
+}
+
+model BankQuestion {
+  id            String   @id @default(uuid())
+  lecturerId    String
+  lecturer      Lecturer @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  text          String
+  optionsJson   String   // JSON array of 4 option strings
+  correctOption String
+  topic         String?  // Optional tag for filtering
+  createdAt     DateTime @default(now())
 }
