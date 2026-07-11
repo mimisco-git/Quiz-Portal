@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap, Star } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap, Star, WifiOff } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import CalendarView from "./CalendarView";
 import DiscussionBoard from "./DiscussionBoard";
@@ -397,6 +397,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const periodicSaveRef = useRef<NodeJS.Timeout | null>(null);
 
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const [syncStatus, setSyncStatus] = useState<"synced" | "syncing" | "error">("synced");
@@ -628,6 +629,17 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       setRemainingSeconds(initialSeconds);
       startTimerSystem(data.attempt.id, initialSeconds);
       startProctoring(data.attempt.id, () => handleAutoSubmitBackground(data.attempt.id));
+
+      // Periodic autosave every 10 s — captures current answers even without input changes
+      if (periodicSaveRef.current) clearInterval(periodicSaveRef.current);
+      periodicSaveRef.current = setInterval(() => {
+        setSelectedAnswers((prev) => {
+          if (Object.keys(prev).length > 0) {
+            try { localStorage.setItem(`exam_draft_${data.attempt.id}`, JSON.stringify(prev)); } catch { /* storage unavailable */ }
+          }
+          return prev;
+        });
+      }, 10_000);
     } catch (err: any) {
       setSubmitError(err.message);
     }
@@ -684,6 +696,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const stopTimerSystem = () => {
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
+    if (periodicSaveRef.current) clearInterval(periodicSaveRef.current);
   };
 
   const proctoringCleanupRef = useRef<(() => void) | null>(null);
@@ -1084,6 +1097,24 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             )}
           </div>
         </div>
+
+        {/* Offline banner — shown during active exam when network drops */}
+        <AnimatePresence>
+          {isOffline && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="overflow-hidden"
+            >
+              <div className="bg-amber-950/80 border-b border-amber-800/60 px-6 py-2.5 flex items-center gap-2.5 text-amber-300 text-[12px] font-semibold">
+                <WifiOff className="h-4 w-4 flex-shrink-0" />
+                <span>No network — your answers are saved locally and will be submitted when connection restores.</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="flex-1 overflow-y-auto max-w-3xl w-full mx-auto px-4 sm:px-6 py-8">
           {submitError && (

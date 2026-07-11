@@ -1,4 +1,4 @@
-const CACHE = "quizportal-v2";
+const CACHE = "quizportal-v3";
 const NOTES_CACHE = "quizportal-notes-v1";
 const PRECACHE = ["/", "/index.html"];
 // API paths to cache for offline note reading (network-first, fall back to cache)
@@ -19,6 +19,24 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
+
+  // Cache-first for Vite-built assets (JS/CSS/images with hash filenames) — fast offline load
+  if (url.pathname.startsWith("/assets/") || url.pathname.match(/\.(js|css|woff2?|ttf|otf)$/)) {
+    e.respondWith(
+      caches.open(CACHE).then(async (cache) => {
+        const cached = await cache.match(e.request);
+        if (cached) return cached;
+        try {
+          const res = await fetch(e.request);
+          if (res.ok) cache.put(e.request, res.clone());
+          return res;
+        } catch {
+          return cached || new Response("", { status: 503 });
+        }
+      })
+    );
+    return;
+  }
 
   // Network-first for note/course APIs — cache successful responses for offline fallback
   if (OFFLINE_API.some(p => url.pathname.startsWith(p))) {

@@ -493,6 +493,52 @@ app.post("/api/auth/lecturer-login", authLimiter, async (req, res) => {
   }
 });
 
+// Demo Login — returns a short-lived token for a pre-seeded read-only demo account
+app.post("/api/auth/demo-login", authLimiter, async (req, res) => {
+  const { role } = req.body;
+  try {
+    if (role === "student") {
+      const hashedAnswer = await bcrypt.hash("demo", 10);
+      const demo = await prisma.student.upsert({
+        where: { regNumber: "DEMO/0000/00001" },
+        update: {},
+        create: {
+          fullName: "Demo Student",
+          email: "demo.student@futo.edu.ng",
+          regNumber: "DEMO/0000/00001",
+          department: "Computer Science",
+          year: "Year 1",
+          securityQuestion: "What is demo?",
+          securityAnswer: hashedAnswer,
+        },
+      });
+      const token = jwt.sign({ id: demo.id, role: "student", regNumber: demo.regNumber }, JWT_SECRET, { expiresIn: "2h" });
+      return res.json({
+        token,
+        user: { id: demo.id, fullName: demo.fullName, regNumber: demo.regNumber, department: demo.department, year: demo.year, role: "student" },
+      });
+    }
+    if (role === "lecturer") {
+      const hashedPw = await bcrypt.hash("demo1234", 10);
+      let demo = await prisma.lecturer.findUnique({ where: { email: "demo.lecturer@futo.edu.ng" } });
+      if (!demo) {
+        demo = await prisma.lecturer.create({
+          data: { name: "Demo Lecturer", email: "demo.lecturer@futo.edu.ng", password: hashedPw },
+        });
+      }
+      const token = jwt.sign({ id: demo.id, role: "lecturer", email: demo.email }, JWT_SECRET, { expiresIn: "2h" });
+      return res.json({
+        token,
+        user: { id: demo.id, name: demo.name, email: demo.email, role: "lecturer" },
+      });
+    }
+    return res.status(400).json({ error: "Invalid role. Use 'student' or 'lecturer'." });
+  } catch (err: any) {
+    console.error("Demo login error:", err);
+    return res.status(500).json({ error: "Demo login failed. Please try again." });
+  }
+});
+
 // -------------------------------------------------------------
 // COURSE & NOTE PLATFORM API
 // -------------------------------------------------------------
