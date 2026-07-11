@@ -7,6 +7,7 @@ export interface User {
   department?: string; // For student
   year?: string;       // For student
   role: "student" | "lecturer";
+  mustChangePassword?: boolean; // For student: true if they must set a new password
 }
 
 export interface Lecturer {

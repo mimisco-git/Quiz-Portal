@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import LandingScreen from "./components/LandingScreen";
 import StudentDashboard from "./components/StudentDashboard";
 import LecturerDashboard from "./components/LecturerDashboard";
+import ForceChangePasswordScreen from "./components/ForceChangePasswordScreen";
 import { User } from "./types";
 import { motion, AnimatePresence } from "motion/react";
 import { ShieldAlert, Clock, LogOut } from "lucide-react";
@@ -220,6 +221,21 @@ export default function App() {
             transition={{ duration: 0.15 }}
           >
             <LandingScreen theme={theme} onToggleTheme={toggleTheme} onLoginSuccess={handleLoginSuccess} />
+          </motion.div>
+        ) : user.role === "student" && user.mustChangePassword ? (
+          <motion.div
+            key="force-change-password"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <ForceChangePasswordScreen
+              token={token}
+              regNumber={user.regNumber || ""}
+              onPasswordChanged={handleLoginSuccess}
+              onLogout={handleLogout}
+            />
           </motion.div>
         ) : user.role === "student" ? (
           <motion.div

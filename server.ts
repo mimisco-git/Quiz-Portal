@@ -104,6 +104,29 @@ const strictLimiter = rateLimit({
   message: { error: "Too many attempts. Please wait 1 hour before trying again." },
 });
 
+// ── Per-reg-number failed-login tracker (5 failures per 10 min) ──
+const failedLogins = new Map<string, { count: number; resetAt: number }>();
+const MAX_FAILED = 5;
+const FAILED_WINDOW_MS = 10 * 60 * 1000;
+
+function isLoginBlocked(reg: string): boolean {
+  const entry = failedLogins.get(reg);
+  if (!entry || Date.now() > entry.resetAt) return false;
+  return entry.count >= MAX_FAILED;
+}
+function recordFailedLogin(reg: string): void {
+  const now = Date.now();
+  const entry = failedLogins.get(reg);
+  if (!entry || now > entry.resetAt) {
+    failedLogins.set(reg, { count: 1, resetAt: now + FAILED_WINDOW_MS });
+  } else {
+    entry.count++;
+  }
+}
+function clearFailedLogin(reg: string): void {
+  failedLogins.delete(reg);
+}
+
 // ── Input length constants ─────────────────────────────────────
 const MAX_NAME   = 120;
 const MAX_EMAIL  = 254;
@@ -126,6 +149,14 @@ function authenticateToken(req: any, res: any, next: any) {
   jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
     if (err) {
       return res.status(403).json({ error: "Invalid or expired token" });
+    }
+    // Block all endpoints for accounts that must change their password,
+    // except the change-password endpoint itself (flagged via req._allowMustChange).
+    if (user.mustChangePassword && !req._allowMustChange) {
+      return res.status(403).json({
+        error: "Password change required. Please set a new password to continue.",
+        mustChangePassword: true,
+      });
     }
     req.user = user;
     next();
@@ -204,6 +235,7 @@ app.post("/api/auth/student-register", authLimiter, async (req, res) => {
         department: student.department,
         year: student.year,
         role: "student",
+        mustChangePassword: false,
       },
       JWT_SECRET,
       { expiresIn: "4h" }
@@ -218,6 +250,7 @@ app.post("/api/auth/student-register", authLimiter, async (req, res) => {
         department: student.department,
         year: student.year,
         role: "student",
+        mustChangePassword: false,
       },
     });
   } catch (error: any) {
@@ -226,7 +259,7 @@ app.post("/api/auth/student-register", authLimiter, async (req, res) => {
   }
 });
 
-// Student Login — reg number + password; unmigrated accounts get a SET_PASSWORD action
+// Student Login — registration number + password only
 app.post("/api/auth/student-login", authLimiter, async (req, res) => {
   const { regNumber, password } = req.body;
 
@@ -240,37 +273,61 @@ app.post("/api/auth/student-login", authLimiter, async (req, res) => {
       return res.status(400).json({ error: "Please use the Demo button to access demo accounts." });
     }
 
+    // Per-registration-number rate limit: 5 failures per 10 minutes
+    if (isLoginBlocked(normalizedReg)) {
+      return res.status(429).json({ error: "Too many failed attempts. Please wait 10 minutes before trying again." });
+    }
+
     const student = await prisma.student.findUnique({ where: { regNumber: normalizedReg } });
 
     if (!student) {
-      return res.status(404).json({ error: "Registration Number not found. Please register to access the portal." });
+      recordFailedLogin(normalizedReg);
+      return res.status(401).json({ error: "Invalid registration number or password." });
     }
 
-    // Unmigrated account — passwordHash is null, year was the old credential
-    // Tell the client to collect year + new password; do NOT issue a session token yet
-    if (student.passwordHash === null) {
-      return res.json({ action: "SET_PASSWORD" });
+    if (!student.passwordHash) {
+      // Account exists but was never given a password — treat as invalid credentials
+      recordFailedLogin(normalizedReg);
+      return res.status(401).json({ error: "Invalid registration number or password." });
     }
 
-    // Normal password login
     const valid = await bcrypt.compare(password, student.passwordHash);
     if (!valid) {
-      return res.status(401).json({ error: "Incorrect password. Please try again." });
+      recordFailedLogin(normalizedReg);
+      return res.status(401).json({ error: "Invalid registration number or password." });
     }
 
+    clearFailedLogin(normalizedReg);
+
     const token = jwt.sign(
-      { id: student.id, fullName: student.fullName, regNumber: student.regNumber, department: student.department, year: student.year, role: "student" },
+      {
+        id: student.id,
+        fullName: student.fullName,
+        regNumber: student.regNumber,
+        department: student.department,
+        year: student.year,
+        role: "student",
+        mustChangePassword: student.mustChangePassword,
+      },
       JWT_SECRET,
       { expiresIn: "4h" }
     );
 
     return res.json({
       token,
-      user: { id: student.id, fullName: student.fullName, regNumber: student.regNumber, department: student.department, year: student.year, role: "student" },
+      user: {
+        id: student.id,
+        fullName: student.fullName,
+        regNumber: student.regNumber,
+        department: student.department,
+        year: student.year,
+        role: "student",
+        mustChangePassword: student.mustChangePassword,
+      },
     });
   } catch (error: any) {
     console.error("Student login error:", error);
-    return res.status(500).json({ error: "An internal server error occurred." });
+    return res.status(500).json({ error: "Something went wrong. Please try again." });
   }
 });
 
@@ -322,6 +379,79 @@ app.post("/api/auth/student-migrate", authLimiter, async (req, res) => {
     return res.status(500).json({ error: "Password setup failed. Please try again." });
   }
 });
+
+// Forced password change — requires a valid token (even mustChangePassword=true).
+// The _allowMustChange flag on the request bypasses the authenticateToken guard.
+app.post(
+  "/api/auth/student-change-password",
+  authLimiter,
+  (req: any, _res: any, next: any) => { req._allowMustChange = true; next(); },
+  authenticateToken,
+  async (req: any, res: any) => {
+    const { newPassword, confirmPassword } = req.body;
+
+    if (!newPassword || !confirmPassword) {
+      return res.status(400).json({ error: "New password and confirmation are required." });
+    }
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: "Passwords do not match." });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    }
+    if (newPassword.length > 128) {
+      return res.status(400).json({ error: "Password is too long." });
+    }
+
+    try {
+      const student = await prisma.student.findUnique({ where: { id: req.user.id } });
+      if (!student) return res.status(404).json({ error: "Student account not found." });
+
+      // Disallow using the registration number as a password
+      if (newPassword.toUpperCase() === student.regNumber.toUpperCase()) {
+        return res.status(400).json({ error: "Your password cannot be the same as your registration number." });
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 12);
+      const updated = await prisma.student.update({
+        where: { id: student.id },
+        data:  { passwordHash, mustChangePassword: false },
+      });
+
+      clearFailedLogin(updated.regNumber);
+
+      const token = jwt.sign(
+        {
+          id: updated.id,
+          fullName: updated.fullName,
+          regNumber: updated.regNumber,
+          department: updated.department,
+          year: updated.year,
+          role: "student",
+          mustChangePassword: false,
+        },
+        JWT_SECRET,
+        { expiresIn: "4h" }
+      );
+
+      return res.json({
+        token,
+        user: {
+          id: updated.id,
+          fullName: updated.fullName,
+          regNumber: updated.regNumber,
+          department: updated.department,
+          year: updated.year,
+          role: "student",
+          mustChangePassword: false,
+        },
+      });
+    } catch (error: any) {
+      console.error("Student change-password error:", error);
+      return res.status(500).json({ error: "Something went wrong. Please try again." });
+    }
+  }
+);
 
 // Get student's security question
 app.post("/api/auth/student-get-security-question", strictLimiter, async (req, res) => {
@@ -550,22 +680,23 @@ app.post("/api/auth/demo-login", authLimiter, async (req, res) => {
       ]);
       const demo = await prisma.student.upsert({
         where: { regNumber: "DEMO/0000/00001" },
-        update: { passwordHash: demoPasswordHash },
+        update: { passwordHash: demoPasswordHash, mustChangePassword: false },
         create: {
           fullName: "Demo Student",
           email: "demo.student@futo.edu.ng",
           regNumber: "DEMO/0000/00001",
           passwordHash: demoPasswordHash,
+          mustChangePassword: false,
           department: "Computer Science",
           year: "Year 1",
           securityQuestion: "What is demo?",
           securityAnswer: hashedAnswer,
         },
       });
-      const token = jwt.sign({ id: demo.id, role: "student", regNumber: demo.regNumber }, JWT_SECRET, { expiresIn: "2h" });
+      const token = jwt.sign({ id: demo.id, role: "student", regNumber: demo.regNumber, mustChangePassword: false }, JWT_SECRET, { expiresIn: "2h" });
       return res.json({
         token,
-        user: { id: demo.id, fullName: demo.fullName, regNumber: demo.regNumber, department: demo.department, year: demo.year, role: "student" },
+        user: { id: demo.id, fullName: demo.fullName, regNumber: demo.regNumber, department: demo.department, year: demo.year, role: "student", mustChangePassword: false },
       });
     }
     if (role === "lecturer") {

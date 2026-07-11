@@ -25,7 +25,8 @@ model Student {
   fullName         String
   email            String           @unique @default("student@futo.edu.ng")
   regNumber        String           @unique // Normalized FUTO/2026/10423
-  passwordHash     String?          // null = unmigrated (legacy year-based auth still accepted for one final login)
+  passwordHash     String?          // null = account not yet migrated
+  mustChangePassword Boolean        @default(false)
   department            String           @default("Computer Science")
   additionalDepartments String           @default("[]") // JSON array of extra dept names (borrowed courses, extra year)
   year             String           @default("Year 1")
