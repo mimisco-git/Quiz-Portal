@@ -831,7 +831,7 @@ ${text.slice(0, 12000)}`;
     return res.json({ questions: parsed, count: parsed.length });
   } catch (err: any) {
     console.error("Error parsing quiz questions:", err);
-    return res.status(500).json({ error: err.message || "Failed to parse questions" });
+    return res.status(500).json({ error: "Failed to parse questions from file." });
   }
 });
 
