@@ -204,17 +204,6 @@ export default function LandingScreen({
     setStudentPassword("");
   };
 
-  const handleDemoLogin = async (role: "student" | "lecturer") => {
-    setError(null); setSuccess(null); setLoading(true);
-    try {
-      const res  = await fetch("/api/auth/demo-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role }) });
-      const data = await apiJSON(res);
-      if (!res.ok) throw new Error(data.error || "Demo login failed");
-      setSuccess("Demo access granted! Loading…");
-      setTimeout(() => onLoginSuccess(data.token, data.user), 500);
-    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
-  };
-
   /* ─── helpers ────────────────────────────────────────── */
   const yearsOptions = ["Year 1","Year 2","Year 3","Year 4","Year 5","Extra Year","Postgraduate"];
   const timeStr = clock.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -435,39 +424,6 @@ export default function LandingScreen({
                       );
                     })}
                     </div>
-
-                    {/* Demo Access */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.32, duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
-                      className="flex flex-col items-center gap-2.5"
-                    >
-                      <p className="text-white/22 text-[10.5px] font-mono uppercase tracking-[0.20em] select-none">— or explore a demo —</p>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          disabled={loading}
-                          onClick={() => handleDemoLogin("student")}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-emerald-300 border border-emerald-800/50 bg-emerald-950/30 hover:bg-emerald-950/60 hover:border-emerald-600/60 transition-all disabled:opacity-40 cursor-pointer backdrop-blur-sm"
-                        >
-                          <BookOpen className="h-3.5 w-3.5" />
-                          Demo Student
-                        </button>
-                        <button
-                          type="button"
-                          disabled={loading}
-                          onClick={() => handleDemoLogin("lecturer")}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-blue-300 border border-blue-800/50 bg-blue-950/30 hover:bg-blue-950/60 hover:border-blue-600/60 transition-all disabled:opacity-40 cursor-pointer backdrop-blur-sm"
-                        >
-                          <GraduationCap className="h-3.5 w-3.5" />
-                          Demo Lecturer
-                        </button>
-                      </div>
-                      {error && (
-                        <p className="text-red-400 text-[11px] text-center mt-1">{error}</p>
-                      )}
-                    </motion.div>
 
                     {/* Security feature badges */}
                     <motion.div

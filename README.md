@@ -12,7 +12,7 @@
 [![Prisma](https://img.shields.io/badge/Prisma-5-2d3748?style=flat-square&logo=prisma&logoColor=white)](https://www.prisma.io/)
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)](https://vercel.com/)
 
-[**Live Demo →**](https://quiz-portal.vercel.app) &nbsp;·&nbsp; [Try as Student](#demo-access) &nbsp;·&nbsp; [Try as Lecturer](#demo-access)
+[**Live App →**](https://quiz-portal.vercel.app)
 
 </div>
 
@@ -25,21 +25,6 @@
 QuizOS is a full-stack academic portal built to replace paper-based and informal CBT processes at Nigerian universities. It handles the full assessment lifecycle - from a lecturer uploading notes and creating a quiz, to a student taking a time-boxed exam with anti-cheat enforcement, through to AI-assisted grading and analytics.
 
 It also runs live audio lectures (WebRTC + Ably) with hand-raise queues, polls, and attendance tracking - all from a single deployment on Vercel's free tier, with no paid backend server.
-
----
-
-## Demo Access
-
-Click the **"Demo Student"** or **"Demo Lecturer"** buttons on the login page - no credentials required. They provision a read-only sandbox account instantly.
-
-If you prefer manual login:
-
-| Role | Field | Value |
-|------|-------|-------|
-| Student | Registration Number | `DEMO/0000/00001` |
-| Student | Password | `demo1234` |
-| Lecturer | Email | `demo.lecturer@futo.edu.ng` |
-| Lecturer | Password | `demo1234` |
 
 ---
 
@@ -225,6 +210,33 @@ This project is configured for **Vercel** out of the box:
 4. Deploy - Vercel runs `npm run vercel-build` (`prisma generate && vite build`) automatically
 
 The backend runs as a single serverless function at `/api/index.ts`. The frontend is served as a static SPA. Ably handles all real-time signaling so no persistent WebSocket server is needed.
+
+---
+
+## Demo Deployment (Isolated)
+
+The public demo runs as a **completely separate Vercel project** pointing at its own Turso database. It shares the same codebase but uses different environment variables so demo activity never touches the real FUTO data.
+
+### Setup steps
+
+1. Create a second Turso database (e.g. `quizos-demo`)
+2. Apply the schema:
+   ```bash
+   TURSO_DATABASE_URL="libsql://your-demo-db.turso.io" \
+   TURSO_AUTH_TOKEN="your-demo-token" \
+   npx prisma db push
+   ```
+3. Seed it with fake students, lecturers, quizzes, and notes:
+   ```bash
+   TURSO_DATABASE_URL="libsql://your-demo-db.turso.io" \
+   TURSO_AUTH_TOKEN="your-demo-token" \
+   JWT_SECRET="any-secret" \
+   npx tsx src/lib/seed-demo.ts
+   ```
+4. Import the same GitHub repo into a new Vercel project and set the demo database env vars
+5. Deploy
+
+The seed script creates 2 lecturers and 10 fake students with known credentials, 4 courses, 4 quizzes, sample quiz history, lecture notes, assignments, and discussion threads.
 
 ---
 
