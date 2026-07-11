@@ -148,10 +148,16 @@ function optionalAuth(req: any, _res: any, next: any) {
 
 // Student Registration Route
 app.post("/api/auth/student-register", authLimiter, async (req, res) => {
-  const { fullName, email, regNumber, department, year, securityQuestion, securityAnswer } = req.body;
+  const { fullName, email, regNumber, department, year, password, securityQuestion, securityAnswer } = req.body;
 
-  if (!fullName || !email || !regNumber || !department || !year || !securityQuestion || !securityAnswer) {
+  if (!fullName || !email || !regNumber || !department || !year || !password || !securityQuestion || !securityAnswer) {
     return res.status(400).json({ error: "All registration fields are required." });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters." });
+  }
+  if (password.length > 128) {
+    return res.status(400).json({ error: "Password is too long." });
   }
   if (fullName.length > MAX_NAME || email.length > MAX_EMAIL || regNumber.length > MAX_REG ||
       department.length > MAX_DEPT || year.length > MAX_YEAR ||
@@ -172,13 +178,17 @@ app.post("/api/auth/student-register", authLimiter, async (req, res) => {
       return res.status(400).json({ error: "This email address is already in use." });
     }
 
-    const hashedAnswer = await bcrypt.hash(securityAnswer.trim().toLowerCase(), 10);
+    const [passwordHash, hashedAnswer] = await Promise.all([
+      bcrypt.hash(password, 12),
+      bcrypt.hash(securityAnswer.trim().toLowerCase(), 10),
+    ]);
 
     const student = await prisma.student.create({
       data: {
         fullName: fullName.trim(),
         email: normalizedEmail,
         regNumber: normalizedReg,
+        passwordHash,
         department: department.trim(),
         year: year.trim(),
         securityQuestion: securityQuestion.trim(),
@@ -216,64 +226,100 @@ app.post("/api/auth/student-register", authLimiter, async (req, res) => {
   }
 });
 
-// Student Login Route (with only regNumber and year)
+// Student Login — reg number + password; unmigrated accounts get a SET_PASSWORD action
 app.post("/api/auth/student-login", authLimiter, async (req, res) => {
-  const { regNumber, year } = req.body;
+  const { regNumber, password } = req.body;
 
-  if (!regNumber || !year) {
-    return res.status(400).json({ error: "Registration Number and Year of Study are required." });
-  }
+  if (!regNumber) return res.status(400).json({ error: "Registration Number is required." });
+  if (!password)  return res.status(400).json({ error: "Password is required." });
 
   try {
     const normalizedReg = regNumber.trim().toUpperCase();
 
-    // Find student
-    const student = await prisma.student.findUnique({
-      where: { regNumber: normalizedReg },
-    });
+    if (normalizedReg.startsWith("DEMO/")) {
+      return res.status(400).json({ error: "Please use the Demo button to access demo accounts." });
+    }
+
+    const student = await prisma.student.findUnique({ where: { regNumber: normalizedReg } });
 
     if (!student) {
-      return res.status(404).json({
-        error: "Registration Number not found. Please register to access the portal.",
-      });
+      return res.status(404).json({ error: "Registration Number not found. Please register to access the portal." });
     }
 
-    // Verify year matches closely (case-insensitive)
-    if (student.year.toLowerCase().trim() !== year.toLowerCase().trim()) {
-      return res.status(400).json({
-        error: `The Year of Study provided does not match our records for ${normalizedReg}. If you forgot or need to update your year, use the security verification helper below.`,
-        mismatch: true,
-      });
+    // Unmigrated account — passwordHash is null, year was the old credential
+    // Tell the client to collect year + new password; do NOT issue a session token yet
+    if (student.passwordHash === null) {
+      return res.json({ action: "SET_PASSWORD" });
     }
 
-    // Generate secure JWT token
+    // Normal password login
+    const valid = await bcrypt.compare(password, student.passwordHash);
+    if (!valid) {
+      return res.status(401).json({ error: "Incorrect password. Please try again." });
+    }
+
     const token = jwt.sign(
-      {
-        id: student.id,
-        fullName: student.fullName,
-        regNumber: student.regNumber,
-        department: student.department,
-        year: student.year,
-        role: "student",
-      },
+      { id: student.id, fullName: student.fullName, regNumber: student.regNumber, department: student.department, year: student.year, role: "student" },
       JWT_SECRET,
       { expiresIn: "4h" }
     );
 
     return res.json({
       token,
-      user: {
-        id: student.id,
-        fullName: student.fullName,
-        regNumber: student.regNumber,
-        department: student.department,
-        year: student.year,
-        role: "student",
-      },
+      user: { id: student.id, fullName: student.fullName, regNumber: student.regNumber, department: student.department, year: student.year, role: "student" },
     });
   } catch (error: any) {
     console.error("Student login error:", error);
     return res.status(500).json({ error: "An internal server error occurred." });
+  }
+});
+
+// First-time password setup for unmigrated (legacy) student accounts
+// Identity is verified with their old year credential before allowing password to be set
+app.post("/api/auth/student-migrate", authLimiter, async (req, res) => {
+  const { regNumber, year, password } = req.body;
+
+  if (!regNumber || !year || !password) {
+    return res.status(400).json({ error: "Registration Number, Year of Study, and new Password are all required." });
+  }
+  if (password.length < 8)   return res.status(400).json({ error: "Password must be at least 8 characters." });
+  if (password.length > 128) return res.status(400).json({ error: "Password is too long." });
+
+  try {
+    const normalizedReg = regNumber.trim().toUpperCase();
+
+    if (normalizedReg.startsWith("DEMO/")) {
+      return res.status(403).json({ error: "Demo accounts cannot be migrated." });
+    }
+
+    const student = await prisma.student.findUnique({ where: { regNumber: normalizedReg } });
+    if (!student) return res.status(404).json({ error: "Registration Number not found." });
+
+    if (student.passwordHash !== null) {
+      return res.status(400).json({ error: "This account already has a password. Please sign in normally." });
+    }
+
+    // Use their old year credential as identity verification
+    if (student.year.toLowerCase().trim() !== year.toLowerCase().trim()) {
+      return res.status(401).json({ error: "Year of Study does not match our records. Please check and try again." });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const updated = await prisma.student.update({ where: { id: student.id }, data: { passwordHash } });
+
+    const token = jwt.sign(
+      { id: updated.id, fullName: updated.fullName, regNumber: updated.regNumber, department: updated.department, year: updated.year, role: "student" },
+      JWT_SECRET,
+      { expiresIn: "4h" }
+    );
+
+    return res.json({
+      token,
+      user: { id: updated.id, fullName: updated.fullName, regNumber: updated.regNumber, department: updated.department, year: updated.year, role: "student" },
+    });
+  } catch (error: any) {
+    console.error("Student migrate error:", error);
+    return res.status(500).json({ error: "Password setup failed. Please try again." });
   }
 });
 
@@ -498,14 +544,18 @@ app.post("/api/auth/demo-login", authLimiter, async (req, res) => {
   const { role } = req.body;
   try {
     if (role === "student") {
-      const hashedAnswer = await bcrypt.hash("demo", 10);
+      const [demoPasswordHash, hashedAnswer] = await Promise.all([
+        bcrypt.hash("demo1234", 10),
+        bcrypt.hash("demo", 10),
+      ]);
       const demo = await prisma.student.upsert({
         where: { regNumber: "DEMO/0000/00001" },
-        update: {},
+        update: { passwordHash: demoPasswordHash },
         create: {
           fullName: "Demo Student",
           email: "demo.student@futo.edu.ng",
           regNumber: "DEMO/0000/00001",
+          passwordHash: demoPasswordHash,
           department: "Computer Science",
           year: "Year 1",
           securityQuestion: "What is demo?",

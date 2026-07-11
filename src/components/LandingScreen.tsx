@@ -57,11 +57,16 @@ export default function LandingScreen({
 
   /* ─── login state ────────────────────────────────────── */
   const [selectedUser, setSelectedUser] = useState<"student" | "lecturer" | null>(null);
-  const [mode, setMode]     = useState<"login" | "register" | "security-fix">("login");
+  const [mode, setMode]     = useState<"login" | "register" | "security-fix" | "migrate">("login");
   const [activeTab, setActiveTab] = useState<"student" | "lecturer">("student");
 
   const [studentRegNumber, setStudentRegNumber] = useState("");
-  const [studentYear, setStudentYear]           = useState("Year 1");
+  const [studentPassword, setStudentPassword]   = useState("");
+  const [regPassword, setRegPassword]           = useState("");
+  const [regConfirmPassword, setRegConfirmPassword] = useState("");
+  const [migrateYear, setMigrateYear]           = useState("Year 1");
+  const [migratePassword, setMigratePassword]   = useState("");
+  const [migrateConfirmPassword, setMigrateConfirmPassword] = useState("");
   const [lecturerEmail, setLecturerEmail]       = useState("");
   const [lecturerPassword, setLecturerPassword] = useState("");
 
@@ -111,18 +116,41 @@ export default function LandingScreen({
   const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setError(null); setSuccess(null); setLoading(true);
     try {
-      const res  = await fetch("/api/auth/student-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regNumber: studentRegNumber, year: studentYear }) });
+      const res  = await fetch("/api/auth/student-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regNumber: studentRegNumber, password: studentPassword }) });
       const data = await apiJSON(res);
+      if (data.action === "SET_PASSWORD") {
+        setMode("migrate");
+        setError(null);
+        setLoading(false);
+        return;
+      }
       if (!res.ok) throw new Error(data.error || "Failed to log in");
       setSuccess("Login successful! Redirecting…");
       setTimeout(() => onLoginSuccess(data.token, data.user), 500);
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   };
 
-  const handleStudentRegister = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(null); setSuccess(null); setLoading(true);
+  const handleStudentMigrate = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null); setSuccess(null);
+    if (migratePassword !== migrateConfirmPassword) { setError("Passwords do not match."); return; }
+    if (migratePassword.length < 8) { setError("Password must be at least 8 characters."); return; }
+    setLoading(true);
     try {
-      const res  = await fetch("/api/auth/student-register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fullName: regFullName, email: regEmail, regNumber: regRegNumber, department: regDepartment, year: regYear, securityQuestion, securityAnswer }) });
+      const res  = await fetch("/api/auth/student-migrate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regNumber: studentRegNumber, year: migrateYear, password: migratePassword }) });
+      const data = await apiJSON(res);
+      if (!res.ok) throw new Error(data.error || "Password setup failed");
+      setSuccess("Password set! Signing you in…");
+      setTimeout(() => onLoginSuccess(data.token, data.user), 500);
+    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
+  };
+
+  const handleStudentRegister = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null); setSuccess(null);
+    if (regPassword !== regConfirmPassword) { setError("Passwords do not match."); return; }
+    if (regPassword.length < 8) { setError("Password must be at least 8 characters."); return; }
+    setLoading(true);
+    try {
+      const res  = await fetch("/api/auth/student-register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fullName: regFullName, email: regEmail, regNumber: regRegNumber, department: regDepartment, year: regYear, password: regPassword, securityQuestion, securityAnswer }) });
       const data = await apiJSON(res);
       if (!res.ok) throw new Error(data.error || "Registration failed");
       setSuccess("Account registered! Welcome aboard.");
@@ -181,6 +209,7 @@ export default function LandingScreen({
   const handleBack = () => {
     setSelectedUser(null); setMode("login");
     setError(null); setSuccess(null);
+    setStudentPassword(""); setMigratePassword(""); setMigrateConfirmPassword("");
   };
 
   const handleDemoLogin = async (role: "student" | "lecturer") => {
@@ -589,10 +618,8 @@ export default function LandingScreen({
                                 <input id="login-student-reg" type="text" required value={studentRegNumber} onChange={e => setStudentRegNumber(e.target.value.toUpperCase())} placeholder="FUTO/2026/10423" className={inp + " font-mono"} autoFocus />
                               </motion.div>
                               <motion.div initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ delay: 0.10, type: "spring", stiffness: 500, damping: 32 }}>
-                                <label className={lbl}>Year of Study</label>
-                                <select id="login-student-year" value={studentYear} onChange={e => setStudentYear(e.target.value)} className={inp + " [&>option]:bg-slate-900"}>
-                                  {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                                </select>
+                                <label className={lbl}>Password</label>
+                                <input id="login-student-pwd" type="password" required value={studentPassword} onChange={e => setStudentPassword(e.target.value)} placeholder="••••••••••" className={inp} />
                               </motion.div>
                               <motion.div initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} transition={{ delay: 0.16, type: "spring", stiffness: 500, damping: 32 }}>
                                 <motion.button id="student-submit-btn" type="submit" disabled={loading} whileTap={{ scale: 0.96 }} transition={{ type: "spring", stiffness: 500, damping: 20 }} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${USERS[0].btn}`}>
@@ -605,6 +632,40 @@ export default function LandingScreen({
                                   <KeyRound className="h-3 w-3" /> Fix year
                                 </button>
                               </motion.div>
+                            </motion.form>
+                          )}
+
+                          {/* STUDENT MIGRATE — first login after password system was introduced */}
+                          {selectedUser === "student" && mode === "migrate" && (
+                            <motion.form key="s-migrate" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} onSubmit={handleStudentMigrate} className="space-y-4">
+                              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-[12px] text-emerald-300/90 leading-relaxed">
+                                <p className="font-bold mb-0.5">Create your password</p>
+                                <p className="text-emerald-300/70">The portal now uses passwords. Verify your year of study to set yours — you only do this once.</p>
+                              </div>
+                              <div>
+                                <label className={lbl}>Reg. Number</label>
+                                <input type="text" readOnly value={studentRegNumber} className={inp + " font-mono opacity-50 cursor-not-allowed"} />
+                              </div>
+                              <div>
+                                <label className={lbl}>Year of Study (for verification)</label>
+                                <select required value={migrateYear} onChange={e => setMigrateYear(e.target.value)} className={inp + " [&>option]:bg-slate-900"}>
+                                  {yearsOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label className={lbl}>New Password</label>
+                                <input type="password" required minLength={8} value={migratePassword} onChange={e => setMigratePassword(e.target.value)} placeholder="Min. 8 characters" className={inp} autoFocus />
+                              </div>
+                              <div>
+                                <label className={lbl}>Confirm Password</label>
+                                <input type="password" required value={migrateConfirmPassword} onChange={e => setMigrateConfirmPassword(e.target.value)} placeholder="Repeat your password" className={inp} />
+                              </div>
+                              <button type="submit" disabled={loading} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${USERS[0].btn}`}>
+                                {loading ? "Setting password…" : "Set Password & Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
+                              </button>
+                              <button type="button" onClick={() => { setMode("login"); setError(null); }} className="block text-center w-full text-[12px] text-white/35 hover:text-white/60 transition cursor-pointer">
+                                Back to sign in
+                              </button>
                             </motion.form>
                           )}
 
@@ -633,6 +694,14 @@ export default function LandingScreen({
                                 ) : (
                                   <input type="text" required value={regDepartment} onChange={e => setRegDepartment(e.target.value)} placeholder="e.g. Computer Science" className={inp} />
                                 )}
+                              </div>
+                              <div>
+                                <label className={lbl}>Password</label>
+                                <input type="password" required minLength={8} value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="Min. 8 characters" className={inp} />
+                              </div>
+                              <div>
+                                <label className={lbl}>Confirm Password</label>
+                                <input type="password" required value={regConfirmPassword} onChange={e => setRegConfirmPassword(e.target.value)} placeholder="Repeat your password" className={inp} />
                               </div>
                               <div className="pt-1 border-t border-white/[0.07]">
                                 <p className="text-[9.5px] text-white/28 uppercase tracking-widest font-bold mb-3">Year Recovery Setup</p>

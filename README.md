@@ -37,7 +37,7 @@ If you prefer manual login:
 | Role | Field | Value |
 |------|-------|-------|
 | Student | Registration Number | `DEMO/0000/00001` |
-| Student | Year of Study | `Year 1` |
+| Student | Password | `demo1234` |
 | Lecturer | Email | `demo.lecturer@futo.edu.ng` |
 | Lecturer | Password | `demo1234` |
 
