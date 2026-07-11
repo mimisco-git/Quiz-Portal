@@ -26,6 +26,7 @@ interface StudentDashboardProps {
   theme: "light" | "dark";
   onToggleTheme: () => void;
   onLogout: () => void;
+  deepLink?: { type: string; id: string } | null;
 }
 
 function getPeriodStatus(availableFrom?: string, availableUntil?: string) {
@@ -46,7 +47,7 @@ function formatCountdown(target: Date): string {
   return `${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
 }
 
-export default function StudentDashboard({ token, user, theme, onToggleTheme, onLogout }: StudentDashboardProps) {
+export default function StudentDashboard({ token, user, theme, onToggleTheme, onLogout, deepLink }: StudentDashboardProps) {
   const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "assignments" | "history" | "calendar" | "discussions">("notes");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [periodTick, setPeriodTick] = useState(0);
@@ -107,6 +108,10 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [gradeFilter, setGradeFilter] = useState<"all" | "quiz" | "exam" | "assignment">("all");
   const [expandedGradeId, setExpandedGradeId] = useState<string | null>(null);
 
+  // Deep-link: id of item to highlight after navigating to its tab
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const deepLinkHandled = React.useRef(false);
+
   // Onboarding tour
   const [showTour, setShowTour] = useState<boolean>(() => {
     try { return !localStorage.getItem("tour_done_student"); } catch { return false; }
@@ -156,6 +161,14 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     } catch (e) {
       console.error("Error joining live session:", e);
     }
+  };
+
+  const shareWhatsApp = (type: string, id: string, title: string, detail?: string) => {
+    const url = `${window.location.origin}/${type}/${id}`;
+    const text = detail
+      ? `${title}\n${detail}\n\nView on QuizOS: ${url}`
+      : `${title}\n\nView on QuizOS: ${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   };
 
   const fetchActiveLiveSession = async () => {
@@ -314,7 +327,6 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     return () => clearInterval(interval);
   }, [activeTab, joinedCourseId]);
 
-
   useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -430,6 +442,43 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     try { return new Set(JSON.parse(localStorage.getItem("bookmarked_notes") || "[]")); } catch { return new Set(); }
   });
   const [showOnlyBookmarked, setShowOnlyBookmarked] = useState(false);
+
+  // Deep-link: switch to the right tab on first mount; resolve item once data loads
+  useEffect(() => {
+    if (!deepLink || deepLinkHandled.current) return;
+    const tabMap: Record<string, typeof activeTab> = {
+      quiz: "quizzes", note: "notes", exam: "exams",
+      assignment: "assignments", live: "live-classroom",
+    };
+    const tab = tabMap[deepLink.type];
+    if (tab) setActiveTab(tab);
+    setHighlightId(deepLink.id);
+    setTimeout(() => setHighlightId(null), 3000);
+  }, [deepLink]);
+
+  // Resolve deep-link item once the relevant data array loads
+  useEffect(() => {
+    if (!deepLink || deepLinkHandled.current) return;
+    if (deepLink.type === "note" && allNotes.length > 0) {
+      const note = allNotes.find(n => n.id === deepLink.id);
+      if (note) { setSelectedNote(note); deepLinkHandled.current = true; }
+    }
+    if (deepLink.type === "exam" && exams.length > 0) {
+      const exam = exams.find((e: any) => e.id === deepLink.id);
+      if (exam) { setActiveExam(exam); fetchMySubmission(exam.id); deepLinkHandled.current = true; }
+    }
+    if (deepLink.type === "assignment" && assignments.length > 0) {
+      const a = assignments.find((a: any) => a.id === deepLink.id);
+      if (a) { setActiveAssignment(a); fetchMyAssignmentSubmission(a.id); deepLinkHandled.current = true; }
+    }
+    if (deepLink.type === "live" && allLiveSessions.length > 0) {
+      const sess = allLiveSessions.find((s: any) => s.id === deepLink.id);
+      if (sess) { joinLiveSession(sess.courseId); deepLinkHandled.current = true; }
+    }
+    if (deepLink.type === "quiz" && quizzes.length > 0) {
+      deepLinkHandled.current = true;
+    }
+  }, [deepLink, allNotes, exams, assignments, allLiveSessions, quizzes]);
 
   useEffect(() => {
     fetchCourses();
@@ -1913,6 +1962,13 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                                     >
                                       <Star className="h-3.5 w-3.5" fill={isBookmarked ? "currentColor" : "none"} strokeWidth={isBookmarked ? 0 : 1.8} />
                                     </button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); shareWhatsApp("note", note.id, note.title, noteCourse?.code); }}
+                                      title="Share on WhatsApp"
+                                      className="text-[#c7c7cc] dark:text-white/20 hover:text-green-600 dark:hover:text-green-400 transition cursor-pointer"
+                                    >
+                                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                    </button>
                                   <span className="flex items-center gap-1 text-[11px] font-mono text-[#6e6e73] dark:text-white/35">
                                     <Calendar className="h-3 w-3" />
                                     {new Date(note.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -1954,10 +2010,19 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       </button>
                       <h2 className="apple-title">{selectedNote.title}</h2>
                     </div>
-                    <span className="text-[11px] font-mono text-[#6e6e73] dark:text-white/35 flex items-center gap-1 flex-shrink-0 mt-6">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(selectedNote.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
-                    </span>
+                    <div className="flex items-center gap-3 flex-shrink-0 mt-6">
+                      <button
+                        onClick={() => shareWhatsApp("note", selectedNote.id, selectedNote.title)}
+                        title="Share on WhatsApp"
+                        className="p-1.5 rounded-lg text-[#8e8e93] dark:text-white/30 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition cursor-pointer"
+                      >
+                        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                      </button>
+                      <span className="text-[11px] font-mono text-[#6e6e73] dark:text-white/35 flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {new Date(selectedNote.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                      </span>
+                    </div>
                   </div>
                   <div className="p-5 sm:p-7">
                     <MarkdownView content={selectedNote.content} />
@@ -2028,7 +2093,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                         const isUpcoming = period.type === "upcoming";
                         void periodTick; // consumed so re-renders update countdown
                         return (
-                          <div key={quiz.id} className="flex items-center justify-between p-4 rounded-[12px] border border-black/[0.07] dark:border-white/[0.07] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 bg-black/[0.01] dark:bg-white/[0.02] hover:shadow-sm transition-all duration-200">
+                          <div key={quiz.id} className={`flex items-center justify-between p-4 rounded-[12px] border bg-black/[0.01] dark:bg-white/[0.02] hover:shadow-sm transition-all duration-200 ${highlightId === quiz.id ? "border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-400/30" : "border-black/[0.07] dark:border-white/[0.07] hover:border-emerald-300/60 dark:hover:border-emerald-700/40"}`}>
                             <div className="space-y-1 min-w-0">
                               <h4 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{quiz.title}</h4>
                               <div className="flex items-center gap-3 text-[10.5px] text-[#6e6e73] dark:text-white/40 font-mono">
@@ -2053,7 +2118,15 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                                 </div>
                               )}
                             </div>
-                            <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                            <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                              <button
+                                type="button"
+                                title="Share on WhatsApp"
+                                onClick={() => shareWhatsApp("quiz", quiz.id, quiz.title, `${quiz._count?.questions || 0} questions · ${quiz.durationMinutes} min`)}
+                                className="p-1.5 rounded-lg text-[#8e8e93] dark:text-white/30 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition cursor-pointer flex-shrink-0"
+                              >
+                                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                              </button>
                               {isCompleted ? (
                                 <div className="text-right space-y-1">
                                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
@@ -2161,7 +2234,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">Live Now — Select a Class to Join</p>
                           {allLiveSessions.map((session: any) => (
                             <motion.div key={session.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                              className="flex items-center justify-between gap-3 p-4 border border-red-100 dark:border-red-900/30 bg-red-50/40 dark:bg-red-950/10 rounded-[14px]">
+                              className={`flex items-center justify-between gap-3 p-4 border bg-red-50/40 dark:bg-red-950/10 rounded-[14px] ${highlightId === session.id ? "border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-400/30" : "border-red-100 dark:border-red-900/30"}`}>
                               <div className="flex items-center gap-3 min-w-0">
                                 <div className="flex-shrink-0 relative">
                                   <span className="flex h-2.5 w-2.5">
@@ -2181,10 +2254,20 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                                   </p>
                                 </div>
                               </div>
-                              <button onClick={() => joinLiveSession(session.course.id)}
-                                className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-[12px] font-semibold rounded-[10px] transition cursor-pointer">
-                                <Play className="h-3.5 w-3.5 fill-white" /> Join
-                              </button>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  title="Share on WhatsApp"
+                                  onClick={() => shareWhatsApp("live", session.id, session.topic, `LIVE NOW · ${session.course?.code}`)}
+                                  className="p-1.5 rounded-lg text-[#8e8e93] dark:text-white/30 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition cursor-pointer"
+                                >
+                                  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                </button>
+                                <button onClick={() => joinLiveSession(session.course.id)}
+                                  className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-[12px] font-semibold rounded-[10px] transition cursor-pointer">
+                                  <Play className="h-3.5 w-3.5 fill-white" /> Join
+                                </button>
+                              </div>
                             </motion.div>
                           ))}
                         </div>
@@ -2369,10 +2452,11 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           const examBlocked = examExpired || examUpcoming;
                           void periodTick;
                           return (
-                            <button key={exam.id}
+                            <div key={exam.id} className={`p-4 border rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] transition-all duration-200 flex items-center justify-between gap-3 ${highlightId === exam.id ? "border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-400/30" : examBlocked ? "border-black/[0.07] dark:border-white/[0.07] opacity-70" : "border-black/[0.07] dark:border-white/[0.07] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 hover:shadow-sm"}`}>
+                            <button
                               onClick={examBlocked ? undefined : async () => { setActiveExam(exam); setMySubmission(null); await fetchMySubmission(exam.id); }}
                               disabled={examBlocked}
-                              className={`w-full text-left p-4 border rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] transition-all duration-200 flex items-center justify-between gap-3 ${examBlocked ? "border-black/[0.07] dark:border-white/[0.07] opacity-70 cursor-not-allowed" : "border-black/[0.07] dark:border-white/[0.07] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 hover:shadow-sm cursor-pointer"}`}>
+                              className={`flex-1 text-left ${examBlocked ? "cursor-not-allowed" : "cursor-pointer"}`}>
                               <div className="min-w-0">
                                 <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{exam.title}</p>
                                 <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">{exam.course?.code} / {exam.course?.title}</p>
@@ -2400,6 +2484,15 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                                 {examExpired ? "Expired" : examUpcoming ? "Upcoming" : exam.isOpen ? "Open" : "Closed"}
                               </span>
                             </button>
+                            <button
+                              type="button"
+                              title="Share on WhatsApp"
+                              onClick={() => shareWhatsApp("exam", exam.id, exam.title, exam.course?.code)}
+                              className="p-1.5 rounded-lg text-[#8e8e93] dark:text-white/30 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition cursor-pointer flex-shrink-0"
+                            >
+                              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                            </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -2537,31 +2630,41 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           const isOverdue = a.dueDate && new Date() > new Date(a.dueDate);
                           const blocked = !a.isOpen || isOverdue;
                           return (
-                            <button key={a.id}
-                              onClick={blocked ? undefined : async () => { setActiveAssignment(a); setMyAssignmentSubmission(null); await fetchMyAssignmentSubmission(a.id); }}
-                              disabled={blocked}
-                              className={`w-full text-left p-4 border rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] transition-all duration-200 flex items-center justify-between gap-3 ${blocked ? "border-black/[0.07] dark:border-white/[0.07] opacity-70 cursor-not-allowed" : "border-black/[0.07] dark:border-white/[0.07] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 hover:shadow-sm cursor-pointer"}`}>
-                              <div className="min-w-0">
-                                <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{a.title}</p>
-                                <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">{a.course?.code} / {a.course?.title}</p>
-                                {a.description && <p className="text-[11px] text-[#6e6e73] dark:text-white/50 mt-0.5 italic">{a.description}</p>}
-                                {a.dueDate && (
-                                  <div className={`flex items-center gap-1 text-[10.5px] font-mono font-semibold mt-1 ${isOverdue ? "text-red-500" : "text-amber-600 dark:text-amber-400"}`}>
-                                    <Clock className="h-3 w-3" />
-                                    {isOverdue ? "Past due" : `Due ${new Date(a.dueDate).toLocaleString()}`}
-                                  </div>
-                                )}
-                              </div>
-                              <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border flex-shrink-0 ${
-                                isOverdue
-                                  ? "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"
-                                  : a.isOpen
-                                  ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
-                                  : "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"
-                              }`}>
-                                {isOverdue ? "Overdue" : a.isOpen ? "Open" : "Closed"}
-                              </span>
-                            </button>
+                            <div key={a.id} className={`p-4 border rounded-[12px] bg-black/[0.01] dark:bg-white/[0.02] transition-all duration-200 flex items-center justify-between gap-3 ${highlightId === a.id ? "border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-400/30" : blocked ? "border-black/[0.07] dark:border-white/[0.07] opacity-70" : "border-black/[0.07] dark:border-white/[0.07] hover:border-emerald-300/60 dark:hover:border-emerald-700/40 hover:shadow-sm"}`}>
+                              <button
+                                onClick={blocked ? undefined : async () => { setActiveAssignment(a); setMyAssignmentSubmission(null); await fetchMyAssignmentSubmission(a.id); }}
+                                disabled={blocked}
+                                className={`flex-1 text-left ${blocked ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                                <div className="min-w-0">
+                                  <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90">{a.title}</p>
+                                  <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-0.5">{a.course?.code} / {a.course?.title}</p>
+                                  {a.description && <p className="text-[11px] text-[#6e6e73] dark:text-white/50 mt-0.5 italic">{a.description}</p>}
+                                  {a.dueDate && (
+                                    <div className={`flex items-center gap-1 text-[10.5px] font-mono font-semibold mt-1 ${isOverdue ? "text-red-500" : "text-amber-600 dark:text-amber-400"}`}>
+                                      <Clock className="h-3 w-3" />
+                                      {isOverdue ? "Past due" : `Due ${new Date(a.dueDate).toLocaleString()}`}
+                                    </div>
+                                  )}
+                                </div>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border flex-shrink-0 ${
+                                  isOverdue
+                                    ? "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"
+                                    : a.isOpen
+                                    ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/30"
+                                    : "bg-black/[0.04] dark:bg-white/[0.04] text-[#6e6e73] dark:text-white/40 border-black/[0.07] dark:border-white/[0.07]"
+                                }`}>
+                                  {isOverdue ? "Overdue" : a.isOpen ? "Open" : "Closed"}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                title="Share on WhatsApp"
+                                onClick={() => shareWhatsApp("assignment", a.id, a.title, a.course?.code)}
+                                className="p-1.5 rounded-lg text-[#8e8e93] dark:text-white/30 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition cursor-pointer flex-shrink-0"
+                              >
+                                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                              </button>
+                            </div>
                           );
                         })}
                       </div>

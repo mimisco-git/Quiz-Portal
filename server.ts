@@ -723,6 +723,65 @@ app.post("/api/auth/lecturer-login", authLimiter, async (req, res) => {
 });
 
 // -------------------------------------------------------------
+// PUBLIC METADATA (no auth — safe preview data only)
+// -------------------------------------------------------------
+
+app.get("/api/public/quiz/:id", async (req, res) => {
+  try {
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: req.params.id },
+      select: { title: true, durationMinutes: true, availableFrom: true, availableUntil: true, course: { select: { code: true, title: true } }, _count: { select: { questions: true } } },
+    });
+    if (!quiz) return res.status(404).json({ error: "Not found" });
+    return res.json({ title: quiz.title, durationMinutes: quiz.durationMinutes, availableFrom: quiz.availableFrom, availableUntil: quiz.availableUntil, course: quiz.course, questionCount: quiz._count.questions });
+  } catch { return res.status(500).json({ error: "Server error" }); }
+});
+
+app.get("/api/public/note/:id", async (req, res) => {
+  try {
+    const note = await prisma.lectureNote.findUnique({
+      where: { id: req.params.id },
+      select: { title: true, createdAt: true, course: { select: { code: true, title: true } } },
+    });
+    if (!note) return res.status(404).json({ error: "Not found" });
+    return res.json({ title: note.title, createdAt: note.createdAt, course: note.course });
+  } catch { return res.status(500).json({ error: "Server error" }); }
+});
+
+app.get("/api/public/exam/:id", async (req, res) => {
+  try {
+    const exam = await prisma.exam.findUnique({
+      where: { id: req.params.id },
+      select: { title: true, isOpen: true, availableFrom: true, availableUntil: true, course: { select: { code: true, title: true } } },
+    });
+    if (!exam) return res.status(404).json({ error: "Not found" });
+    return res.json({ title: exam.title, isOpen: exam.isOpen, availableFrom: exam.availableFrom, availableUntil: exam.availableUntil, course: exam.course });
+  } catch { return res.status(500).json({ error: "Server error" }); }
+});
+
+app.get("/api/public/assignment/:id", async (req, res) => {
+  try {
+    const assignment = await prisma.assignment.findUnique({
+      where: { id: req.params.id },
+      select: { title: true, dueDate: true, isOpen: true, course: { select: { code: true, title: true } } },
+    });
+    if (!assignment) return res.status(404).json({ error: "Not found" });
+    return res.json({ title: assignment.title, dueDate: assignment.dueDate, isOpen: assignment.isOpen, course: assignment.course });
+  } catch { return res.status(500).json({ error: "Server error" }); }
+});
+
+app.get("/api/public/live/:id", async (req, res) => {
+  try {
+    const session = await prisma.lectureSession.findUnique({
+      where: { id: req.params.id },
+      select: { topic: true, isActive: true, courseId: true, course: { select: { code: true, title: true } } },
+    });
+    if (!session) return res.status(404).json({ error: "Not found" });
+    return res.json({ topic: session.topic, isActive: session.isActive, courseId: session.courseId, course: session.course });
+  } catch { return res.status(500).json({ error: "Server error" }); }
+});
+
+// -------------------------------------------------------------
 // COURSE & NOTE PLATFORM API
 // -------------------------------------------------------------
 

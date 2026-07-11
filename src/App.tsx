@@ -1,16 +1,34 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import LandingScreen from "./components/LandingScreen";
 import StudentDashboard from "./components/StudentDashboard";
 import LecturerDashboard from "./components/LecturerDashboard";
 import ForceChangePasswordScreen from "./components/ForceChangePasswordScreen";
+import DeepLinkPreview from "./components/DeepLinkPreview";
 import { User } from "./types";
 import { motion, AnimatePresence } from "motion/react";
 import { ShieldAlert, Clock, LogOut } from "lucide-react";
 
+const DEEP_LINK_TYPES = ["quiz", "note", "exam", "assignment", "live"] as const;
+type DeepLinkType = typeof DEEP_LINK_TYPES[number];
+
 export default function App() {
+  const location = useLocation();
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // When unauthenticated user is on a deep-link URL and clicks "Sign in",
+  // we keep the URL but show the landing screen instead of the preview.
+  const [showLoginFromPreview, setShowLoginFromPreview] = useState(false);
+
+  // Parse deep link from URL path (e.g. /quiz/abc123)
+  const deepLink = useMemo<{ type: DeepLinkType; id: string } | null>(() => {
+    const parts = location.pathname.split("/").filter(Boolean);
+    const type = parts[0] as DeepLinkType;
+    const id = parts[1];
+    if (DEEP_LINK_TYPES.includes(type) && id) return { type, id };
+    return null;
+  }, [location.pathname]);
 
   // Global Theme State
   const [theme, setTheme] = useState<"light" | "dark">(
@@ -213,6 +231,21 @@ export default function App() {
 
       <AnimatePresence mode="wait">
         {!token || !user ? (
+          deepLink && !showLoginFromPreview ? (
+            <motion.div
+              key="deep-link-preview"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              <DeepLinkPreview
+                type={deepLink.type}
+                id={deepLink.id}
+                onSignIn={() => setShowLoginFromPreview(true)}
+              />
+            </motion.div>
+          ) : (
           <motion.div
             key="landing"
             initial={{ opacity: 0 }}
@@ -222,6 +255,7 @@ export default function App() {
           >
             <LandingScreen theme={theme} onToggleTheme={toggleTheme} onLoginSuccess={handleLoginSuccess} />
           </motion.div>
+          )
         ) : user.role === "student" && user.mustChangePassword ? (
           <motion.div
             key="force-change-password"
@@ -257,6 +291,7 @@ export default function App() {
               theme={theme}
               onToggleTheme={toggleTheme}
               onLogout={handleLogout}
+              deepLink={deepLink}
             />
           </motion.div>
         ) : (
