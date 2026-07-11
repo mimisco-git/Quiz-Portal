@@ -22,15 +22,15 @@
 
 ## What Is This?
 
-QuizOS is a full-stack academic portal built to replace paper-based and informal CBT processes at Nigerian universities. It handles the full assessment lifecycle — from a lecturer uploading notes and creating a quiz, to a student taking a time-boxed exam with anti-cheat enforcement, through to AI-assisted grading and analytics.
+QuizOS is a full-stack academic portal built to replace paper-based and informal CBT processes at Nigerian universities. It handles the full assessment lifecycle - from a lecturer uploading notes and creating a quiz, to a student taking a time-boxed exam with anti-cheat enforcement, through to AI-assisted grading and analytics.
 
-It also runs live audio lectures (WebRTC + Ably) with hand-raise queues, polls, and attendance tracking — all from a single deployment on Vercel's free tier, with no paid backend server.
+It also runs live audio lectures (WebRTC + Ably) with hand-raise queues, polls, and attendance tracking - all from a single deployment on Vercel's free tier, with no paid backend server.
 
 ---
 
 ## Demo Access
 
-Click the **"Demo Student"** or **"Demo Lecturer"** buttons on the login page — no credentials required. They provision a read-only sandbox account instantly.
+Click the **"Demo Student"** or **"Demo Lecturer"** buttons on the login page - no credentials required. They provision a read-only sandbox account instantly.
 
 If you prefer manual login:
 
@@ -62,7 +62,7 @@ If you prefer manual login:
 
 | Tab | What it does |
 |-----|-------------|
-| **Gradebook** | All student submissions in one place — filter by course, export CSV |
+| **Gradebook** | All student submissions in one place - filter by course, export CSV |
 | **Courses** | Create and manage courses per department and year level |
 | **Notes** | Upload lecture notes via .docx file upload or direct text editor |
 | **Quizzes** | Create MCQ quizzes; AI generates questions from pasted text or an uploaded file |
@@ -79,14 +79,14 @@ If you prefer manual login:
 
 The exam engine mirrors an invigilated CBT centre:
 
-- **Tab-switch detection** — 3-strike system; third violation auto-submits and locks the session
-- **Fullscreen enforcement** — entering fullscreen on exam start; leaving counts as a violation
-- **Question randomisation** — questions are shuffled per session
-- **Server-side timer** — client and server clocks sync every 10 seconds; the server is the source of truth
-- **Auto-submit on timeout** — session is locked and scored server-side when time expires, regardless of network state
-- **Answers auto-saved** — written to `localStorage` on every answer change and every 10 seconds; survives network drops, tab suspend, and accidental refresh
-- **Copy-protection overlay** — student watermark rendered across the exam surface
-- **Offline recovery banner** — notifies the student when network drops and confirms answers are safe
+- **Tab-switch detection** - 3-strike system; third violation auto-submits and locks the session
+- **Fullscreen enforcement** - entering fullscreen on exam start; leaving counts as a violation
+- **Question randomisation** - questions are shuffled per session
+- **Server-side timer** - client and server clocks sync every 10 seconds; the server is the source of truth
+- **Auto-submit on timeout** - session is locked and scored server-side when time expires, regardless of network state
+- **Answers auto-saved** - written to `localStorage` on every answer change and every 10 seconds; survives network drops, tab suspend, and accidental refresh
+- **Copy-protection overlay** - student watermark rendered across the exam surface
+- **Offline recovery banner** - notifies the student when network drops and confirms answers are safe
 
 ---
 
@@ -100,7 +100,7 @@ The exam engine mirrors an invigilated CBT centre:
 | Auth | JWT (jsonwebtoken) + bcrypt |
 | Real-time audio | WebRTC (full-mesh) + Ably Realtime (signaling + presence) |
 | TURN / NAT traversal | Open Relay (free public TURN, no account needed) |
-| AI features | NVIDIA NIM API (Llama 4) — question generation, essay grading, lecture summarisation |
+| AI features | NVIDIA NIM API (Llama 4) - question generation, essay grading, lecture summarisation |
 | File parsing | Mammoth (.docx → HTML), JSZip (.pptx slide extraction) |
 | Math rendering | KaTeX via remark-math + rehype-katex |
 | Push notifications | Web Push (VAPID) |
@@ -142,20 +142,20 @@ The app runs at `http://localhost:3000`. The backend and frontend are served fro
 Create a `.env` file in the project root:
 
 ```env
-# Database — Turso
+# Database - Turso
 DATABASE_URL=libsql://your-db-name.turso.io
 TURSO_AUTH_TOKEN=your-turso-auth-token
 
-# Auth — generate with: openssl rand -hex 32
+# Auth - generate with: openssl rand -hex 32
 JWT_SECRET=your-64-character-hex-secret
 
-# Real-time audio (Ably) — copy the Root key from your Ably app dashboard
+# Real-time audio (Ably) - copy the Root key from your Ably app dashboard
 ABLY_API_KEY=your-ably-api-key
 
-# AI features (NVIDIA NIM) — optional; disables AI grading/generation if absent
+# AI features (NVIDIA NIM) - optional; disables AI grading/generation if absent
 NVIDIA_API_KEY=your-nvidia-nim-key
 
-# Push notifications (Web Push) — optional; disables announcements if absent
+# Push notifications (Web Push) - optional; disables announcements if absent
 VAPID_PUBLIC_KEY=your-vapid-public-key
 VAPID_PRIVATE_KEY=your-vapid-private-key
 VAPID_EMAIL=admin@yourdomain.com
@@ -191,7 +191,7 @@ Quiz-Portal/
 │   │   ├── db.ts                  # Prisma client (Turso adapter)
 │   │   └── seed.ts                # Initial department seeding
 │   ├── types.ts
-│   └── App.tsx                    # Root — auth state, session expiry, theme
+│   └── App.tsx                    # Root - auth state, session expiry, theme
 ├── server.ts                      # Express API (3600+ lines, all routes)
 ├── api/index.ts                   # Vercel serverless entry point
 ├── prisma/schema.prisma           # Database schema (20 models)
@@ -222,7 +222,7 @@ This project is configured for **Vercel** out of the box:
 1. Push to GitHub
 2. Import the repo in Vercel
 3. Add all environment variables under Settings → Environment Variables
-4. Deploy — Vercel runs `npm run vercel-build` (`prisma generate && vite build`) automatically
+4. Deploy - Vercel runs `npm run vercel-build` (`prisma generate && vite build`) automatically
 
 The backend runs as a single serverless function at `/api/index.ts`. The frontend is served as a static SPA. Ably handles all real-time signaling so no persistent WebSocket server is needed.
 
