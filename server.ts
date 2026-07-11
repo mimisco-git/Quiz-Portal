@@ -469,6 +469,67 @@ app.post("/api/auth/student-get-security-question", strictLimiter, async (req, r
   }
 });
 
+// Forgot password — verify security answer and set a new password
+app.post("/api/auth/student-forgot-password", strictLimiter, async (req, res) => {
+  const { regNumber, securityAnswer, newPassword, confirmPassword } = req.body;
+  if (!regNumber || !securityAnswer || !newPassword || !confirmPassword) {
+    return res.status(400).json({ error: "All fields are required." });
+  }
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({ error: "Passwords do not match." });
+  }
+  if (newPassword.length < 8)   return res.status(400).json({ error: "Password must be at least 8 characters." });
+  if (newPassword.length > 128) return res.status(400).json({ error: "Password is too long." });
+
+  try {
+    const normalizedReg = regNumber.trim().toUpperCase();
+    if (newPassword.toUpperCase() === normalizedReg) {
+      return res.status(400).json({ error: "Your password cannot be the same as your registration number." });
+    }
+
+    const student = await prisma.student.findUnique({ where: { regNumber: normalizedReg } });
+    if (!student) {
+      return res.status(400).json({ error: "Incorrect registration number or security answer." });
+    }
+
+    const normalizedInput = securityAnswer.trim().toLowerCase();
+    let answerMatches = false;
+    if (student.securityAnswer.startsWith("$2")) {
+      answerMatches = await bcrypt.compare(normalizedInput, student.securityAnswer);
+    } else {
+      answerMatches = student.securityAnswer.toLowerCase().trim() === normalizedInput;
+      if (answerMatches) {
+        const hashed = await bcrypt.hash(normalizedInput, 10);
+        await prisma.student.update({ where: { id: student.id }, data: { securityAnswer: hashed } });
+      }
+    }
+
+    if (!answerMatches) {
+      return res.status(400).json({ error: "Incorrect registration number or security answer." });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const updated = await prisma.student.update({
+      where: { id: student.id },
+      data: { passwordHash, mustChangePassword: false },
+    });
+    clearFailedLogin(updated.regNumber);
+
+    const token = jwt.sign(
+      { id: updated.id, fullName: updated.fullName, regNumber: updated.regNumber, department: updated.department, year: updated.year, role: "student", mustChangePassword: false },
+      JWT_SECRET,
+      { expiresIn: "4h" }
+    );
+    return res.json({
+      token,
+      user: { id: updated.id, fullName: updated.fullName, regNumber: updated.regNumber, department: updated.department, year: updated.year, role: "student", mustChangePassword: false },
+    });
+  } catch (error: any) {
+    console.error("Student forgot-password error:", error);
+    return res.status(500).json({ error: "Something went wrong. Please try again." });
+  }
+});
+
 // Answer security question and fix/update year
 app.post("/api/auth/student-fix-year", strictLimiter, async (req, res) => {
   const { regNumber, securityAnswer, newYear } = req.body;

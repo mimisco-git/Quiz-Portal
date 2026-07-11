@@ -57,7 +57,7 @@ export default function LandingScreen({
 
   /* ─── login state ────────────────────────────────────── */
   const [selectedUser, setSelectedUser] = useState<"student" | "lecturer" | null>(null);
-  const [mode, setMode]     = useState<"login" | "register" | "security-fix">("login");
+  const [mode, setMode]     = useState<"login" | "register" | "security-fix" | "forgot">("login");
   const [activeTab, setActiveTab] = useState<"student" | "lecturer">("student");
 
   const [studentRegNumber, setStudentRegNumber] = useState("");
@@ -84,6 +84,13 @@ export default function LandingScreen({
   const [fixAnswer, setFixAnswer]       = useState("");
   const [fixNewYear, setFixNewYear]     = useState("Year 1");
   const [fixStep, setFixStep]           = useState<"enter-reg" | "answer-question">("enter-reg");
+
+  const [forgotRegNumber, setForgotRegNumber]       = useState("");
+  const [forgotQuestion, setForgotQuestion]         = useState("");
+  const [forgotAnswer, setForgotAnswer]             = useState("");
+  const [forgotNewPassword, setForgotNewPassword]   = useState("");
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
+  const [forgotStep, setForgotStep]                 = useState<"enter-reg" | "set-password">("enter-reg");
 
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [error, setError]     = useState<string | null>(null);
@@ -190,6 +197,30 @@ export default function LandingScreen({
       if (!res.ok) throw new Error(data.error || "Incorrect answer");
       setSuccess("Year updated! Logging in…");
       setTimeout(() => onLoginSuccess(data.token, data.user), 1000);
+    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
+  };
+
+  const handleForgotGetQuestion = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null); setLoading(true);
+    try {
+      const res  = await fetch("/api/auth/student-get-security-question", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regNumber: forgotRegNumber }) });
+      const data = await apiJSON(res);
+      if (!res.ok) throw new Error(data.error || "Registration number not found.");
+      setForgotQuestion(data.securityQuestion);
+      setForgotStep("set-password");
+    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
+  };
+
+  const handleForgotResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null); setLoading(true);
+    if (forgotNewPassword !== forgotConfirmPassword) { setError("Passwords do not match."); setLoading(false); return; }
+    if (forgotNewPassword.length < 8) { setError("Password must be at least 8 characters."); setLoading(false); return; }
+    try {
+      const res  = await fetch("/api/auth/student-forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regNumber: forgotRegNumber, securityAnswer: forgotAnswer, newPassword: forgotNewPassword, confirmPassword: forgotConfirmPassword }) });
+      const data = await apiJSON(res);
+      if (!res.ok) throw new Error(data.error || "Reset failed. Please check your answer.");
+      setSuccess("Password reset! Signing you in…");
+      setTimeout(() => onLoginSuccess(data.token, data.user), 800);
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   };
 
@@ -576,8 +607,65 @@ export default function LandingScreen({
                               </motion.div>
                               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.22, duration: 0.3 }} className="flex items-center justify-between pt-0.5">
                                 <button type="button" onClick={() => { setMode("register"); setError(null); }} className={link}>New student?</button>
+                                <button type="button" onClick={() => { setMode("forgot"); setForgotStep("enter-reg"); setForgotRegNumber(""); setForgotAnswer(""); setForgotNewPassword(""); setForgotConfirmPassword(""); setError(null); }} className="text-[13px] text-white/40 hover:text-white/70 transition-colors cursor-pointer">Forgot password?</button>
                               </motion.div>
                             </motion.form>
+                          )}
+
+                          {/* FORGOT PASSWORD */}
+                          {selectedUser === "student" && mode === "forgot" && (
+                            <motion.div key="s-forgot" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} className="space-y-4">
+                              <div className="flex items-center gap-2.5">
+                                <button type="button" onClick={() => { setMode("login"); setError(null); setForgotStep("enter-reg"); }}
+                                  className="flex items-center justify-center w-8 h-8 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-white/60 transition cursor-pointer">
+                                  <ArrowLeft className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="text-white/70 text-[12px] font-semibold flex items-center gap-1.5">
+                                  <KeyRound className="h-3.5 w-3.5 text-emerald-400" /> Password Recovery
+                                </span>
+                              </div>
+
+                              {forgotStep === "enter-reg" ? (
+                                <form onSubmit={handleForgotGetQuestion} className="space-y-4">
+                                  <div className="bg-emerald-400/10 border border-emerald-400/20 rounded-xl p-3 text-[12px] text-emerald-300/90 leading-relaxed">
+                                    Enter your registration number to retrieve your security question. You will need to answer it to reset your password.
+                                  </div>
+                                  <div>
+                                    <label className={lbl}>Registration Number</label>
+                                    <input type="text" required value={forgotRegNumber} onChange={e => setForgotRegNumber(e.target.value.toUpperCase())} placeholder="FUTO/2026/10423" className={inp + " font-mono"} autoFocus />
+                                  </div>
+                                  <button type="submit" disabled={loading} className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer">
+                                    {loading ? "Looking up…" : "Continue"} <ArrowRight className="h-4 w-4" />
+                                  </button>
+                                </form>
+                              ) : (
+                                <form onSubmit={handleForgotResetPassword} className="space-y-4">
+                                  <div className="flex items-start gap-2 bg-white/[0.05] border border-white/[0.08] rounded-xl p-3">
+                                    <HelpCircle className="h-4 w-4 text-white/40 shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">Your Security Question</p>
+                                      <p className="text-[13px] text-white/80 font-medium">{forgotQuestion}</p>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className={lbl}>Your Answer</label>
+                                    <input type="text" required value={forgotAnswer} onChange={e => setForgotAnswer(e.target.value)} placeholder="Your secret answer" className={inp} autoFocus />
+                                  </div>
+                                  <div>
+                                    <label className={lbl}>New Password</label>
+                                    <input type="password" required minLength={8} value={forgotNewPassword} onChange={e => setForgotNewPassword(e.target.value)} placeholder="Min. 8 characters" className={inp} />
+                                  </div>
+                                  <div>
+                                    <label className={lbl}>Confirm New Password</label>
+                                    <input type="password" required value={forgotConfirmPassword} onChange={e => setForgotConfirmPassword(e.target.value)} placeholder="Repeat your new password" className={inp} />
+                                  </div>
+                                  <button type="submit" disabled={loading} className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer">
+                                    {loading ? "Resetting…" : "Reset Password & Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
+                                  </button>
+                                  <button type="button" onClick={() => { setForgotStep("enter-reg"); setError(null); }} className={link + " block text-center w-full"}>Try a different reg number</button>
+                                </form>
+                              )}
+                            </motion.div>
                           )}
 
                           {/* STUDENT REGISTER */}
@@ -615,7 +703,14 @@ export default function LandingScreen({
                                 <input type="password" required value={regConfirmPassword} onChange={e => setRegConfirmPassword(e.target.value)} placeholder="Repeat your password" className={inp} />
                               </div>
                               <div className="pt-1 border-t border-white/[0.07]">
-                                <p className="text-[9.5px] text-white/28 uppercase tracking-widest font-bold mb-3">Year Recovery Setup</p>
+                                <div className="bg-amber-400/10 border border-amber-400/25 rounded-xl p-3 mb-3">
+                                  <p className="text-[11px] font-bold text-amber-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                                    <ShieldAlert className="h-3.5 w-3.5" /> Account Recovery Setup
+                                  </p>
+                                  <p className="text-[11.5px] text-amber-200/75 leading-relaxed">
+                                    This security question is how you will recover your account if you ever forget your password. Choose a question only you can answer and remember your answer exactly.
+                                  </p>
+                                </div>
                                 <div className="space-y-3">
                                   <div><label className={lbl}>Security Question</label>
                                     <select value={securityQuestion} onChange={e => setSecurityQuestion(e.target.value)} className={inp + " [&>option]:bg-slate-900"}>
@@ -625,7 +720,7 @@ export default function LandingScreen({
                                       <option>What is your mother's maiden name?</option>
                                     </select></div>
                                   <div><label className={lbl}>Your Answer</label>
-                                    <input type="text" required value={securityAnswer} onChange={e => setSecurityAnswer(e.target.value)} placeholder="Your secret answer" className={inp} /></div>
+                                    <input type="text" required value={securityAnswer} onChange={e => setSecurityAnswer(e.target.value)} placeholder="Your secret answer (keep this safe)" className={inp} /></div>
                                 </div>
                               </div>
                               <button type="submit" disabled={loading} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${USERS[0].btn}`}>
