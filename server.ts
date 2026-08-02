@@ -1940,7 +1940,7 @@ app.post("/api/lectures", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") {
     return res.status(403).json({ error: "Only lecturers can broadcast lectures." });
   }
-  const { courseId, topic, scheduledAt } = req.body;
+  const { courseId, topic, scheduledAt, endsAt } = req.body;
   if (!courseId || !topic) {
     return res.status(400).json({ error: "Course ID and topic are required." });
   }
@@ -1963,6 +1963,7 @@ app.post("/api/lectures", authenticateToken, async (req: any, res) => {
         content: "",
         isActive: !isScheduled,
         scheduledAt: isScheduled ? new Date(scheduledAt) : null,
+        endsAt: endsAt ? new Date(endsAt) : null,
         jitsiRoom: `quizos-${Date.now().toString(36)}`,
       },
     });
@@ -1977,9 +1978,15 @@ app.post("/api/lectures", authenticateToken, async (req: any, res) => {
 app.get("/api/lectures/active-all", authenticateToken, async (req: any, res) => {
   try {
     const now = new Date();
+    // Demand-trigger: activate sessions whose scheduled time has passed
     await prisma.lectureSession.updateMany({
       where: { isActive: false, scheduledAt: { not: null, lte: now } },
       data: { isActive: true },
+    });
+    // Demand-trigger: auto-end sessions whose endsAt has passed (null scheduledAt so it can't re-activate)
+    await prisma.lectureSession.updateMany({
+      where: { isActive: true, endsAt: { not: null, lte: now } },
+      data: { isActive: false, scheduledAt: null },
     });
     const sessions = await prisma.lectureSession.findMany({
       where: { isActive: true },
@@ -2024,6 +2031,11 @@ app.get("/api/lectures/active/:courseId", authenticateToken, async (req: any, re
     await prisma.lectureSession.updateMany({
       where: { courseId, isActive: false, scheduledAt: { not: null, lte: now } },
       data: { isActive: true },
+    });
+    // Demand-trigger: auto-end if endsAt passed
+    await prisma.lectureSession.updateMany({
+      where: { courseId, isActive: true, endsAt: { not: null, lte: now } },
+      data: { isActive: false, scheduledAt: null },
     });
     const session = await prisma.lectureSession.findFirst({
       where: { courseId, isActive: true },
@@ -2108,7 +2120,8 @@ app.post("/api/lectures/:id/end", authenticateToken, async (req: any, res) => {
     if (session.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
     const ended = await prisma.lectureSession.update({
       where: { id },
-      data: { isActive: false },
+      // Null out scheduledAt so the demand-trigger never re-activates this ended session
+      data: { isActive: false, scheduledAt: null },
     });
     return res.json(ended);
   } catch (error: any) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import TurndownService from "turndown";
-import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, MicOff, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles, Eye, Monitor, KeyRound, ShieldCheck } from "lucide-react";
+import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, MicOff, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles, Eye, Monitor, KeyRound, ShieldCheck, Clock } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import NotificationBell from "./NotificationBell";
@@ -112,7 +112,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [liveCourseId, setLiveCourseId] = useState("");
   const [liveTopic, setLiveTopic] = useState("");
   const [liveScheduledAt, setLiveScheduledAt] = useState("");
+  const [liveEndsAt, setLiveEndsAt] = useState("");
   const [broadcastingSession, setBroadcastingSession] = useState<any | null>(null);
+  const [broadcastNow, setBroadcastNow] = useState(Date.now()); // 1s tick for end-time countdown
   const [myScheduledSessions, setMyScheduledSessions] = useState<any[]>([]);
   const [schedNow, setSchedNow] = useState(Date.now());
   const [liveChats, setLiveChats] = useState<any[]>([]);
@@ -1185,17 +1187,24 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       const res = await fetch("/api/lectures", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ courseId: liveCourseId, topic: liveTopic, scheduledAt: liveScheduledAt ? localToUTCIso(liveScheduledAt) : undefined }),
+        body: JSON.stringify({
+          courseId: liveCourseId,
+          topic: liveTopic,
+          scheduledAt: liveScheduledAt ? localToUTCIso(liveScheduledAt) : undefined,
+          endsAt: liveEndsAt ? localToUTCIso(liveEndsAt) : undefined,
+        }),
       });
       if (res.ok) {
         const data = await res.json();
         if (data.isActive) {
           setBroadcastingSession(data);
+          setLiveTopic(""); setLiveCourseId(""); setLiveScheduledAt(""); setLiveEndsAt("");
           showSuccess("Live class started! Students can join now.");
         } else {
           await fetchMyScheduledSessions();
           setLiveTopic("");
           setLiveScheduledAt("");
+          setLiveEndsAt("");
           showSuccess("Class scheduled! It will go live automatically at the set time.");
         }
       } else {
@@ -1259,6 +1268,19 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     const id = setInterval(() => setSchedNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [myScheduledSessions.length]);
+
+  // 1-second tick for broadcast end-time countdown + auto-end
+  useEffect(() => {
+    if (!broadcastingSession?.endsAt) return;
+    const id = setInterval(async () => {
+      setBroadcastNow(Date.now());
+      if (new Date(broadcastingSession.endsAt).getTime() <= Date.now()) {
+        clearInterval(id);
+        await handleEndLiveLecture();
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [broadcastingSession?.id, broadcastingSession?.endsAt]);
 
   const handleResetStudentPassword = async () => {
     if (!resetPwdModal || !resetPwdInput.trim()) return;
@@ -2048,6 +2070,36 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         </div>
                       )}
 
+                      {/* Auto-end countdown banner */}
+                      {broadcastingSession.endsAt && (() => {
+                        const endDiff = new Date(broadcastingSession.endsAt).getTime() - broadcastNow;
+                        const endMins = Math.floor(endDiff / 60000);
+                        const endSecs = Math.floor((endDiff % 60000) / 1000);
+                        const endH = Math.floor(endDiff / 3600000);
+                        const endM = Math.floor((endDiff % 3600000) / 60000);
+                        const endS = Math.floor((endDiff % 60000) / 1000);
+                        const cdStr = endDiff <= 0 ? "Ending now…" : endH > 0 ? `${endH}h ${endM}m ${endS}s` : endMins > 0 ? `${endM}m ${endS}s` : `${endS}s`;
+                        const isWarning = endDiff > 0 && endDiff <= 5 * 60 * 1000;
+                        const isCritical = endDiff > 0 && endDiff <= 60 * 1000;
+                        if (endDiff <= 0) return null;
+                        return (
+                          <div className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-[10px] border text-[12px] font-semibold ${
+                            isCritical ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-400 animate-pulse"
+                            : isWarning ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/30 text-amber-700 dark:text-amber-400"
+                            : "bg-black/[0.03] dark:bg-white/[0.04] border-black/[0.07] dark:border-white/[0.07] text-[#6e6e73] dark:text-white/40"
+                          }`}>
+                            <span className="flex items-center gap-2">
+                              <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                              {isCritical ? "Broadcast ending in:" : isWarning ? "Class ending soon:" : "Auto-ends at:"}
+                              {!isWarning && !isCritical && (
+                                <span className="font-mono">{new Date(broadcastingSession.endsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                              )}
+                            </span>
+                            <span className="font-mono font-bold tabular-nums">{cdStr}</span>
+                          </div>
+                        );
+                      })()}
+
                       {/* ── Unified content toolbar ── */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {/* Upload PPTX — auto-loads on file select */}
@@ -2391,6 +2443,18 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           <input type="datetime-local" value={liveScheduledAt}
                             onChange={(e) => setLiveScheduledAt(e.target.value)}
                             min={toLocalInputStr(new Date(Date.now() + 60000))}
+                            className="form-input" />
+                        </div>
+                        <div>
+                          <label className={lbl}>
+                            Auto-End Time
+                            <span className="ml-1.5 normal-case font-normal text-[#8e8e93] dark:text-white/30 tracking-normal">(optional — broadcast stops automatically at this time)</span>
+                          </label>
+                          <input type="datetime-local" value={liveEndsAt}
+                            onChange={(e) => setLiveEndsAt(e.target.value)}
+                            min={liveScheduledAt
+                              ? toLocalInputStr(new Date(new Date(liveScheduledAt).getTime() + 60000))
+                              : toLocalInputStr(new Date(Date.now() + 120000))}
                             className="form-input" />
                         </div>
                         <button type="submit" className="btn-gradient flex items-center gap-2 w-full justify-center">

@@ -2354,6 +2354,31 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
                     return (
                       <div className="space-y-2 sm:space-y-3">
+                        {/* Auto-end countdown for students */}
+                        {activeLiveSession.endsAt && (() => {
+                          void periodTick; // consumed so 1s tick re-renders this countdown
+                          const endDiff = new Date(activeLiveSession.endsAt).getTime() - Date.now();
+                          const endH = Math.floor(endDiff / 3600000);
+                          const endM = Math.floor((endDiff % 3600000) / 60000);
+                          const endS = Math.floor((endDiff % 60000) / 1000);
+                          const cdStr = endH > 0 ? `${endH}h ${endM}m` : endM > 0 ? `${endM}m ${endS}s` : `${endS}s`;
+                          const isWarning = endDiff > 0 && endDiff <= 5 * 60 * 1000;
+                          const isCritical = endDiff > 0 && endDiff <= 60 * 1000;
+                          if (endDiff <= 0 || (!isWarning && !isCritical)) return null;
+                          return (
+                            <div className={`flex items-center justify-between gap-2 px-3.5 py-2 rounded-[10px] border text-[12px] font-semibold ${
+                              isCritical ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-400 animate-pulse"
+                              : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/30 text-amber-700 dark:text-amber-400"
+                            }`}>
+                              <span className="flex items-center gap-1.5">
+                                <Clock className="h-3.5 w-3.5" />
+                                {isCritical ? "Class ending very soon!" : "Class ending soon"}
+                              </span>
+                              <span className="font-mono font-bold">{cdStr} remaining</span>
+                            </div>
+                          );
+                        })()}
+
                         {activeLiveSession.attachmentName && activeLiveSession.attachmentData && (
                           <div className="flex items-center justify-between gap-3 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-[12px]">
                             <div className="flex items-center gap-2">
