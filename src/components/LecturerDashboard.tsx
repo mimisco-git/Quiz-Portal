@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import TurndownService from "turndown";
-import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles, Eye } from "lucide-react";
+import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, MicOff, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles, Eye, Monitor } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import NotificationBell from "./NotificationBell";
@@ -170,7 +170,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [expandedAssignmentSub, setExpandedAssignmentSub] = useState<string | null>(null);
   const [manualScoreInputs, setManualScoreInputs] = useState<Record<string, string>>({});
 
-  const [liveSubTab, setLiveSubTab] = useState<"audio" | "slides" | "poll" | "attendance" | "chat">("slides");
+  const [liveSubTab, setLiveSubTab] = useState<"poll" | "attendance" | "chat">("poll");
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["Option A", "Option B", "Option C", "Option D"]);
   const [attachLiveFile, setAttachLiveFile] = useState<File | null>(null);
@@ -1329,18 +1329,20 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     audioRoomRef.current?.muteAll();
   };
 
-  const handleAttachFile = async () => {
-    if (!broadcastingSession || !attachLiveFile) return;
-    const fd = new FormData(); fd.append("file", attachLiveFile);
+  const handleAttachFile = async (file?: File) => {
+    const f = file ?? attachLiveFile;
+    if (!broadcastingSession || !f) return;
+    const fd = new FormData(); fd.append("file", f);
     const res = await fetch(`/api/lectures/${broadcastingSession.id}/attachment`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
-    if (res.ok) { showSuccess(`"${attachLiveFile.name}" attached. Students can now download it.`); setAttachLiveFile(null); }
+    if (res.ok) { showSuccess(`"${f.name}" attached. Students can now download it.`); setAttachLiveFile(null); }
     else showError("Failed to attach file");
   };
 
-  const handleUploadPptx = async () => {
-    if (!broadcastingSession || !pptxFile) return;
+  const handleUploadPptx = async (file?: File) => {
+    const f = file ?? pptxFile;
+    if (!broadcastingSession || !f) return;
     setIsUploadingPptx(true);
-    const fd = new FormData(); fd.append("file", pptxFile);
+    const fd = new FormData(); fd.append("file", f);
     const res = await fetch(`/api/lectures/${broadcastingSession.id}/pptx`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
     if (res.ok) {
       const data = await res.json();
@@ -1981,152 +1983,146 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         </div>
                       )}
 
-                      {/* Sub-tabs */}
-                      <div className="flex gap-1 bg-black/[0.04] dark:bg-white/[0.04] rounded-[12px] p-1 border border-black/[0.06] dark:border-white/[0.05] overflow-x-auto">
+                      {/* ── Unified content toolbar ── */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {/* Upload PPTX — auto-loads on file select */}
+                        <label className={`flex items-center gap-2 px-3 py-2.5 border rounded-[12px] cursor-pointer transition-all text-[12px] font-semibold ${isUploadingPptx ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400" : "border-dashed border-black/[0.14] dark:border-white/[0.14] hover:border-emerald-400 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/10 text-[#3a3a3c] dark:text-white/70"}`}>
+                          {isUploadingPptx ? <Loader2 className="h-4 w-4 animate-spin shrink-0" /> : <Layers className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+                          <span className="truncate">{isUploadingPptx ? "Parsing…" : slides.length > 0 ? `${slides.length} slides loaded` : "Upload PPTX"}</span>
+                          <input type="file" accept=".pptx" className="hidden" onChange={e => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) handleUploadPptx(f);
+                          }} />
+                        </label>
+
+                        {/* Share Screen */}
+                        <button type="button" onClick={() => audioRoomRef.current?.startScreenShare()}
+                          className="flex items-center gap-2 px-3 py-2.5 border border-dashed border-black/[0.14] dark:border-white/[0.14] hover:border-blue-400 hover:bg-blue-50/60 dark:hover:bg-blue-950/10 rounded-[12px] text-[12px] font-semibold text-[#3a3a3c] dark:text-white/70 transition cursor-pointer">
+                          <Monitor className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                          Share Screen
+                        </button>
+
+                        {/* Mute All */}
+                        <button type="button" onClick={handleMuteAll}
+                          className="flex items-center gap-2 px-3 py-2.5 border border-dashed border-black/[0.14] dark:border-white/[0.14] hover:border-red-400 hover:bg-red-50/60 dark:hover:bg-red-950/10 rounded-[12px] text-[12px] font-semibold text-[#3a3a3c] dark:text-white/70 transition cursor-pointer">
+                          <MicOff className="h-4 w-4 text-red-500 shrink-0" />
+                          Mute All
+                        </button>
+
+                        {/* Share File */}
+                        <label className="flex items-center gap-2 px-3 py-2.5 border border-dashed border-black/[0.14] dark:border-white/[0.14] hover:border-amber-400 hover:bg-amber-50/60 dark:hover:bg-amber-950/10 rounded-[12px] cursor-pointer text-[12px] font-semibold text-[#3a3a3c] dark:text-white/70 transition">
+                          <Upload className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <span className="truncate">{attachLiveFile ? attachLiveFile.name : broadcastingSession.attachmentName ? "File shared ✓" : "Share File"}</span>
+                          <input type="file" className="hidden" onChange={e => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) handleAttachFile(f);
+                          }} />
+                        </label>
+                      </div>
+
+
+                      {/* ── Slide area / placeholder ── */}
+                      {slides.length > 0 ? (
+                        <div className="space-y-3">
+                          <SlideView
+                            content={slides[safeSlide]}
+                            slideNumber={safeSlide + 1}
+                            totalSlides={slides.length}
+                            topic={broadcastingSession.topic}
+                            courseCode={courses.find((c: any) => c.id === broadcastingSession.courseId)?.code}
+                            canNavigate
+                            onPrev={() => handleSlideChange(Math.max(0, safeSlide - 1))}
+                            onNext={() => handleSlideChange(Math.min(slides.length - 1, safeSlide + 1))}
+                          />
+                          <div className="flex items-center justify-between gap-3">
+                            <button onClick={() => handleSlideChange(Math.max(0, safeSlide - 1))} disabled={safeSlide === 0}
+                              className="flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold bg-black/[0.06] dark:bg-white/[0.08] hover:bg-black/[0.12] dark:hover:bg-white/[0.14] text-[#3a3a3c] dark:text-white/70 rounded-[10px] disabled:opacity-30 transition cursor-pointer">
+                              <ChevronLeft className="h-4 w-4" /> Previous
+                            </button>
+                            <span className="text-[11px] font-mono text-[#6e6e73] dark:text-white/40 select-none">{safeSlide + 1} / {slides.length} · hover for fullscreen</span>
+                            <button onClick={() => handleSlideChange(Math.min(slides.length - 1, safeSlide + 1))} disabled={safeSlide === slides.length - 1}
+                              className="flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-[10px] disabled:opacity-30 transition cursor-pointer">
+                              Next <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center rounded-2xl border-2 border-dashed border-black/[0.07] dark:border-white/[0.07] bg-black/[0.02] dark:bg-white/[0.02]" style={{ aspectRatio: "16/9" }}>
+                          <div className="text-center space-y-2.5 px-6">
+                            <div className="flex items-center justify-center gap-3">
+                              <Layers className="h-8 w-8 text-slate-300 dark:text-slate-600" />
+                              <span className="text-slate-300 dark:text-slate-600 text-xl font-light">or</span>
+                              <Monitor className="h-8 w-8 text-slate-300 dark:text-slate-600" />
+                            </div>
+                            <p className="text-[14px] font-semibold text-[#6e6e73] dark:text-white/40">Upload PPTX or Share Screen</p>
+                            <p className="text-[11px] text-[#8e8e93] dark:text-white/25">Students are waiting — choose how you want to present</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── Hand raise alerts ── */}
+                      {handRaises.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                            <ThumbsUp className="h-3.5 w-3.5" /> {handRaises.length} student{handRaises.length !== 1 ? "s" : ""} raised hand
+                          </p>
+                          {handRaises.map((h: any) => (
+                            <div key={h.id} className={`flex items-center justify-between gap-3 px-3.5 py-2.5 border rounded-[10px] ${h.allowedToSpeak ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/30" : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/30"}`}>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[15px]">{h.allowedToSpeak ? "🎤" : "✋"}</span>
+                                <div>
+                                  <p className="text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/90">{h.studentName}</p>
+                                  <p className="text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40">
+                                    {h.allowedToSpeak ? "Speaking allowed" : new Date(h.raisedAt).toLocaleTimeString()}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {!h.allowedToSpeak ? (
+                                  <button onClick={() => handleAllowToSpeak(h.id, h.studentName)}
+                                    className="px-3 py-1 text-[11px] font-semibold border border-emerald-400 dark:border-emerald-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 rounded-[8px] transition cursor-pointer">
+                                    Allow 🎤
+                                  </button>
+                                ) : (
+                                  <button onClick={() => handleMuteStudent(h.id, h.studentName)}
+                                    className="px-3 py-1 text-[11px] font-semibold border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-[8px] transition cursor-pointer">
+                                    Mute 🔇
+                                  </button>
+                                )}
+                                <button onClick={() => handleDismissHandRaise(h.id)}
+                                  className="px-3 py-1 text-[11px] font-semibold border border-black/[0.09] dark:border-white/[0.10] text-[#6e6e73] dark:text-white/50 hover:bg-black/[0.05] dark:hover:bg-white/[0.05] rounded-[8px] transition cursor-pointer">
+                                  Lower
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* ── Audio room — always visible ── */}
+                      <LiveAudioRoom
+                        ref={audioRoomRef}
+                        roomId={broadcastingSession.id}
+                        displayName={user.name}
+                        role="lecturer"
+                      />
+
+                      {/* ── Bottom sub-tabs: Poll | Attendance | Chat ── */}
+                      <div className="flex gap-1 bg-black/[0.04] dark:bg-white/[0.04] rounded-[12px] p-1 border border-black/[0.06] dark:border-white/[0.05]">
                         {([
-                          { id: "audio",      icon: Mic,           label: "Audio/Video" },
-                          { id: "slides",     icon: Layers,        label: `Slides${slides.length > 1 ? ` (${safeSlide + 1}/${slides.length})` : ""}` },
                           { id: "poll",       icon: BarChart2,     label: `Poll${activePoll ? " •" : ""}` },
                           { id: "attendance", icon: Users,         label: `Attendance (${attendance.length})` },
                           { id: "chat",       icon: MessageSquare, label: `Chat (${liveChats.length})` },
-                        ] as { id: "audio" | "slides" | "poll" | "attendance" | "chat"; icon: React.ElementType; label: string }[]).map(tab => (
+                        ] as { id: "poll" | "attendance" | "chat"; icon: React.ElementType; label: string }[]).map(tab => (
                           <button key={tab.id} onClick={() => setLiveSubTab(tab.id)}
-                            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveSubTab === tab.id ? "bg-[#ffffff] dark:bg-white/[0.10] text-[#1d1d1f] dark:text-white/90 shadow-sm border border-black/[0.07] dark:border-white/[0.08]" : "text-[#6e6e73] dark:text-white/50 hover:text-[#1d1d1f] dark:hover:text-white/75"}`}>
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] transition-all duration-150 ${liveSubTab === tab.id ? "bg-[#ffffff] dark:bg-white/[0.10] text-[#1d1d1f] dark:text-white/90 shadow-sm border border-black/[0.07] dark:border-white/[0.08]" : "text-[#6e6e73] dark:text-white/50 hover:text-[#1d1d1f] dark:hover:text-white/75"}`}>
                             <tab.icon className="h-3.5 w-3.5 flex-shrink-0" />
                             {tab.label}
                           </button>
                         ))}
                       </div>
-
-                      {/* LiveAudioRoom — always mounted so audio stays alive when switching tabs */}
-                      <div style={{ display: liveSubTab === "audio" ? "block" : "none" }}>
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <p className="text-[12px] font-semibold text-[#6e6e73] dark:text-white/40">Live audio room — you are the host</p>
-                            <button onClick={handleMuteAll}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold rounded-[10px] border border-red-200 dark:border-red-800/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition cursor-pointer">
-                              <Mic className="h-3.5 w-3.5" /> Mute All Students
-                            </button>
-                          </div>
-                          <LiveAudioRoom
-                            ref={audioRoomRef}
-                            roomId={broadcastingSession.id}
-                            displayName={user.name}
-                            role="lecturer"
-                          />
-                          <div className="bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4 space-y-3">
-                            <p className={lbl}>Share a File with Students</p>
-                            <div className="flex items-center gap-3">
-                              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-black/[0.12] dark:border-white/[0.15] rounded-[10px] cursor-pointer hover:border-emerald-400 transition-colors text-[12px] text-[#6e6e73] dark:text-white/50 flex-1">
-                                <Upload className="h-4 w-4 shrink-0" />
-                                {attachLiveFile ? attachLiveFile.name : "Choose file to share (PDF, DOCX, etc.)"}
-                                <input type="file" className="hidden" onChange={e => setAttachLiveFile(e.target.files?.[0] ?? null)} />
-                              </label>
-                              <button onClick={handleAttachFile} disabled={!attachLiveFile}
-                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold rounded-[10px] transition disabled:opacity-40">
-                                Share
-                              </button>
-                            </div>
-                            {broadcastingSession.attachmentName && (
-                              <p className="text-[12px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                                <CheckCircle className="h-3.5 w-3.5 flex-shrink-0" /> Shared: {broadcastingSession.attachmentName}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Slides */}
-                      {liveSubTab === "slides" && (
-                        <div className="space-y-4">
-                          {/* Hand raise alerts — shown directly in slides view */}
-                          {handRaises.length > 0 && (
-                            <div className="space-y-2">
-                              <p className="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                                <ThumbsUp className="h-3.5 w-3.5" /> {handRaises.length} student{handRaises.length !== 1 ? "s" : ""} raised hand
-                              </p>
-                              {handRaises.map((h: any) => (
-                                <div key={h.id} className={`flex items-center justify-between gap-3 px-3.5 py-2.5 border rounded-[10px] ${h.allowedToSpeak ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/30" : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/30"}`}>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[15px]">{h.allowedToSpeak ? "🎤" : "✋"}</span>
-                                    <div>
-                                      <p className="text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/90">{h.studentName}</p>
-                                      <p className="text-[10.5px] font-mono text-[#6e6e73] dark:text-white/40">
-                                        {h.allowedToSpeak ? "Speaking allowed" : new Date(h.raisedAt).toLocaleTimeString()}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                                    {!h.allowedToSpeak ? (
-                                      <button onClick={() => handleAllowToSpeak(h.id, h.studentName)}
-                                        className="px-3 py-1 text-[11px] font-semibold border border-emerald-400 dark:border-emerald-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 rounded-[8px] transition cursor-pointer">
-                                        Allow 🎤
-                                      </button>
-                                    ) : (
-                                      <button onClick={() => handleMuteStudent(h.id, h.studentName)}
-                                        className="px-3 py-1 text-[11px] font-semibold border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-[8px] transition cursor-pointer">
-                                        Mute 🔇
-                                      </button>
-                                    )}
-                                    <button onClick={() => handleDismissHandRaise(h.id)}
-                                      className="px-3 py-1 text-[11px] font-semibold border border-black/[0.09] dark:border-white/[0.10] text-[#6e6e73] dark:text-white/50 hover:bg-black/[0.05] dark:hover:bg-white/[0.05] rounded-[8px] transition cursor-pointer">
-                                      Lower
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {slides.length > 0 && (
-                            <div className="space-y-3">
-                              <SlideView
-                                content={slides[safeSlide]}
-                                slideNumber={safeSlide + 1}
-                                totalSlides={slides.length}
-                                topic={broadcastingSession.topic}
-                                courseCode={courses.find((c: any) => c.id === broadcastingSession.courseId)?.code}
-                                canNavigate
-                                onPrev={() => handleSlideChange(Math.max(0, safeSlide - 1))}
-                                onNext={() => handleSlideChange(Math.min(slides.length - 1, safeSlide + 1))}
-                              />
-                              <div className="flex items-center justify-between gap-3">
-                                <button onClick={() => handleSlideChange(Math.max(0, safeSlide - 1))} disabled={safeSlide === 0}
-                                  className="flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold bg-black/[0.06] dark:bg-white/[0.08] hover:bg-black/[0.12] dark:hover:bg-white/[0.14] text-[#3a3a3c] dark:text-white/70 rounded-[10px] disabled:opacity-30 transition cursor-pointer">
-                                  <ChevronLeft className="h-4 w-4" /> Previous
-                                </button>
-                                <span className="text-[11px] font-mono text-[#6e6e73] dark:text-white/40 select-none">← → or hover slide for fullscreen</span>
-                                <button onClick={() => handleSlideChange(Math.min(slides.length - 1, safeSlide + 1))} disabled={safeSlide === slides.length - 1}
-                                  className="flex items-center gap-2 px-5 py-2.5 text-[13px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-[10px] disabled:opacity-30 transition cursor-pointer">
-                                  Next <ChevronRight className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                          <div className="bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4 space-y-3">
-                            <p className={lbl}>Upload PowerPoint (.pptx)</p>
-                            <div className="flex items-center gap-3">
-                              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-black/[0.12] dark:border-white/[0.15] rounded-[10px] cursor-pointer hover:border-emerald-400 transition-colors text-[12px] text-[#6e6e73] dark:text-white/50 flex-1 min-w-0">
-                                <Layers className="h-4 w-4 shrink-0" />
-                                <span className="truncate">{pptxFile ? pptxFile.name : "Choose .pptx file"}</span>
-                                <input type="file" accept=".pptx" className="hidden" onChange={e => setPptxFile(e.target.files?.[0] ?? null)} />
-                              </label>
-                              <button onClick={handleUploadPptx} disabled={!pptxFile || isUploadingPptx}
-                                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold rounded-[10px] transition disabled:opacity-40 flex-shrink-0">
-                                {isUploadingPptx ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Parsing…</> : "Load Slides"}
-                              </button>
-                            </div>
-                            <p className="text-[11px] text-[#6e6e73] dark:text-white/40">Slides are extracted from the PPTX and displayed in order during the live class.</p>
-                          </div>
-                          <div className="bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.06] dark:border-white/[0.05] rounded-[12px] p-4 space-y-3">
-                            <p className={lbl}>Update Content Manually</p>
-                            <input type="text" value={liveTopic} onChange={e => setLiveTopic(e.target.value)} placeholder="Topic" className="form-input" />
-                            <textarea rows={8} value={liveContent} onChange={e => setLiveContent(e.target.value)} className="form-input" />
-                            <button onClick={handleUpdateLiveLecture} className="btn-gradient flex items-center gap-2">
-                              <Save className="h-4 w-4" /> Sync to Students
-                            </button>
-                          </div>
-                        </div>
-                      )}
 
                       {/* Poll */}
                       {liveSubTab === "poll" && (
