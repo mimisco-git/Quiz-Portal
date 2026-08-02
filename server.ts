@@ -1798,24 +1798,29 @@ app.post("/api/lectures", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") {
     return res.status(403).json({ error: "Only lecturers can broadcast lectures." });
   }
-  const { courseId, topic, content } = req.body;
-  if (!courseId || !topic || !content) {
-    return res.status(400).json({ error: "Course ID, topic, and content are required." });
+  const { courseId, topic, scheduledAt } = req.body;
+  if (!courseId || !topic) {
+    return res.status(400).json({ error: "Course ID and topic are required." });
   }
 
+  const isScheduled = scheduledAt && new Date(scheduledAt) > new Date();
+
   try {
-    // Deactivate previous active lectures for this course first
-    await prisma.lectureSession.updateMany({
-      where: { courseId, isActive: true },
-      data: { isActive: false },
-    });
+    if (!isScheduled) {
+      // Deactivate previous active lectures for this course
+      await prisma.lectureSession.updateMany({
+        where: { courseId, isActive: true },
+        data: { isActive: false },
+      });
+    }
 
     const session = await prisma.lectureSession.create({
       data: {
         courseId,
         topic: topic.trim(),
-        content,
-        isActive: true,
+        content: "",
+        isActive: !isScheduled,
+        scheduledAt: isScheduled ? new Date(scheduledAt) : null,
         jitsiRoom: `quizos-${Date.now().toString(36)}`,
       },
     });
@@ -1829,6 +1834,11 @@ app.post("/api/lectures", authenticateToken, async (req: any, res) => {
 
 app.get("/api/lectures/active-all", authenticateToken, async (req: any, res) => {
   try {
+    const now = new Date();
+    await prisma.lectureSession.updateMany({
+      where: { isActive: false, scheduledAt: { not: null, lte: now } },
+      data: { isActive: true },
+    });
     const sessions = await prisma.lectureSession.findMany({
       where: { isActive: true },
       include: {
@@ -1844,9 +1854,31 @@ app.get("/api/lectures/active-all", authenticateToken, async (req: any, res) => 
   }
 });
 
+app.get("/api/lectures/scheduled", authenticateToken, async (req: any, res) => {
+  try {
+    const now = new Date();
+    const sessions = await prisma.lectureSession.findMany({
+      where: { isActive: false, scheduledAt: { gt: now } },
+      include: {
+        course: { select: { id: true, code: true, title: true, lecturer: { select: { name: true } } } },
+      },
+      orderBy: { scheduledAt: "asc" },
+    });
+    return res.json(sessions);
+  } catch (error: any) {
+    console.error("Error fetching scheduled sessions:", error);
+    return res.status(500).json({ error: "Error fetching scheduled sessions" });
+  }
+});
+
 app.get("/api/lectures/active/:courseId", authenticateToken, async (req: any, res) => {
   const { courseId } = req.params;
   try {
+    const now = new Date();
+    await prisma.lectureSession.updateMany({
+      where: { courseId, isActive: false, scheduledAt: { not: null, lte: now } },
+      data: { isActive: true },
+    });
     const session = await prisma.lectureSession.findFirst({
       where: { courseId, isActive: true },
       include: {
@@ -1936,6 +1968,23 @@ app.post("/api/lectures/:id/end", authenticateToken, async (req: any, res) => {
   } catch (error: any) {
     console.error("Error ending live lecture:", error);
     return res.status(500).json({ error: "Error ending live lecture" });
+  }
+});
+
+app.delete("/api/lectures/:id", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") {
+    return res.status(403).json({ error: "Only lecturers can delete lectures." });
+  }
+  const { id } = req.params;
+  try {
+    const session = await prisma.lectureSession.findUnique({ where: { id }, include: { course: { select: { lecturerId: true } } } });
+    if (!session) return res.status(404).json({ error: "Lecture not found" });
+    if (session.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
+    await prisma.lectureSession.delete({ where: { id } });
+    return res.json({ ok: true });
+  } catch (error: any) {
+    console.error("Error deleting lecture:", error);
+    return res.status(500).json({ error: "Error deleting lecture" });
   }
 });
 

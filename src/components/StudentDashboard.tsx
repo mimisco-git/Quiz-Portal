@@ -74,6 +74,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   const [activeLiveSession, setActiveLiveSession] = useState<any | null>(null);
   const [allLiveSessions, setAllLiveSessions] = useState<any[]>([]);
+  const [scheduledSessions, setScheduledSessions] = useState<any[]>([]);
+  const [schedNow, setSchedNow] = useState(Date.now());
   const [joinedCourseId, setJoinedCourseId] = useState<string | null>(null);
   const [liveChats, setLiveChats] = useState<any[]>([]);
   const [chatMessage, setChatMessage] = useState("");
@@ -140,8 +142,12 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   const fetchAllLiveSessions = async () => {
     try {
-      const res = await fetch("/api/lectures/active-all", { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) setAllLiveSessions(await res.json());
+      const [activeRes, scheduledRes] = await Promise.all([
+        fetch("/api/lectures/active-all", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/lectures/scheduled", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (activeRes.ok) setAllLiveSessions(await activeRes.json());
+      if (scheduledRes.ok) setScheduledSessions(await scheduledRes.json());
     } catch {}
   };
 
@@ -328,6 +334,13 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     }
     return () => clearInterval(interval);
   }, [activeTab, joinedCourseId]);
+
+  // Tick every second to drive scheduled-session countdowns
+  useEffect(() => {
+    if (scheduledSessions.length === 0) return;
+    const id = setInterval(() => setSchedNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [scheduledSessions.length]);
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -2225,13 +2238,48 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 <div className="p-2 sm:p-5">
                   {!activeLiveSession ? (
                     <div className="space-y-4">
-                      {allLiveSessions.length === 0 ? (
+                      {/* Scheduled / upcoming sessions */}
+                      {scheduledSessions.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Upcoming Classes</p>
+                          {scheduledSessions.map((sess: any) => {
+                            const diff = new Date(sess.scheduledAt).getTime() - schedNow;
+                            const h = Math.floor(diff / 3600000);
+                            const m = Math.floor((diff % 3600000) / 60000);
+                            const s = Math.floor((diff % 60000) / 1000);
+                            const cdStr = diff <= 0 ? "Starting now…" : h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+                            return (
+                              <div key={sess.id} className="flex items-center justify-between gap-3 p-4 border border-amber-100 dark:border-amber-800/30 bg-amber-50/40 dark:bg-amber-950/10 rounded-[14px]">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                                    <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{sess.topic}</p>
+                                    <p className="text-[11.5px] text-[#6e6e73] dark:text-white/50 truncate">
+                                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{sess.course?.code}</span>
+                                      {" · "}{sess.course?.title}
+                                      {" · "}{sess.course?.lecturer?.name}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex-shrink-0 px-3 py-1.5 bg-amber-100 dark:bg-amber-900/30 rounded-[10px] text-center">
+                                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Starting in</p>
+                                  <p className="text-[12px] font-mono font-bold text-amber-700 dark:text-amber-300">{cdStr}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {allLiveSessions.length === 0 && scheduledSessions.length === 0 ? (
                         <div className="py-16 text-center border border-dashed border-black/[0.10] dark:border-white/[0.10] rounded-[12px]">
                           <Radio className="h-8 w-8 text-black/20 dark:text-white/20 mx-auto mb-3" />
                           <h4 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/70">No Live Lectures Right Now</h4>
                           <p className="text-[12px] text-[#6e6e73] dark:text-white/40 max-w-sm mx-auto mt-1.5 leading-relaxed">When a lecturer goes live, their class will appear here. Check back soon.</p>
                         </div>
-                      ) : (
+                      ) : allLiveSessions.length > 0 ? (
                         <div className="space-y-3">
                           <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">Live Now — Select a Class to Join</p>
                           {allLiveSessions.map((session: any) => (
@@ -2273,7 +2321,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                             </motion.div>
                           ))}
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   ) : (() => {
                     const slides = activeLiveSession.content.split(/^---$/m).map((s: string) => s.trim()).filter(Boolean);

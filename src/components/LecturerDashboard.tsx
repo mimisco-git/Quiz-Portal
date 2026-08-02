@@ -111,8 +111,10 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   const [liveCourseId, setLiveCourseId] = useState("");
   const [liveTopic, setLiveTopic] = useState("");
-  const [liveContent, setLiveContent] = useState("");
+  const [liveScheduledAt, setLiveScheduledAt] = useState("");
   const [broadcastingSession, setBroadcastingSession] = useState<any | null>(null);
+  const [scheduledSession, setScheduledSession] = useState<any | null>(null);
+  const [schedCountdown, setSchedCountdown] = useState("");
   const [liveChats, setLiveChats] = useState<any[]>([]);
   const [lecturerChatMessage, setLecturerChatMessage] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
@@ -176,9 +178,6 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [attachLiveFile, setAttachLiveFile] = useState<File | null>(null);
   const [pptxFile, setPptxFile] = useState<File | null>(null);
   const [isUploadingPptx, setIsUploadingPptx] = useState(false);
-  const [preLaunchPptxFile, setPreLaunchPptxFile] = useState<File | null>(null);
-  const [isParsingPptx, setIsParsingPptx] = useState(false);
-  const [parsedSlideCount, setParsedSlideCount] = useState<number | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [sessionSummary, setSessionSummary] = useState<string | null>(null);
 
@@ -527,7 +526,6 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
             setBroadcastingSession(data);
             setLiveCourseId(c.id);
             setLiveTopic(data.topic);
-            setLiveContent(data.content);
             setLiveChats(data.chats || []);
             break;
           }
@@ -1157,76 +1155,80 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   const handleLaunchLiveLecture = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!liveCourseId || !liveTopic.trim() || !liveContent.trim()) {
-      showError("Fill out all required live lecture fields");
+    if (!liveCourseId || !liveTopic.trim()) {
+      showError("Please select a course and enter a class title");
       return;
     }
     try {
       const res = await fetch("/api/lectures", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ courseId: liveCourseId, topic: liveTopic, content: liveContent }),
+        body: JSON.stringify({ courseId: liveCourseId, topic: liveTopic, scheduledAt: liveScheduledAt || undefined }),
       });
       if (res.ok) {
         const data = await res.json();
-        setBroadcastingSession(data);
-        showSuccess("Live Broadcast launched successfully. Virtual slides are active!");
+        if (data.isActive) {
+          setBroadcastingSession(data);
+          showSuccess("Live class started! Students can join now.");
+        } else {
+          setScheduledSession(data);
+          showSuccess("Class scheduled! It will go live automatically at the set time.");
+        }
       } else {
         const d = await res.json();
-        showError(d.error || "Failed to launch lecture stream");
+        showError(d.error || "Failed to create live class");
       }
     } catch (err: any) {
       showError(err.message);
     }
   };
 
-  const handlePreLaunchPptx = async (file: File) => {
-    setPreLaunchPptxFile(file);
-    setIsParsingPptx(true);
-    setParsedSlideCount(null);
+  const handleCancelScheduled = async () => {
+    if (!scheduledSession) return;
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/lectures/parse-pptx", {
-        method: "POST",
+      await fetch(`/api/lectures/${scheduledSession.id}`, {
+        method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
-        body: fd,
       });
-      const data = await res.json();
-      if (res.ok) {
-        setLiveContent(data.content);
-        setParsedSlideCount(data.slideCount);
-        showSuccess(`Extracted ${data.slideCount} slides from ${file.name}`);
-      } else {
-        showError(data.error || "Failed to parse PPT file");
-        setPreLaunchPptxFile(null);
-      }
-    } catch (err: any) {
-      showError(err.message);
-      setPreLaunchPptxFile(null);
-    } finally {
-      setIsParsingPptx(false);
-    }
+    } catch {}
+    setScheduledSession(null);
+    setLiveTopic("");
+    setLiveCourseId("");
+    setLiveScheduledAt("");
   };
 
-  const handleUpdateLiveLecture = async () => {
-    if (!broadcastingSession || !liveContent.trim()) return;
-    try {
-      const res = await fetch(`/api/lectures/${broadcastingSession.id}/content`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content: liveContent }),
-      });
-      if (res.ok) {
-        setBroadcastingSession((prev: any) => prev ? { ...prev, topic: liveTopic, content: liveContent } : prev);
-        showSuccess("Live board synced to all connected student panels!");
-      } else {
-        showError("Failed to sync broadcast content");
-      }
-    } catch (err: any) {
-      showError(err.message);
-    }
-  };
+  // Poll every 5 seconds while a class is scheduled (not yet active)
+  useEffect(() => {
+    if (!scheduledSession) return;
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/lectures/active/${scheduledSession.courseId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data) { setBroadcastingSession(data); setScheduledSession(null); }
+        }
+      } catch {}
+    }, 5000);
+    return () => clearInterval(id);
+  }, [scheduledSession, token]);
+
+  // Update countdown display every second
+  useEffect(() => {
+    if (!scheduledSession?.scheduledAt) return;
+    const update = () => {
+      const diff = new Date(scheduledSession.scheduledAt).getTime() - Date.now();
+      if (diff <= 0) { setSchedCountdown("Starting now…"); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setSchedCountdown(h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`);
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [scheduledSession]);
 
   const handleEndLiveLecture = async () => {
     if (!broadcastingSession) return;
@@ -1239,7 +1241,6 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         setBroadcastingSession(null);
         setLiveChats([]);
         setLiveTopic("");
-        setLiveContent("");
         showSuccess("Live Virtual Class ended. Broadcast disconnected.");
       } else {
         showError("Failed to disconnect broadcast session");
@@ -1870,78 +1871,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
               </div>
               <div className="p-5 space-y-4">
 
-                {!broadcastingSession ? (
-                  <form onSubmit={handleLaunchLiveLecture} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className={lbl}>Target Course</label>
-                        <select value={liveCourseId} onChange={(e) => setLiveCourseId(e.target.value)} className="form-input">
-                          {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
-                        </select>
-                        {audienceBadge(liveCourseId)}
-                      </div>
-                      <div>
-                        <label className={lbl}>Lecture Topic</label>
-                        <input type="text" required value={liveTopic} onChange={(e) => setLiveTopic(e.target.value)} placeholder="e.g. Lecture 4: Relational Algebra" className="form-input" />
-                      </div>
-                    </div>
-
-                    {/* PPT Upload */}
-                    <div>
-                      <label className={lbl}>Upload PowerPoint Slides (.pptx)</label>
-                      <label className={`flex items-center gap-3 cursor-pointer border-2 border-dashed rounded-[12px] px-4 py-5 transition
-                        ${preLaunchPptxFile ? "border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-black/[0.10] dark:border-white/[0.10] hover:border-emerald-300 dark:hover:border-emerald-700"}`}>
-                        <input type="file" accept=".pptx" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePreLaunchPptx(f); e.target.value = ""; }} />
-                        {isParsingPptx ? (
-                          <><Loader2 className="h-5 w-5 animate-spin text-emerald-500 flex-shrink-0" /><span className="text-[13px] text-[#6e6e73] dark:text-white/50">Extracting slides…</span></>
-                        ) : preLaunchPptxFile && parsedSlideCount ? (
-                          <>
-                            <div className="flex items-center justify-center w-9 h-9 rounded-[10px] bg-emerald-100 dark:bg-emerald-900/30 flex-shrink-0">
-                              <Layers className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-400 truncate">{preLaunchPptxFile.name}</p>
-                              <p className="text-[11.5px] text-emerald-600/70 dark:text-emerald-400/60">{parsedSlideCount} slides extracted — tap to replace</p>
-                            </div>
-                            <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
-                          </>
-                        ) : (
-                          <>
-                            <div className="flex items-center justify-center w-9 h-9 rounded-[10px] bg-black/[0.04] dark:bg-white/[0.05] flex-shrink-0">
-                              <Upload className="h-4 w-4 text-[#6e6e73] dark:text-white/40" />
-                            </div>
-                            <div>
-                              <p className="text-[13px] font-semibold text-[#3a3a3c] dark:text-white/70">Choose a .pptx file</p>
-                              <p className="text-[11.5px] text-[#6e6e73] dark:text-white/40">AI extracts each slide into a live board — or type content below</p>
-                            </div>
-                          </>
-                        )}
-                      </label>
-                    </div>
-
-                    {/* Manual content — shown collapsed when PPT loaded, expanded when typing manually */}
-                    <div>
-                      <label className={lbl}>
-                        {parsedSlideCount ? "Extracted Slide Content (editable)" : "Or Type Slides Manually (separate with ---)"}
-                      </label>
-                      <textarea
-                        required
-                        rows={parsedSlideCount ? 5 : 7}
-                        value={liveContent}
-                        onChange={(e) => setLiveContent(e.target.value)}
-                        placeholder={"# Slide 1\nYour first slide content here\n\n---\n\n# Slide 2\nSecond slide…"}
-                        className="form-input font-mono text-[12px]"
-                      />
-                      {parsedSlideCount && (
-                        <p className="text-[11px] text-[#6e6e73] dark:text-white/40 mt-1">You can edit the extracted content before launching.</p>
-                      )}
-                    </div>
-
-                    <button type="submit" className="btn-gradient flex items-center gap-2">
-                      <Radio className="h-4 w-4" /> Launch Broadcast
-                    </button>
-                  </form>
-                ) : (() => {
+                {broadcastingSession ? (() => {
                   const slides = broadcastingSession.content.split(/^---$/m).map((s: string) => s.trim()).filter(Boolean);
                   const currentSlide = broadcastingSession.currentSlide ?? 0;
                   const safeSlide = Math.min(currentSlide, slides.length - 1);
@@ -2249,7 +2179,92 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       )}
                     </div>
                   );
-                })()}
+                })() : scheduledSession ? (
+                  /* ── Scheduled class waiting card ── */
+                  <div className="max-w-xl mx-auto py-4">
+                    <div className="rounded-2xl border border-amber-200 dark:border-amber-800/40 overflow-hidden shadow-sm">
+                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                          <Calendar className="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-white/70">Class Scheduled</p>
+                          <h3 className="text-[16px] font-bold text-white leading-tight truncate">{scheduledSession.topic}</h3>
+                        </div>
+                      </div>
+                      <div className="px-6 py-5 bg-amber-50/60 dark:bg-amber-950/10 space-y-4">
+                        <div>
+                          <p className="text-[12px] text-[#6e6e73] dark:text-white/50">
+                            <span className="font-semibold text-[#3a3a3c] dark:text-white/80">{courses.find(c => c.id === scheduledSession.courseId)?.code ?? ""}</span>
+                            {" · "}{new Date(scheduledSession.scheduledAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 bg-white dark:bg-black/30 border border-amber-200 dark:border-amber-700/40 rounded-xl px-4 py-3 text-center">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-1">Starting in</p>
+                            <p className="text-[22px] font-mono font-bold text-amber-700 dark:text-amber-300">{schedCountdown}</p>
+                          </div>
+                        </div>
+                        <p className="text-[12px] text-[#8e8e93] dark:text-white/40 leading-relaxed">
+                          The class will go live automatically. Students will see a countdown and can join as soon as it starts.
+                        </p>
+                        <div className="flex justify-end pt-1">
+                          <button onClick={handleCancelScheduled}
+                            className="text-[12px] text-[#8e8e93] dark:text-white/30 hover:text-red-500 dark:hover:text-red-400 font-semibold transition cursor-pointer">
+                            Cancel Scheduled Class
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* ── Pre-launch form ── */
+                  <div className="max-w-xl mx-auto py-4">
+                    <div className="rounded-2xl border border-black/[0.08] dark:border-white/[0.08] overflow-hidden shadow-sm">
+                      <div className="bg-gradient-to-r from-[#1d1d1f] to-[#2c2c2e] dark:from-[#0a0a0a] dark:to-[#141416] px-6 py-5 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/[0.08] flex items-center justify-center flex-shrink-0">
+                          <Radio className="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-[16px] font-bold text-white">Set Up Live Class</h3>
+                          <p className="text-[12px] text-white/50">Students will see a countdown until the class begins</p>
+                        </div>
+                      </div>
+                      <form onSubmit={handleLaunchLiveLecture} className="px-6 py-6 space-y-5 bg-white dark:bg-[#111]">
+                        <div>
+                          <label className={lbl}>Course</label>
+                          <select required value={liveCourseId} onChange={(e) => setLiveCourseId(e.target.value)} className="form-input">
+                            <option value="">Select a course…</option>
+                            {courses.map((c) => <option key={c.id} value={c.id}>{c.code} / {c.title}</option>)}
+                          </select>
+                          {audienceBadge(liveCourseId)}
+                        </div>
+                        <div>
+                          <label className={lbl}>Class Title</label>
+                          <input type="text" required value={liveTopic} onChange={(e) => setLiveTopic(e.target.value)}
+                            placeholder="e.g. Lecture 4: Relational Algebra"
+                            className="form-input" />
+                        </div>
+                        <div>
+                          <label className={lbl}>
+                            Scheduled Time
+                            <span className="ml-1.5 normal-case font-normal text-[#8e8e93] dark:text-white/30 tracking-normal">(optional — leave blank to start now)</span>
+                          </label>
+                          <input type="datetime-local" value={liveScheduledAt}
+                            onChange={(e) => setLiveScheduledAt(e.target.value)}
+                            min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                            className="form-input" />
+                        </div>
+                        <button type="submit" className="btn-gradient flex items-center gap-2 w-full justify-center">
+                          {liveScheduledAt ? <><Calendar className="h-4 w-4" /> Schedule Class</> : <><Radio className="h-4 w-4" /> Start Now</>}
+                        </button>
+                      </form>
+                    </div>
+                    <p className="text-center text-[11.5px] text-[#8e8e93] dark:text-white/30 mt-3">
+                      Upload slides and share your screen once the class is live
+                    </p>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
