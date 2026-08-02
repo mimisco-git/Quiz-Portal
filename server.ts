@@ -530,6 +530,68 @@ app.post("/api/auth/student-forgot-password", strictLimiter, async (req, res) =>
   }
 });
 
+// ── Lecturer security-question lookup
+app.post("/api/auth/lecturer-get-security-question", strictLimiter, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: "Email is required." });
+  try {
+    const lecturer = await prisma.lecturer.findUnique({
+      where: { email: email.trim().toLowerCase() },
+      select: { securityQuestion: true },
+    });
+    if (!lecturer || !lecturer.securityQuestion) {
+      return res.status(404).json({ error: "No security question found for this account. Please contact the system administrator." });
+    }
+    return res.json({ securityQuestion: lecturer.securityQuestion });
+  } catch (error: any) {
+    console.error("Lecturer get-security-question error:", error);
+    return res.status(500).json({ error: "Something went wrong. Please try again." });
+  }
+});
+
+// ── Lecturer forgot-password via security question
+app.post("/api/auth/lecturer-forgot-password", strictLimiter, async (req, res) => {
+  const { email, securityAnswer, newPassword, confirmPassword } = req.body;
+  if (!email || !securityAnswer || !newPassword || !confirmPassword) {
+    return res.status(400).json({ error: "All fields are required." });
+  }
+  if (newPassword !== confirmPassword) return res.status(400).json({ error: "Passwords do not match." });
+  if (newPassword.length < 8)   return res.status(400).json({ error: "Password must be at least 8 characters." });
+  if (newPassword.length > 128) return res.status(400).json({ error: "Password is too long." });
+  try {
+    const lecturer = await prisma.lecturer.findUnique({ where: { email: email.trim().toLowerCase() } });
+    if (!lecturer || !lecturer.securityAnswer) {
+      return res.status(400).json({ error: "Incorrect email or security answer." });
+    }
+    const normalizedInput = securityAnswer.trim().toLowerCase();
+    let answerMatches = false;
+    if (lecturer.securityAnswer.startsWith("$2")) {
+      answerMatches = await bcrypt.compare(normalizedInput, lecturer.securityAnswer);
+    } else {
+      answerMatches = lecturer.securityAnswer.toLowerCase().trim() === normalizedInput;
+      if (answerMatches) {
+        const hashed = await bcrypt.hash(normalizedInput, 10);
+        await prisma.lecturer.update({ where: { id: lecturer.id }, data: { securityAnswer: hashed } });
+      }
+    }
+    if (!answerMatches) return res.status(400).json({ error: "Incorrect email or security answer." });
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    const updated = await prisma.lecturer.update({
+      where: { id: lecturer.id },
+      data: { password: hashedPassword },
+    });
+    const token = jwt.sign(
+      { id: updated.id, name: updated.name, email: updated.email, role: "lecturer" },
+      JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+    return res.json({ token, user: { id: updated.id, name: updated.name, email: updated.email, role: "lecturer" } });
+  } catch (error: any) {
+    console.error("Lecturer forgot-password error:", error);
+    return res.status(500).json({ error: "Something went wrong. Please try again." });
+  }
+});
+
 // Answer security question and fix/update year
 app.post("/api/auth/student-fix-year", strictLimiter, async (req, res) => {
   const { regNumber, securityAnswer, newYear } = req.body;
@@ -610,7 +672,7 @@ app.post("/api/auth/student-fix-year", strictLimiter, async (req, res) => {
 
 // Lecturer Registration Route
 app.post("/api/auth/lecturer-register", authLimiter, async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, securityQuestion, securityAnswer } = req.body;
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: "Name, email, and password are required." });
@@ -631,11 +693,14 @@ app.post("/api/auth/lecturer-register", authLimiter, async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedAnswer = securityAnswer ? await bcrypt.hash(securityAnswer.trim().toLowerCase(), 10) : null;
     const lecturer = await prisma.lecturer.create({
       data: {
         name: name.trim(),
         email: normalizedEmail,
         password: hashedPassword,
+        securityQuestion: securityQuestion?.trim() || null,
+        securityAnswer: hashedAnswer,
       },
     });
 
@@ -1401,6 +1466,59 @@ app.get("/api/lecturer/profile", authenticateToken, async (req: any, res) => {
     return res.json({ ...lecturer, departments: depts });
   } catch (err) {
     return res.status(500).json({ error: "Failed to fetch lecturer profile" });
+  }
+});
+
+// Set/update lecturer security question and answer
+app.patch("/api/lecturer/security", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Unauthorized" });
+  const { currentPassword, securityQuestion, securityAnswer } = req.body;
+  if (!currentPassword || !securityQuestion || !securityAnswer) {
+    return res.status(400).json({ error: "Current password, security question, and answer are required." });
+  }
+  try {
+    const lecturer = await prisma.lecturer.findUnique({ where: { id: req.user.id } });
+    if (!lecturer) return res.status(404).json({ error: "Account not found." });
+    let passwordMatches = false;
+    if (lecturer.password.startsWith("$2")) {
+      passwordMatches = await bcrypt.compare(currentPassword, lecturer.password);
+    } else {
+      passwordMatches = lecturer.password === currentPassword;
+    }
+    if (!passwordMatches) return res.status(401).json({ error: "Current password is incorrect." });
+    const hashedAnswer = await bcrypt.hash(securityAnswer.trim().toLowerCase(), 10);
+    await prisma.lecturer.update({
+      where: { id: req.user.id },
+      data: { securityQuestion: securityQuestion.trim(), securityAnswer: hashedAnswer },
+    });
+    return res.json({ ok: true });
+  } catch (error: any) {
+    console.error("Lecturer security update error:", error);
+    return res.status(500).json({ error: "Failed to update security settings." });
+  }
+});
+
+// Admin: reset a student's password (lecturer-only)
+app.post("/api/admin/students/:studentId/reset-password", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Only lecturers can reset student passwords." });
+  const { studentId } = req.params;
+  const { tempPassword } = req.body;
+  if (!tempPassword || tempPassword.length < 6) {
+    return res.status(400).json({ error: "Temporary password must be at least 6 characters." });
+  }
+  if (tempPassword.length > 128) return res.status(400).json({ error: "Password is too long." });
+  try {
+    const student = await prisma.student.findUnique({ where: { id: studentId }, select: { id: true, fullName: true } });
+    if (!student) return res.status(404).json({ error: "Student not found." });
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    await prisma.student.update({
+      where: { id: studentId },
+      data: { passwordHash, mustChangePassword: true },
+    });
+    return res.json({ ok: true, studentName: student.fullName });
+  } catch (error: any) {
+    console.error("Admin reset student password error:", error);
+    return res.status(500).json({ error: "Failed to reset student password." });
   }
 });
 

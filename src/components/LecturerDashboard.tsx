@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import TurndownService from "turndown";
-import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, MicOff, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles, Eye, Monitor } from "lucide-react";
+import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, MicOff, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles, Eye, Monitor, KeyRound, ShieldCheck } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import NotificationBell from "./NotificationBell";
@@ -117,6 +117,18 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [schedCountdown, setSchedCountdown] = useState("");
   const [liveChats, setLiveChats] = useState<any[]>([]);
   const [lecturerChatMessage, setLecturerChatMessage] = useState("");
+
+  // Student password reset
+  const [resetPwdModal, setResetPwdModal] = useState<{ studentId: string; studentName: string } | null>(null);
+  const [resetPwdInput, setResetPwdInput] = useState("");
+  const [isResettingPwd, setIsResettingPwd] = useState(false);
+
+  // Lecturer security settings modal
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
+  const [secCurrPwd, setSecCurrPwd] = useState("");
+  const [secQuestion, setSecQuestion] = useState("What is your mother's maiden name?");
+  const [secAnswer, setSecAnswer] = useState("");
+  const [isUpdatingSecurity, setIsUpdatingSecurity] = useState(false);
   const [isSendingChat, setIsSendingChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const audioRoomRef = useRef<LiveAudioRoomHandle>(null);
@@ -1230,6 +1242,49 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     return () => clearInterval(id);
   }, [scheduledSession]);
 
+  const handleResetStudentPassword = async () => {
+    if (!resetPwdModal || !resetPwdInput.trim()) return;
+    setIsResettingPwd(true);
+    try {
+      const res = await fetch(`/api/admin/students/${resetPwdModal.studentId}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tempPassword: resetPwdInput.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccess(`Password reset for ${resetPwdModal.studentName}. They must change it on next login.`);
+        setResetPwdModal(null);
+        setResetPwdInput("");
+      } else {
+        showError(data.error || "Failed to reset password");
+      }
+    } catch { showError("Something went wrong"); } finally { setIsResettingPwd(false); }
+  };
+
+  const handleUpdateSecurity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!secCurrPwd || !secQuestion || !secAnswer.trim()) {
+      showError("All fields are required"); return;
+    }
+    setIsUpdatingSecurity(true);
+    try {
+      const res = await fetch("/api/lecturer/security", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ currentPassword: secCurrPwd, securityQuestion: secQuestion, securityAnswer: secAnswer }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccess("Security question saved. You can now use it to recover your password.");
+        setSecurityModalOpen(false);
+        setSecCurrPwd(""); setSecAnswer("");
+      } else {
+        showError(data.error || "Failed to update security settings");
+      }
+    } catch { showError("Something went wrong"); } finally { setIsUpdatingSecurity(false); }
+  };
+
   const handleEndLiveLecture = async () => {
     if (!broadcastingSession) return;
     try {
@@ -1502,6 +1557,15 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
               <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 leading-tight truncate">{user.name}</p>
               <p className="text-[11px] text-[#6e6e73] dark:text-white/38 truncate mt-0.5">{user.email}</p>
             </div>
+          </button>
+        </div>
+
+        {/* Security settings button */}
+        <div className="px-3 pb-1 flex-shrink-0">
+          <button onClick={() => setSecurityModalOpen(true)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-[10px] text-[12px] text-[#6e6e73] dark:text-white/40 hover:bg-amber-50 dark:hover:bg-amber-950/20 hover:text-amber-700 dark:hover:text-amber-400 transition text-left cursor-pointer">
+            <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" strokeWidth={1.6} />
+            <span className="hidden sm:block">Security Settings</span>
           </button>
         </div>
 
@@ -1841,6 +1905,13 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                               ) : (
                                 <span className="text-[12px] text-[#6e6e73] dark:text-white/30">—</span>
                               )}
+                              <button
+                                title="Reset student password"
+                                onClick={() => { setResetPwdModal({ studentId: att.studentId, studentName: att.studentName }); setResetPwdInput(""); }}
+                                className="ml-1 p-1 text-[#8e8e93] dark:text-white/30 hover:text-amber-600 dark:hover:text-amber-400 transition cursor-pointer"
+                              >
+                                <KeyRound className="h-3.5 w-3.5" />
+                              </button>
                             </td>
                           </tr>
                           );
@@ -4132,6 +4203,99 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
         userName={user.name}
         onAvatarUpdated={() => setAvatarRefreshTrigger((prev) => prev + 1)}
       />
+
+      {/* ── Reset Student Password Modal ── */}
+      {resetPwdModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <motion.div initial={{ scale: 0.93, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28 }}
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
+            <div className="p-6 space-y-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                  <KeyRound className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-bold text-[#1d1d1f] dark:text-white">Reset Password</h3>
+                  <p className="text-[12px] text-[#6e6e73] dark:text-white/50">{resetPwdModal.studentName}</p>
+                </div>
+                <button onClick={() => setResetPwdModal(null)} className="ml-auto p-1.5 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] rounded-lg transition cursor-pointer">
+                  <X className="h-4 w-4 text-[#6e6e73] dark:text-white/50" />
+                </button>
+              </div>
+              <div>
+                <label className={lbl}>Temporary Password</label>
+                <input type="text" value={resetPwdInput} onChange={e => setResetPwdInput(e.target.value)}
+                  placeholder="e.g. Temp@1234"
+                  className="form-input" autoFocus />
+                <p className="text-[11px] text-[#8e8e93] dark:text-white/30 mt-1.5">The student will be required to change this on next login.</p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleResetStudentPassword} disabled={isResettingPwd || !resetPwdInput.trim()}
+                  className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[13px] font-semibold rounded-xl transition cursor-pointer">
+                  {isResettingPwd ? "Resetting…" : "Set Temporary Password"}
+                </button>
+                <button onClick={() => setResetPwdModal(null)}
+                  className="px-4 py-2.5 border border-black/[0.09] dark:border-white/[0.10] text-[13px] font-semibold text-[#3a3a3c] dark:text-white/60 hover:bg-black/[0.04] dark:hover:bg-white/[0.05] rounded-xl transition cursor-pointer">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ── Lecturer Security Settings Modal ── */}
+      {securityModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <motion.div initial={{ scale: 0.93, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28 }}
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
+            <form onSubmit={handleUpdateSecurity} className="p-6 space-y-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+                  <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-bold text-[#1d1d1f] dark:text-white">Security Settings</h3>
+                  <p className="text-[12px] text-[#6e6e73] dark:text-white/50">Set up password recovery</p>
+                </div>
+                <button type="button" onClick={() => setSecurityModalOpen(false)} className="ml-auto p-1.5 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] rounded-lg transition cursor-pointer">
+                  <X className="h-4 w-4 text-[#6e6e73] dark:text-white/50" />
+                </button>
+              </div>
+              <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 text-[12px] text-emerald-700 dark:text-emerald-400 leading-relaxed">
+                Set a security question so you can recover your password if you forget it.
+              </div>
+              <div>
+                <label className={lbl}>Current Password <span className="normal-case font-normal text-[#8e8e93] dark:text-white/30">(to verify it's you)</span></label>
+                <input type="password" required value={secCurrPwd} onChange={e => setSecCurrPwd(e.target.value)} placeholder="Your current password" className="form-input" />
+              </div>
+              <div>
+                <label className={lbl}>Security Question</label>
+                <select value={secQuestion} onChange={e => setSecQuestion(e.target.value)} className="form-input">
+                  {["What is your mother's maiden name?","What was the name of your first pet?","What city were you born in?","What is your favourite book?","What was your childhood nickname?","What is your high school name?"].map(q => <option key={q} value={q}>{q}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={lbl}>Security Answer</label>
+                <input type="text" required value={secAnswer} onChange={e => setSecAnswer(e.target.value)} placeholder="Your secret answer" className="form-input" />
+                <p className="text-[11px] text-[#8e8e93] dark:text-white/30 mt-1.5">Answers are case-insensitive and stored securely.</p>
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" disabled={isUpdatingSecurity}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[13px] font-semibold rounded-xl transition cursor-pointer">
+                  {isUpdatingSecurity ? "Saving…" : "Save Security Settings"}
+                </button>
+                <button type="button" onClick={() => setSecurityModalOpen(false)}
+                  className="px-4 py-2.5 border border-black/[0.09] dark:border-white/[0.10] text-[13px] font-semibold text-[#3a3a3c] dark:text-white/60 hover:bg-black/[0.04] dark:hover:bg-white/[0.05] rounded-xl transition cursor-pointer">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

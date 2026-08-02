@@ -78,6 +78,15 @@ export default function LandingScreen({
   const [regLecturerName, setRegLecturerName]           = useState("");
   const [regLecturerEmail, setRegLecturerEmail]         = useState("");
   const [regLecturerPassword, setRegLecturerPassword]   = useState("");
+  const [regLecturerSecQ, setRegLecturerSecQ]           = useState("What is your mother's maiden name?");
+  const [regLecturerSecA, setRegLecturerSecA]           = useState("");
+
+  const [lecForgotEmail, setLecForgotEmail]             = useState("");
+  const [lecForgotQuestion, setLecForgotQuestion]       = useState("");
+  const [lecForgotAnswer, setLecForgotAnswer]           = useState("");
+  const [lecForgotNewPwd, setLecForgotNewPwd]           = useState("");
+  const [lecForgotConfirmPwd, setLecForgotConfirmPwd]   = useState("");
+  const [lecForgotStep, setLecForgotStep]               = useState<"enter-email" | "set-password">("enter-email");
 
   const [fixRegNumber, setFixRegNumber] = useState("");
   const [fixQuestion, setFixQuestion]   = useState("");
@@ -170,13 +179,39 @@ export default function LandingScreen({
 
   const handleLecturerRegister = async (e: React.FormEvent) => {
     e.preventDefault(); setError(null); setSuccess(null); setLoading(true);
+    if (!regLecturerSecQ || !regLecturerSecA.trim()) { setError("Please set a security question and answer for account recovery."); setLoading(false); return; }
     try {
-      const res  = await fetch("/api/auth/lecturer-register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: regLecturerName, email: regLecturerEmail, password: regLecturerPassword }) });
+      const res  = await fetch("/api/auth/lecturer-register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: regLecturerName, email: regLecturerEmail, password: regLecturerPassword, securityQuestion: regLecturerSecQ, securityAnswer: regLecturerSecA }) });
       const data = await apiJSON(res);
       if (!res.ok) throw new Error(data.error || "Lecturer registration failed");
       setSuccess("Lecturer account created!");
       setTimeout(() => onLoginSuccess(data.token, data.user), 1000);
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
+  };
+
+  const handleLecturerForgotGetQuestion = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null); setLoading(true);
+    try {
+      const res  = await fetch("/api/auth/lecturer-get-security-question", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: lecForgotEmail }) });
+      const data = await apiJSON(res);
+      if (!res.ok) { setError(data.error || "Email not found."); setLoading(false); return; }
+      setLecForgotQuestion(data.securityQuestion);
+      setLecForgotStep("set-password");
+    } catch { setError("Something went wrong. Please try again."); } finally { setLoading(false); }
+  };
+
+  const handleLecturerForgotResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null);
+    if (lecForgotNewPwd !== lecForgotConfirmPwd) { setError("Passwords do not match."); return; }
+    if (lecForgotNewPwd.length < 8) { setError("Password must be at least 8 characters."); return; }
+    setLoading(true);
+    try {
+      const res  = await fetch("/api/auth/lecturer-forgot-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: lecForgotEmail, securityAnswer: lecForgotAnswer, newPassword: lecForgotNewPwd, confirmPassword: lecForgotConfirmPwd }) });
+      const data = await apiJSON(res);
+      if (!res.ok) { setError(data.error || "Password reset failed."); setLoading(false); return; }
+      setSuccess("Password reset! Signing you in…");
+      setTimeout(() => onLoginSuccess(data.token, data.user), 800);
+    } catch { setError("Something went wrong. Please try again."); } finally { setLoading(false); }
   };
 
   const handleGetSecurityQuestion = async (e: React.FormEvent) => {
@@ -746,10 +781,66 @@ export default function LandingScreen({
                                   {loading ? "Signing in…" : "Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
                                 </motion.button>
                               </motion.div>
-                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.22, duration: 0.3 }}>
+                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.22, duration: 0.3 }} className="flex items-center justify-between pt-0.5">
                                 <button type="button" onClick={() => { setMode("register"); setError(null); }} className={link}>New staff? Register</button>
+                                <button type="button" onClick={() => { setMode("forgot"); setLecForgotStep("enter-email"); setLecForgotEmail(""); setLecForgotAnswer(""); setLecForgotNewPwd(""); setLecForgotConfirmPwd(""); setError(null); }} className="text-[13px] text-white/40 hover:text-white/70 transition-colors cursor-pointer">Forgot password?</button>
                               </motion.div>
                             </motion.form>
+                          )}
+
+                          {/* LECTURER FORGOT PASSWORD */}
+                          {selectedUser === "lecturer" && mode === "forgot" && (
+                            <motion.div key="l-forgot" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} className="space-y-4">
+                              <div className="flex items-center gap-2.5">
+                                <button type="button" onClick={() => { setMode("login"); setError(null); setLecForgotStep("enter-email"); }}
+                                  className="flex items-center justify-center w-8 h-8 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-white/60 transition cursor-pointer">
+                                  <ArrowLeft className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="text-white/70 text-[12px] font-semibold flex items-center gap-1.5">
+                                  <KeyRound className="h-3.5 w-3.5 text-blue-400" /> Password Recovery
+                                </span>
+                              </div>
+                              {lecForgotStep === "enter-email" ? (
+                                <form onSubmit={handleLecturerForgotGetQuestion} className="space-y-4">
+                                  <div className="bg-blue-400/10 border border-blue-400/20 rounded-xl p-3 text-[12px] text-blue-300/90 leading-relaxed">
+                                    Enter your staff email to retrieve your security question.
+                                  </div>
+                                  <div>
+                                    <label className={lbl}>Staff Email</label>
+                                    <input type="email" required value={lecForgotEmail} onChange={e => setLecForgotEmail(e.target.value)} placeholder="staff@futo.edu.ng" className={inp} autoFocus />
+                                  </div>
+                                  <button type="submit" disabled={loading} className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer">
+                                    {loading ? "Looking up…" : "Continue"} <ArrowRight className="h-4 w-4" />
+                                  </button>
+                                </form>
+                              ) : (
+                                <form onSubmit={handleLecturerForgotResetPassword} className="space-y-4">
+                                  <div className="flex items-start gap-2 bg-white/[0.05] border border-white/[0.08] rounded-xl p-3">
+                                    <HelpCircle className="h-4 w-4 text-white/40 shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">Your Security Question</p>
+                                      <p className="text-[13px] text-white/80 font-medium">{lecForgotQuestion}</p>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className={lbl}>Your Answer</label>
+                                    <input type="text" required value={lecForgotAnswer} onChange={e => setLecForgotAnswer(e.target.value)} placeholder="Your secret answer" className={inp} autoFocus />
+                                  </div>
+                                  <div>
+                                    <label className={lbl}>New Password</label>
+                                    <input type="password" required minLength={8} value={lecForgotNewPwd} onChange={e => setLecForgotNewPwd(e.target.value)} placeholder="Min. 8 characters" className={inp} />
+                                  </div>
+                                  <div>
+                                    <label className={lbl}>Confirm New Password</label>
+                                    <input type="password" required value={lecForgotConfirmPwd} onChange={e => setLecForgotConfirmPwd(e.target.value)} placeholder="Repeat your new password" className={inp} />
+                                  </div>
+                                  <button type="submit" disabled={loading} className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer">
+                                    {loading ? "Resetting…" : "Reset Password & Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
+                                  </button>
+                                  <button type="button" onClick={() => { setLecForgotStep("enter-email"); setError(null); }} className={link + " block text-center w-full"}>Try a different email</button>
+                                </form>
+                              )}
+                            </motion.div>
                           )}
 
                           {/* LECTURER REGISTER */}
@@ -762,6 +853,14 @@ export default function LandingScreen({
                                 <input type="email" required value={regLecturerEmail} onChange={e => setRegLecturerEmail(e.target.value)} placeholder="staff@futo.edu.ng" className={inp} /></div>
                               <div><label className={lbl}>Password</label>
                                 <input type="password" required value={regLecturerPassword} onChange={e => setRegLecturerPassword(e.target.value)} placeholder="Create a strong password" className={inp} /></div>
+                              <div>
+                                <label className={lbl}>Security Question <span className="normal-case font-normal text-white/30 tracking-normal">(for account recovery)</span></label>
+                                <select value={regLecturerSecQ} onChange={e => setRegLecturerSecQ(e.target.value)} className={inp + " [&>option]:bg-slate-900"}>
+                                  {["What is your mother's maiden name?","What was the name of your first pet?","What city were you born in?","What is your favourite book?","What was your childhood nickname?","What is your high school name?"].map(q => <option key={q} value={q}>{q}</option>)}
+                                </select>
+                              </div>
+                              <div><label className={lbl}>Security Answer</label>
+                                <input type="text" required value={regLecturerSecA} onChange={e => setRegLecturerSecA(e.target.value)} placeholder="Your secret answer" className={inp} /></div>
                               <button type="submit" disabled={loading} className={`w-full py-3 rounded-xl text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer ${USERS[1].btn}`}>
                                 {loading ? "Creating…" : "Register Staff Account"} {!loading && <ArrowRight className="h-4 w-4" />}
                               </button>

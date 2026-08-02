@@ -9,15 +9,17 @@ generator client {
 }
 
 model Lecturer {
-  id            String         @id @default(uuid())
-  name          String
-  email         String         @unique
-  password      String
-  avatarData    String?
-  departments   String         @default("[]") // JSON array of dept names this lecturer teaches
-  courses       Course[]
-  announcements Announcement[]
-  bankQuestions BankQuestion[]
+  id               String         @id @default(uuid())
+  name             String
+  email            String         @unique
+  password         String
+  avatarData       String?
+  departments      String         @default("[]") // JSON array of dept names this lecturer teaches
+  securityQuestion String?
+  securityAnswer   String?
+  courses          Course[]
+  announcements    Announcement[]
+  bankQuestions    BankQuestion[]
 }
 
 model Student {
