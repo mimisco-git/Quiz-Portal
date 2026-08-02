@@ -122,6 +122,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [resetPwdModal, setResetPwdModal] = useState<{ studentId: string; studentName: string } | null>(null);
   const [resetPwdInput, setResetPwdInput] = useState("");
   const [isResettingPwd, setIsResettingPwd] = useState(false);
+  const [studentLookup, setStudentLookup] = useState<any[]>([]);
 
   // Lecturer security settings modal
   const [securityModalOpen, setSecurityModalOpen] = useState(false);
@@ -1434,6 +1435,21 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     return true;
   });
 
+  // Debounced student lookup for password reset (finds students even with no attempts)
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) { setStudentLookup([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/students/search?q=${encodeURIComponent(q)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) setStudentLookup(await res.json());
+      } catch {}
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery, token]);
+
   /* ─── macOS nav button ─── */
   const navBtn = (id: string, label: string, icon: React.ReactNode, live?: boolean) => {
     const isActive = activeTab === id;
@@ -1808,6 +1824,35 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                     </button>
                   </div>
                 </div>
+
+                {/* Student lookup results — shown when search has results from direct DB query */}
+                {studentLookup.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                      <KeyRound className="h-3 w-3" /> Student Lookup — click a row to reset password
+                    </p>
+                    {studentLookup.map(s => (
+                      <div key={s.id} className="flex items-center justify-between gap-3 p-3 border border-amber-100 dark:border-amber-800/30 bg-amber-50/40 dark:bg-amber-950/10 rounded-[12px]">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0 text-[12px] font-bold text-amber-700 dark:text-amber-400">
+                            {s.fullName.split(" ").map((n: string) => n[0]).join("").slice(0,2).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{s.fullName}</p>
+                            <p className="text-[11px] text-[#6e6e73] dark:text-white/40 font-mono">
+                              {s.regNumber} · {s.department} · {s.year}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => { setResetPwdModal({ studentId: s.id, studentName: s.fullName }); setResetPwdInput(""); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-semibold rounded-[8px] transition cursor-pointer flex-shrink-0">
+                          <KeyRound className="h-3 w-3" /> Reset Password
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Table */}
                 <div className="overflow-x-auto rounded-[12px] border border-black/[0.07] dark:border-white/[0.06]">

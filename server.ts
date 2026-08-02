@@ -1522,6 +1522,30 @@ app.post("/api/admin/students/:studentId/reset-password", authenticateToken, asy
   }
 });
 
+// Search students by name or reg number (lecturer-only, for password reset lookup)
+app.get("/api/admin/students/search", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Unauthorized" });
+  const q = (req.query.q as string || "").trim();
+  if (!q || q.length < 2) return res.json([]);
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        OR: [
+          { fullName: { contains: q } },
+          { regNumber: { contains: q.toUpperCase() } },
+        ],
+      },
+      select: { id: true, fullName: true, regNumber: true, department: true, year: true },
+      take: 8,
+      orderBy: { fullName: "asc" },
+    });
+    return res.json(students);
+  } catch (error: any) {
+    console.error("Student search error:", error);
+    return res.status(500).json({ error: "Search failed." });
+  }
+});
+
 app.patch("/api/lecturer/departments", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") return res.status(403).json({ error: "Unauthorized" });
   const { departments } = req.body;
