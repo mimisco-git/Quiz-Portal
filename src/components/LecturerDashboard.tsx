@@ -1167,6 +1167,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
+  // datetime-local inputs give LOCAL time strings (no TZ). Convert to UTC ISO before sending.
+  const localToUTCIso = (localStr: string) => new Date(localStr).toISOString();
+  // Build a local-time string suitable for the min/value of a datetime-local input.
+  const toLocalInputStr = (d: Date) => {
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+
   const handleLaunchLiveLecture = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!liveCourseId || !liveTopic.trim()) {
@@ -1177,7 +1185,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       const res = await fetch("/api/lectures", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ courseId: liveCourseId, topic: liveTopic, scheduledAt: liveScheduledAt || undefined }),
+        body: JSON.stringify({ courseId: liveCourseId, topic: liveTopic, scheduledAt: liveScheduledAt ? localToUTCIso(liveScheduledAt) : undefined }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -2382,7 +2390,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           </label>
                           <input type="datetime-local" value={liveScheduledAt}
                             onChange={(e) => setLiveScheduledAt(e.target.value)}
-                            min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                            min={toLocalInputStr(new Date(Date.now() + 60000))}
                             className="form-input" />
                         </div>
                         <button type="submit" className="btn-gradient flex items-center gap-2 w-full justify-center">
