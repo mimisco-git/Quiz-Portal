@@ -52,6 +52,13 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [courseTargetYear, setCourseTargetYear] = useState("");
   const [deptStats, setDeptStats] = useState<any[]>([]);
 
+  // Course edit state
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [editCode, setEditCode] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editDepId, setEditDepId] = useState("");
+  const [editTargetYear, setEditTargetYear] = useState("");
+
   const [noteCourseId, setNoteCourseId] = useState("");
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
@@ -620,6 +627,52 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       } else {
         const d = await res.json();
         showError(d.error || "Failed to create course");
+      }
+    } catch (err: any) {
+      showError(err.message);
+    }
+  };
+
+  const startEditCourse = (c: any) => {
+    setEditingCourseId(c.id);
+    setEditCode(c.code);
+    setEditTitle(c.title);
+    setEditDepId(c.department?.id || "");
+    setEditTargetYear((c as any).targetYear || "");
+  };
+
+  const handleEditCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCourseId || !editCode || !editTitle) return;
+    try {
+      const res = await fetch(`/api/courses/${editingCourseId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: editCode, title: editTitle, departmentId: editDepId || undefined, targetYear: editTargetYear || undefined }),
+      });
+      if (res.ok) {
+        showSuccess("Course updated successfully.");
+        setEditingCourseId(null);
+        fetchCourses();
+      } else {
+        const d = await res.json();
+        showError(d.error || "Failed to update course");
+      }
+    } catch (err: any) {
+      showError(err.message);
+    }
+  };
+
+  const handleDeleteCourse = async (id: string, code: string) => {
+    if (!confirm(`Delete course ${code}? This will also remove all its notes, quizzes, exams, and assignments. This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/courses/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        showSuccess(`Course ${code} deleted.`);
+        fetchCourses();
+      } else {
+        const d = await res.json();
+        showError(d.error || "Failed to delete course");
       }
     } catch (err: any) {
       showError(err.message);
@@ -3477,26 +3530,95 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {courses.map((c) => (
-                        <div key={c.id} className="p-4 border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] flex items-center justify-between bg-black/[0.01] dark:bg-white/[0.02] hover:border-emerald-200 dark:hover:border-emerald-800/40 hover:shadow-sm transition-all duration-200 gap-3">
-                          <div className="min-w-0">
-                            <span className="block font-mono text-[12px] font-bold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">{c.code}</span>
-                            <span className="block text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/85 leading-tight mt-0.5 truncate">{c.title}</span>
-                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                              {c.department
-                                ? <span className="text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 border border-emerald-100 dark:border-emerald-900/30 rounded-full">{c.department.name}</span>
-                                : <span className="text-[10px] font-bold bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 border border-blue-100 dark:border-blue-900/30 rounded-full">All Depts</span>
-                              }
-                              {(c as any).targetYear
-                                ? <span className="text-[10px] font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 border border-amber-100 dark:border-amber-900/30 rounded-full">{(c as any).targetYear}</span>
-                                : <span className="text-[10px] font-bold bg-slate-50 dark:bg-white/[0.04] text-slate-500 dark:text-white/30 px-2 py-0.5 border border-slate-100 dark:border-white/[0.06] rounded-full">All Years</span>
-                              }
+                        <div key={c.id} className="border border-black/[0.07] dark:border-white/[0.06] rounded-[12px] overflow-hidden bg-black/[0.01] dark:bg-white/[0.02] hover:border-emerald-200 dark:hover:border-emerald-800/40 hover:shadow-sm transition-all duration-200">
+                          {editingCourseId === c.id ? (
+                            /* ── inline edit form ── */
+                            <form onSubmit={handleEditCourse} className="p-4 space-y-3">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-[10px] font-bold text-[#6e6e73] dark:text-white/40 uppercase tracking-widest block mb-1">Code</label>
+                                  <input
+                                    type="text" required value={editCode}
+                                    onChange={(e) => setEditCode(e.target.value)}
+                                    className="form-input uppercase font-mono text-[12px] py-1.5"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-bold text-[#6e6e73] dark:text-white/40 uppercase tracking-widest block mb-1">Target Year</label>
+                                  <select value={editTargetYear} onChange={(e) => setEditTargetYear(e.target.value)} className="form-input text-[12px] py-1.5">
+                                    <option value="">All Years</option>
+                                    <option value="Year 1">Year 1</option>
+                                    <option value="Year 2">Year 2</option>
+                                    <option value="Year 3">Year 3</option>
+                                    <option value="Year 4">Year 4</option>
+                                    <option value="Year 5">Year 5</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-[#6e6e73] dark:text-white/40 uppercase tracking-widest block mb-1">Title</label>
+                                <input
+                                  type="text" required value={editTitle}
+                                  onChange={(e) => setEditTitle(e.target.value)}
+                                  className="form-input text-[12px] py-1.5"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-[#6e6e73] dark:text-white/40 uppercase tracking-widest block mb-1">Department</label>
+                                <select value={editDepId} onChange={(e) => setEditDepId(e.target.value)} className="form-input text-[12px] py-1.5">
+                                  <option value="">All Departments</option>
+                                  {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                </select>
+                              </div>
+                              <div className="flex items-center gap-2 pt-1">
+                                <button type="submit" className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11.5px] font-bold rounded-lg transition cursor-pointer">
+                                  <Check className="h-3.5 w-3.5" /> Save
+                                </button>
+                                <button type="button" onClick={() => setEditingCourseId(null)} className="flex items-center gap-1.5 px-3 py-1.5 bg-black/[0.05] dark:bg-white/[0.07] hover:bg-black/[0.09] dark:hover:bg-white/[0.12] text-[#1d1d1f] dark:text-white/70 text-[11.5px] font-bold rounded-lg transition cursor-pointer">
+                                  <X className="h-3.5 w-3.5" /> Cancel
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            /* ── view mode ── */
+                            <div className="p-4 flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <span className="block font-mono text-[12px] font-bold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">{c.code}</span>
+                                <span className="block text-[12.5px] font-semibold text-[#1d1d1f] dark:text-white/85 leading-tight mt-0.5">{c.title}</span>
+                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                  {c.department
+                                    ? <span className="text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 border border-emerald-100 dark:border-emerald-900/30 rounded-full">{c.department.name}</span>
+                                    : <span className="text-[10px] font-bold bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 border border-blue-100 dark:border-blue-900/30 rounded-full">All Depts</span>
+                                  }
+                                  {(c as any).targetYear
+                                    ? <span className="text-[10px] font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 border border-amber-100 dark:border-amber-900/30 rounded-full">{(c as any).targetYear}</span>
+                                    : <span className="text-[10px] font-bold bg-slate-50 dark:bg-white/[0.04] text-slate-500 dark:text-white/30 px-2 py-0.5 border border-slate-100 dark:border-white/[0.06] rounded-full">All Years</span>
+                                  }
+                                  <span className="text-[10px] font-mono font-bold bg-black/[0.04] dark:bg-white/[0.05] text-[#6e6e73] dark:text-white/40 px-2 py-0.5 border border-black/[0.07] dark:border-white/[0.07] rounded-full">
+                                    {c._count?.notes || 0} notes
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditCourse(c)}
+                                  title="Edit course"
+                                  className="p-1.5 rounded-lg bg-black/[0.04] dark:bg-white/[0.06] hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-[#6e6e73] dark:text-white/40 hover:text-emerald-600 dark:hover:text-emerald-400 transition cursor-pointer"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCourse(c.id, c.code)}
+                                  title="Delete course"
+                                  className="p-1.5 rounded-lg bg-black/[0.04] dark:bg-white/[0.06] hover:bg-red-50 dark:hover:bg-red-900/20 text-[#6e6e73] dark:text-white/40 hover:text-red-600 dark:hover:text-red-400 transition cursor-pointer"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <span className="text-[11px] font-mono font-bold bg-black/[0.04] dark:bg-white/[0.05] text-[#6e6e73] dark:text-white/40 px-2.5 py-1 border border-black/[0.07] dark:border-white/[0.07] rounded-full">
-                              {c._count?.notes || 0} notes
-                            </span>
-                          </div>
+                          )}
                         </div>
                       ))}
                     </div>

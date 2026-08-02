@@ -967,6 +967,50 @@ app.post("/api/courses", authenticateToken, async (req: any, res) => {
   }
 });
 
+// Update course (lecturer who owns it only)
+app.put("/api/courses/:id", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Only lecturers can edit courses" });
+  const { id } = req.params;
+  const { code, title, departmentId, targetYear } = req.body;
+  if (!code || !title) return res.status(400).json({ error: "Course code and title are required" });
+  try {
+    const course = await prisma.course.findUnique({ where: { id } });
+    if (!course) return res.status(404).json({ error: "Course not found" });
+    if (course.lecturerId !== req.user.id) return res.status(403).json({ error: "You can only edit your own courses" });
+    const updated = await prisma.course.update({
+      where: { id },
+      data: {
+        code: code.toUpperCase().replace(/\s+/g, ""),
+        title,
+        departmentId: departmentId || null,
+        targetYear: targetYear || null,
+      },
+      include: { department: { select: { id: true, name: true } }, _count: { select: { notes: true, quizzes: true } } },
+    });
+    return res.json(updated);
+  } catch (error: any) {
+    console.error("Error updating course:", error);
+    if (error.code === "P2002") return res.status(400).json({ error: "A course with that code already exists" });
+    return res.status(500).json({ error: "Error updating course" });
+  }
+});
+
+// Delete course (lecturer who owns it only)
+app.delete("/api/courses/:id", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Only lecturers can delete courses" });
+  const { id } = req.params;
+  try {
+    const course = await prisma.course.findUnique({ where: { id } });
+    if (!course) return res.status(404).json({ error: "Course not found" });
+    if (course.lecturerId !== req.user.id) return res.status(403).json({ error: "You can only delete your own courses" });
+    await prisma.course.delete({ where: { id } });
+    return res.json({ ok: true });
+  } catch (error: any) {
+    console.error("Error deleting course:", error);
+    return res.status(500).json({ error: "Error deleting course" });
+  }
+});
+
 // Create Lecture Note (Lecturer Only)
 app.post("/api/notes", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "lecturer") {
