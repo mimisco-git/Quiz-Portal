@@ -81,6 +81,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [chatMessage, setChatMessage] = useState("");
   const [isSendingChat, setIsSendingChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const pendingAutoJoinRef = useRef<string | null>(null); // courseId to auto-join when it goes live
 
   // Live classroom sub-features
   const [liveStudentTab, setLiveStudentTab] = useState<"slides" | "poll" | "chat">("slides");
@@ -146,7 +147,18 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
         fetch("/api/lectures/active-all", { headers: { Authorization: `Bearer ${token}` } }),
         fetch("/api/lectures/scheduled", { headers: { Authorization: `Bearer ${token}` } }),
       ]);
-      if (activeRes.ok) setAllLiveSessions(await activeRes.json());
+      if (activeRes.ok) {
+        const activeSessions: any[] = await activeRes.json();
+        setAllLiveSessions(activeSessions);
+        // Auto-join: if a scheduled session we were watching just went live
+        if (pendingAutoJoinRef.current) {
+          const match = activeSessions.find((s: any) => s.courseId === pendingAutoJoinRef.current);
+          if (match) {
+            pendingAutoJoinRef.current = null;
+            joinLiveSession(match.courseId);
+          }
+        }
+      }
       if (scheduledRes.ok) setScheduledSessions(await scheduledRes.json());
     } catch {}
   };
@@ -2249,11 +2261,18 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                             const m = Math.floor((diff % 3600000) / 60000);
                             const s = Math.floor((diff % 60000) / 1000);
                             const cdStr = diff <= 0 ? "Starting now…" : h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+                            const isImminent = diff <= 0;
+                            // Mark for auto-join when this session goes live
+                            if (isImminent && pendingAutoJoinRef.current !== sess.courseId) {
+                              pendingAutoJoinRef.current = sess.courseId;
+                            }
                             return (
-                              <div key={sess.id} className="flex items-center justify-between gap-3 p-4 border border-amber-100 dark:border-amber-800/30 bg-amber-50/40 dark:bg-amber-950/10 rounded-[14px]">
+                              <div key={sess.id} className={`flex items-center justify-between gap-3 p-4 border rounded-[14px] transition-all ${isImminent ? "border-emerald-300 dark:border-emerald-700/60 bg-emerald-50/60 dark:bg-emerald-950/20 animate-pulse" : "border-amber-100 dark:border-amber-800/30 bg-amber-50/40 dark:bg-amber-950/10"}`}>
                                 <div className="flex items-center gap-3 min-w-0">
-                                  <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                                    <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                  <div className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center ${isImminent ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-amber-100 dark:bg-amber-900/30"}`}>
+                                    {isImminent
+                                      ? <Radio className="h-4 w-4 text-emerald-600 dark:text-emerald-400 animate-pulse" />
+                                      : <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{sess.topic}</p>
@@ -2262,11 +2281,14 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                                       {" · "}{sess.course?.title}
                                       {" · "}{sess.course?.lecturer?.name}
                                     </p>
+                                    {isImminent && (
+                                      <p className="text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">Joining automatically when live…</p>
+                                    )}
                                   </div>
                                 </div>
-                                <div className="flex-shrink-0 px-3 py-1.5 bg-amber-100 dark:bg-amber-900/30 rounded-[10px] text-center">
-                                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Starting in</p>
-                                  <p className="text-[12px] font-mono font-bold text-amber-700 dark:text-amber-300">{cdStr}</p>
+                                <div className={`flex-shrink-0 px-3 py-1.5 rounded-[10px] text-center ${isImminent ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-amber-100 dark:bg-amber-900/30"}`}>
+                                  <p className={`text-[9.5px] font-bold uppercase tracking-wider ${isImminent ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>{isImminent ? "Starting" : "Starting in"}</p>
+                                  <p className={`text-[12px] font-mono font-bold ${isImminent ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>{cdStr}</p>
                                 </div>
                               </div>
                             );

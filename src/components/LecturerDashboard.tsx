@@ -113,8 +113,8 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [liveTopic, setLiveTopic] = useState("");
   const [liveScheduledAt, setLiveScheduledAt] = useState("");
   const [broadcastingSession, setBroadcastingSession] = useState<any | null>(null);
-  const [scheduledSession, setScheduledSession] = useState<any | null>(null);
-  const [schedCountdown, setSchedCountdown] = useState("");
+  const [myScheduledSessions, setMyScheduledSessions] = useState<any[]>([]);
+  const [schedNow, setSchedNow] = useState(Date.now());
   const [liveChats, setLiveChats] = useState<any[]>([]);
   const [lecturerChatMessage, setLecturerChatMessage] = useState("");
 
@@ -1185,7 +1185,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           setBroadcastingSession(data);
           showSuccess("Live class started! Students can join now.");
         } else {
-          setScheduledSession(data);
+          await fetchMyScheduledSessions();
+          setLiveTopic("");
+          setLiveScheduledAt("");
           showSuccess("Class scheduled! It will go live automatically at the set time.");
         }
       } else {
@@ -1197,52 +1199,58 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
-  const handleCancelScheduled = async () => {
-    if (!scheduledSession) return;
+  const handleCancelScheduled = async (session: any) => {
     try {
-      await fetch(`/api/lectures/${scheduledSession.id}`, {
+      await fetch(`/api/lectures/${session.id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
     } catch {}
-    setScheduledSession(null);
-    setLiveTopic("");
-    setLiveCourseId("");
-    setLiveScheduledAt("");
+    await fetchMyScheduledSessions();
   };
 
-  // Poll every 5 seconds while a class is scheduled (not yet active)
+  const fetchMyScheduledSessions = async () => {
+    try {
+      const res = await fetch("/api/lectures/scheduled", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setMyScheduledSessions(await res.json());
+    } catch {}
+  };
+
+  // While on live-lecture tab and not broadcasting, poll scheduled list + check for auto-launch
   useEffect(() => {
-    if (!scheduledSession) return;
+    if (activeTab !== "live-lecture" || broadcastingSession) return;
+    fetchMyScheduledSessions();
     const id = setInterval(async () => {
       try {
-        const res = await fetch(`/api/lectures/active/${scheduledSession.courseId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data) { setBroadcastingSession(data); setScheduledSession(null); }
+        // Refresh scheduled list (demand-trigger fires via active-all below)
+        const schedRes = await fetch("/api/lectures/scheduled", { headers: { Authorization: `Bearer ${token}` } });
+        if (schedRes.ok) setMyScheduledSessions(await schedRes.json());
+
+        // Check if any of my courses now has an active session (auto-launch broadcast)
+        const activeRes = await fetch("/api/lectures/active-all", { headers: { Authorization: `Bearer ${token}` } });
+        if (activeRes.ok) {
+          const activeSessions: any[] = await activeRes.json();
+          const myCourseIds = new Set((courses as any[]).map((c: any) => c.id));
+          const mine = activeSessions.find((s: any) => myCourseIds.has(s.courseId));
+          if (mine) {
+            const fullRes = await fetch(`/api/lectures/active/${mine.courseId}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (fullRes.ok) {
+              const full = await fullRes.json();
+              if (full) { setBroadcastingSession(full); setMyScheduledSessions([]); }
+            }
+          }
         }
       } catch {}
     }, 5000);
     return () => clearInterval(id);
-  }, [scheduledSession, token]);
+  }, [activeTab, broadcastingSession, courses]);
 
-  // Update countdown display every second
+  // 1-second tick for scheduled-session countdowns
   useEffect(() => {
-    if (!scheduledSession?.scheduledAt) return;
-    const update = () => {
-      const diff = new Date(scheduledSession.scheduledAt).getTime() - Date.now();
-      if (diff <= 0) { setSchedCountdown("Starting now…"); return; }
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setSchedCountdown(h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`);
-    };
-    update();
-    const id = setInterval(update, 1000);
+    if (myScheduledSessions.length === 0) return;
+    const id = setInterval(() => setSchedNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [scheduledSession]);
+  }, [myScheduledSessions.length]);
 
   const handleResetStudentPassword = async () => {
     if (!resetPwdModal || !resetPwdInput.trim()) return;
@@ -2296,47 +2304,52 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                       )}
                     </div>
                   );
-                })() : scheduledSession ? (
-                  /* ── Scheduled class waiting card ── */
-                  <div className="max-w-xl mx-auto py-4">
-                    <div className="rounded-2xl border border-amber-200 dark:border-amber-800/40 overflow-hidden shadow-sm">
-                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                          <Calendar className="h-5 w-5 text-white" />
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-white/70">Class Scheduled</p>
-                          <h3 className="text-[16px] font-bold text-white leading-tight truncate">{scheduledSession.topic}</h3>
-                        </div>
+                })() : (
+                  /* ── Scheduled list + form (always visible when not broadcasting) ── */
+                  <div className="max-w-xl mx-auto py-4 space-y-4">
+
+                    {/* Scheduled sessions list */}
+                    {myScheduledSessions.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 px-1">Upcoming Classes</p>
+                        {myScheduledSessions.map((sess: any) => {
+                          const diff = new Date(sess.scheduledAt).getTime() - schedNow;
+                          const h = Math.floor(diff / 3600000);
+                          const m = Math.floor((diff % 3600000) / 60000);
+                          const s = Math.floor((diff % 60000) / 1000);
+                          const cdStr = diff <= 0 ? "Starting now…" : h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+                          const isImminent = diff <= 0;
+                          return (
+                            <div key={sess.id} className={`rounded-2xl border overflow-hidden ${isImminent ? "border-emerald-300 dark:border-emerald-700/60 animate-pulse" : "border-amber-200 dark:border-amber-800/40"}`}>
+                              <div className={`px-4 py-3 flex items-center justify-between gap-3 ${isImminent ? "bg-emerald-600" : "bg-gradient-to-r from-amber-500 to-orange-500"}`}>
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <Calendar className="h-4 w-4 text-white/80 flex-shrink-0" />
+                                  <div className="min-w-0">
+                                    <p className="text-[13px] font-bold text-white truncate">{sess.topic}</p>
+                                    <p className="text-[10.5px] text-white/70 font-mono">{sess.course?.code} · {new Date(sess.scheduledAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
+                                  </div>
+                                </div>
+                                <div className="flex-shrink-0 text-right">
+                                  <p className="text-[9px] font-bold uppercase tracking-wider text-white/60">{isImminent ? "Live soon" : "Starting in"}</p>
+                                  <p className="text-[13px] font-mono font-bold text-white">{cdStr}</p>
+                                </div>
+                              </div>
+                              <div className="px-4 py-2 bg-amber-50/50 dark:bg-amber-950/10 flex items-center justify-between gap-2">
+                                <span className="text-[11px] text-[#8e8e93] dark:text-white/40">
+                                  {isImminent ? "Class will launch automatically in moments…" : "Students will see a countdown and can join when it starts"}
+                                </span>
+                                <button onClick={() => handleCancelScheduled(sess)}
+                                  className="text-[11px] text-[#8e8e93] dark:text-white/30 hover:text-red-500 dark:hover:text-red-400 font-semibold transition cursor-pointer flex-shrink-0">
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div className="px-6 py-5 bg-amber-50/60 dark:bg-amber-950/10 space-y-4">
-                        <div>
-                          <p className="text-[12px] text-[#6e6e73] dark:text-white/50">
-                            <span className="font-semibold text-[#3a3a3c] dark:text-white/80">{courses.find(c => c.id === scheduledSession.courseId)?.code ?? ""}</span>
-                            {" · "}{new Date(scheduledSession.scheduledAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 bg-white dark:bg-black/30 border border-amber-200 dark:border-amber-700/40 rounded-xl px-4 py-3 text-center">
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-1">Starting in</p>
-                            <p className="text-[22px] font-mono font-bold text-amber-700 dark:text-amber-300">{schedCountdown}</p>
-                          </div>
-                        </div>
-                        <p className="text-[12px] text-[#8e8e93] dark:text-white/40 leading-relaxed">
-                          The class will go live automatically. Students will see a countdown and can join as soon as it starts.
-                        </p>
-                        <div className="flex justify-end pt-1">
-                          <button onClick={handleCancelScheduled}
-                            className="text-[12px] text-[#8e8e93] dark:text-white/30 hover:text-red-500 dark:hover:text-red-400 font-semibold transition cursor-pointer">
-                            Cancel Scheduled Class
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* ── Pre-launch form ── */
-                  <div className="max-w-xl mx-auto py-4">
+                    )}
+
+                    {/* Schedule / Start Now form — always visible */}
                     <div className="rounded-2xl border border-black/[0.08] dark:border-white/[0.08] overflow-hidden shadow-sm">
                       <div className="bg-gradient-to-r from-[#1d1d1f] to-[#2c2c2e] dark:from-[#0a0a0a] dark:to-[#141416] px-6 py-5 flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-white/[0.08] flex items-center justify-center flex-shrink-0">
@@ -2377,7 +2390,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                         </button>
                       </form>
                     </div>
-                    <p className="text-center text-[11.5px] text-[#8e8e93] dark:text-white/30 mt-3">
+                    <p className="text-center text-[11.5px] text-[#8e8e93] dark:text-white/30">
                       Upload slides and share your screen once the class is live
                     </p>
                   </div>

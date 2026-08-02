@@ -1999,8 +1999,12 @@ app.get("/api/lectures/active-all", authenticateToken, async (req: any, res) => 
 app.get("/api/lectures/scheduled", authenticateToken, async (req: any, res) => {
   try {
     const now = new Date();
+    const where: any = { isActive: false, scheduledAt: { gt: now } };
+    if (req.user.role === "lecturer") {
+      where.course = { lecturerId: req.user.id };
+    }
     const sessions = await prisma.lectureSession.findMany({
-      where: { isActive: false, scheduledAt: { gt: now } },
+      where,
       include: {
         course: { select: { id: true, code: true, title: true, lecturer: { select: { name: true } } } },
       },
