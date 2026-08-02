@@ -328,6 +328,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       setActiveLiveSession(null);
       setJoinedCourseId(null);
       setAllLiveSessions([]);
+      setScheduledSessions([]);
       setLiveChats([]);
       setIsSpeakingAllowed(false);
       setLiveScreenStream(null);
@@ -2373,7 +2374,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                               Screen Share
                             </div>
                           </div>
-                        ) : (
+                        ) : slides.length > 0 ? (
                           <>
                             {/* ── Slide — primary content ── */}
                             <SlideView
@@ -2390,6 +2391,17 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                               </span>
                             </p>
                           </>
+                        ) : (
+                          <div className="flex items-center justify-center h-48 rounded-2xl"
+                            style={{ background: "linear-gradient(145deg, #0a0f1a, #0d1b2e)" }}>
+                            <div className="text-center px-4">
+                              <div className="inline-flex p-3 rounded-xl bg-white/[0.06] mb-3 border border-white/[0.08]">
+                                <Radio className="h-5 w-5 text-emerald-400 animate-pulse" />
+                              </div>
+                              <p className="text-[13px] font-semibold text-white/80">{activeLiveSession.topic}</p>
+                              <p className="text-[11px] text-slate-500 mt-1">No slides shared yet — class is live</p>
+                            </div>
+                          </div>
                         )}
 
                         {/* ── Audio room — always mounted so screen share works; mic only enabled when panel is open ── */}

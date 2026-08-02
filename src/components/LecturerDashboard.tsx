@@ -248,7 +248,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     if (activeTab === "exams") fetchExams();
     if (activeTab === "assignments") fetchAssignments();
     if (activeTab === "announcements") fetchAnnouncements();
-    if (activeTab === "analytics" && !lecturerAnalytics) {
+    if (activeTab === "analytics") {
       setLecturerAnalyticsLoading(true);
       fetch("/api/lecturer/analytics", { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.ok ? r.json() : null)
@@ -265,6 +265,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     const slides = broadcastingSession.content.split(/^---$/m).map((s: string) => s.trim()).filter(Boolean);
     const safeSlide = Math.min(broadcastingSession.currentSlide ?? 0, slides.length - 1);
     const onKey = (e: KeyboardEvent) => {
+      if (slides.length === 0) return;
       // Don't steal keys when typing in an input/textarea
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); handleSlideChange(Math.min(slides.length - 1, safeSlide + 1)); }
@@ -3050,6 +3051,28 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {/* ── ANALYTICS TAB ── */}
           {activeTab === "analytics" && (
             <motion.div className="space-y-5" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
+              {/* Header row with refresh button */}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-[#1d1d1f] dark:text-white/90">Analytics</h2>
+                  <p className="text-[12px] text-[#6e6e73] dark:text-white/40 mt-0.5">Submission and score data across all your courses</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setLecturerAnalyticsLoading(true);
+                    fetch("/api/lecturer/analytics", { headers: { Authorization: `Bearer ${token}` } })
+                      .then(r => r.ok ? r.json() : null)
+                      .then(d => { if (d) setLecturerAnalytics(d); })
+                      .catch(() => {})
+                      .finally(() => setLecturerAnalyticsLoading(false));
+                  }}
+                  disabled={lecturerAnalyticsLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold border border-black/[0.09] dark:border-white/[0.10] text-[#3a3a3c] dark:text-white/60 hover:border-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-[8px] transition disabled:opacity-40 cursor-pointer"
+                >
+                  <Loader2 className={`h-3.5 w-3.5 ${lecturerAnalyticsLoading ? "animate-spin" : ""}`} />
+                  Refresh
+                </button>
+              </div>
               {lecturerAnalyticsLoading ? (
                 <div className="apple-card p-10 flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
