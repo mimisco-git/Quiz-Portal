@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import TurndownService from "turndown";
-import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, MicOff, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles, Eye, Monitor } from "lucide-react";
+import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, MicOff, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles, Eye, Monitor } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import NotificationBell from "./NotificationBell";
@@ -247,18 +247,20 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   }, [activeTab]);
 
 
-  // Keyboard arrow-key slide navigation for lecturer
+  // Keyboard arrow-key slide navigation for lecturer (always active while broadcasting)
   useEffect(() => {
-    if (!broadcastingSession || liveSubTab !== "slides") return;
+    if (!broadcastingSession) return;
     const slides = broadcastingSession.content.split(/^---$/m).map((s: string) => s.trim()).filter(Boolean);
     const safeSlide = Math.min(broadcastingSession.currentSlide ?? 0, slides.length - 1);
     const onKey = (e: KeyboardEvent) => {
+      // Don't steal keys when typing in an input/textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); handleSlideChange(Math.min(slides.length - 1, safeSlide + 1)); }
       if (e.key === "ArrowLeft"  || e.key === "ArrowUp")   { e.preventDefault(); handleSlideChange(Math.max(0, safeSlide - 1)); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [broadcastingSession, liveSubTab]);
+  }, [broadcastingSession]);
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);

@@ -25,6 +25,8 @@ interface Props {
   className?: string;
   /** Called with the incoming screen-share stream (or null when it ends) — student side only */
   onScreenStream?: (stream: MediaStream | null) => void;
+  /** When false, skip getUserMedia so no mic prompt appears (student joining silently) */
+  micEnabled?: boolean;
 }
 
 // Google STUN + Open Relay TURN (free, no account needed)
@@ -44,7 +46,7 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 
 const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
-  ({ roomId, displayName, role, isMicAllowed = false, className = "", onScreenStream }, ref) => {
+  ({ roomId, displayName, role, isMicAllowed = false, className = "", onScreenStream, micEnabled = true }, ref) => {
 
     const ablyRef    = useRef<Ably.Realtime | null>(null);
     const myConnId   = useRef<string>("");
@@ -103,6 +105,31 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
         analyserRefs.current.set(id, { ctx, raf: rafId });
       } catch { }
     }, []);
+
+    // Acquire mic the first time micEnabled flips to true (student opens audio panel)
+    useEffect(() => {
+      if (!micEnabled || localStreamRef.current) return;
+      navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      }).then(stream => {
+        localStreamRef.current = stream;
+        stream.getAudioTracks().forEach(t => { t.enabled = role === "lecturer"; });
+        attachAnalyser("self", stream);
+        // Add audio track to all existing peer connections
+        pcsRef.current.forEach(async (pc, peerId) => {
+          stream.getTracks().forEach(t => pc.addTrack(t, stream));
+          try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            const ch = ablyRef.current?.channels.get(`signal:${peerId}`);
+            ch?.publish("signal", { from: myConnId.current, signal: { type: "offer", sdp: pc.localDescription } });
+          } catch {}
+        });
+      }).catch(() => {
+        setMicError("Microphone access denied — allow mic permission and reload.");
+      });
+    }, [micEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const detachAnalyser = useCallback((id: string) => {
       const e = analyserRefs.current.get(id);
@@ -297,19 +324,21 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
       let destroyed = false;
 
       (async () => {
-        // 1. Get microphone
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-            video: false,
-          });
-          if (destroyed) { stream.getTracks().forEach(t => t.stop()); return; }
-          localStreamRef.current = stream;
-          stream.getAudioTracks().forEach(t => { t.enabled = role === "lecturer"; });
-          attachAnalyser("self", stream);
-        } catch {
-          setMicError("Microphone access denied — allow mic permission and reload.");
-          return;
+        // 1. Get microphone (skip if micEnabled=false so no prompt appears)
+        if (micEnabled !== false) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+              video: false,
+            });
+            if (destroyed) { stream.getTracks().forEach(t => t.stop()); return; }
+            localStreamRef.current = stream;
+            stream.getAudioTracks().forEach(t => { t.enabled = role === "lecturer"; });
+            attachAnalyser("self", stream);
+          } catch {
+            setMicError("Microphone access denied — allow mic permission and reload.");
+            return;
+          }
         }
 
         // 2. Connect to Ably

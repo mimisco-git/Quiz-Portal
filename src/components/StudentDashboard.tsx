@@ -2344,13 +2344,14 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           </>
                         )}
 
-                        {/* ── Audio room — always mounted so screen share + mic work ── */}
+                        {/* ── Audio room — always mounted so screen share works; mic only enabled when panel is open ── */}
                         <LiveAudioRoom
                           roomId={activeLiveSession.id}
                           displayName={user.fullName}
                           role="student"
                           isMicAllowed={isSpeakingAllowed}
                           onScreenStream={setLiveScreenStream}
+                          micEnabled={audioOpen}
                           className={audioOpen ? "" : "hidden"}
                         />
 
