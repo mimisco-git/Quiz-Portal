@@ -1299,6 +1299,26 @@ app.post("/api/quiz/start", authenticateToken, async (req: any, res) => {
   }
 });
 
+// Incremental quiz progress save (cross-device resilience on network drop)
+app.post("/api/quiz/save-progress", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
+  const { attemptId, answers } = req.body;
+  if (!attemptId || !answers) return res.status(400).json({ error: "attemptId and answers required" });
+  try {
+    const attempt = await prisma.studentAttempt.findUnique({ where: { id: attemptId } });
+    if (!attempt || attempt.studentId !== req.user.id) return res.status(404).json({ error: "Attempt not found" });
+    if (attempt.isCompleted) return res.status(400).json({ error: "Attempt already completed" });
+    await prisma.studentAttempt.update({
+      where: { id: attemptId },
+      data: { answersJson: JSON.stringify(answers) },
+    });
+    return res.json({ ok: true });
+  } catch (error: any) {
+    console.error("Error saving quiz progress:", error);
+    return res.status(500).json({ error: "Error saving progress" });
+  }
+});
+
 // Get Secures Remaining Time API (Prevents Client Clock Tampering)
 app.get("/api/quiz/remaining-time/:attemptId", authenticateToken, async (req: any, res) => {
   const { attemptId } = req.params;

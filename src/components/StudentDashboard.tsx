@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap, Star, WifiOff, Monitor } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, ChevronLeft, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap, Star, WifiOff, Monitor } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import CalendarView from "./CalendarView";
 import DiscussionBoard from "./DiscussionBoard";
@@ -431,6 +431,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [activeAttempt, setActiveAttempt] = useState<StudentAttempt | null>(null);
   const [quizQuestions, setQuizQuestions] = useState<Question[]>([]);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [skippedCount, setSkippedCount] = useState(0);
@@ -688,19 +689,30 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       const quizData = await quizRes.json();
       if (!quizRes.ok) throw new Error(quizData.error || "Failed to load quiz questions");
 
+      const questions: Question[] = quizData.questions || [];
       setActiveQuiz(quizData);
-      setQuizQuestions(quizData.questions || []);
+      setQuizQuestions(questions);
       setActiveAttempt(data.attempt);
       setSubmitError(null);
       setSkippedCount(0);
       setShowSubmitConfirm(false);
       setAutoSaveStatus("idle");
-      try {
-        const draft = localStorage.getItem(`exam_draft_${data.attempt.id}`);
-        setSelectedAnswers(draft ? JSON.parse(draft) : {});
-      } catch {
-        setSelectedAnswers({});
+
+      // Restore answers: server-side first (works on any device), then localStorage fallback
+      let restoredAnswers: Record<string, string> = {};
+      if (data.attempt.answersJson) {
+        try { restoredAnswers = JSON.parse(data.attempt.answersJson); } catch { /* ignore */ }
       }
+      if (Object.keys(restoredAnswers).length === 0) {
+        try {
+          const draft = localStorage.getItem(`exam_draft_${data.attempt.id}`);
+          if (draft) restoredAnswers = JSON.parse(draft);
+        } catch { /* storage unavailable */ }
+      }
+      setSelectedAnswers(restoredAnswers);
+      // Jump to first unanswered question when resuming
+      const firstUnanswered = questions.findIndex((q) => !restoredAnswers[q.id]);
+      setCurrentQuestionIndex(firstUnanswered === -1 ? 0 : firstUnanswered);
 
       const initialSeconds = quiz.durationMinutes * 60;
       setRemainingSeconds(initialSeconds);
@@ -939,6 +951,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   };
 
   const handleSelectOption = (questionId: string, option: string) => {
+    // Lock: once a question is answered it cannot be changed
+    if (selectedAnswers[questionId] !== undefined) return;
     setSelectedAnswers((prev) => {
       const next = { ...prev, [questionId]: option };
       scheduleAutoSave(next);
@@ -946,18 +960,26 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     });
     if (submitError) { setSubmitError(null); setSkippedCount(0); }
     if (showSubmitConfirm) setShowSubmitConfirm(false);
+    // Auto-advance to next question after brief visual feedback
+    setTimeout(() => {
+      setCurrentQuestionIndex((ci) => (ci < quizQuestions.length - 1 ? ci + 1 : ci));
+    }, 380);
   };
 
   const scheduleAutoSave = (answers: Record<string, string>) => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     setAutoSaveStatus("saving");
-    autoSaveTimerRef.current = setTimeout(() => {
+    autoSaveTimerRef.current = setTimeout(async () => {
       if (activeAttempt) {
+        try { localStorage.setItem(`exam_draft_${activeAttempt.id}`, JSON.stringify(answers)); } catch { /* storage unavailable */ }
+        // Server sync for cross-device resilience (fire-and-forget, network may be down)
         try {
-          localStorage.setItem(`exam_draft_${activeAttempt.id}`, JSON.stringify(answers));
-        } catch {
-          // storage unavailable — silently ignore
-        }
+          await fetch("/api/quiz/save-progress", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ attemptId: activeAttempt.id, answers }),
+          });
+        } catch { /* network unavailable — answers still in localStorage */ }
       }
       setAutoSaveStatus("saved");
       autoSaveTimerRef.current = setTimeout(() => setAutoSaveStatus("idle"), 2500);
@@ -1202,22 +1224,59 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           )}
 
           <SecureContent studentName={user.fullName} regNumber={user.regNumber} mode="light" className="space-y-4">
-            {quizQuestions.map((q, qIdx) => {
+            {/* Question navigator dots */}
+            <div className="flex flex-wrap gap-1.5 justify-center pb-1">
+              {quizQuestions.map((q, i) => {
+                const isAnswered = selectedAnswers[q.id] !== undefined;
+                const isCurrent = i === currentQuestionIndex;
+                return (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => setCurrentQuestionIndex(i)}
+                    title={`Question ${i + 1}${isAnswered ? " (answered)" : ""}`}
+                    className={`h-7 w-7 rounded-lg text-[10px] font-bold font-mono transition-all ${
+                      isCurrent
+                        ? "bg-emerald-600 text-white ring-2 ring-emerald-400/40 scale-110"
+                        : isAnswered
+                        ? "bg-slate-700 text-emerald-400"
+                        : "bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-slate-300"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Single question card */}
+            {(() => {
+              const q = quizQuestions[currentQuestionIndex];
+              if (!q) return null;
               const options: string[] = JSON.parse(q.optionsJson);
               const isAnswered = selectedAnswers[q.id] !== undefined;
               return (
-                <div
-                  key={q.id}
+                <motion.div
+                  key={currentQuestionIndex}
+                  initial={{ opacity: 0, x: 18 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
                   className={`p-5 rounded-2xl border transition-all duration-200 ${
                     isAnswered ? "bg-slate-900 border-slate-700" : "bg-slate-900/50 border-slate-800"
                   }`}
                 >
                   <div className="flex items-start gap-4">
                     <span className="flex items-center justify-center h-7 w-7 rounded-xl bg-slate-800 text-[11px] font-mono font-bold text-slate-400 shrink-0 mt-0.5 border border-slate-700 tabular-nums">
-                      {qIdx + 1}
+                      {currentQuestionIndex + 1}
                     </span>
                     <div className="space-y-3.5 w-full">
                       <h3 className="text-[13.5px] font-semibold text-slate-100 leading-relaxed"><MathText text={q.text} /></h3>
+                      {isAnswered && (
+                        <div className="flex items-center gap-1.5 text-[10.5px] text-emerald-400 font-bold font-mono uppercase tracking-wider">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                          Answer locked — cannot be changed
+                        </div>
+                      )}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         {options.map((opt) => {
                           const isSelected = selectedAnswers[q.id] === opt;
@@ -1226,14 +1285,17 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                               key={opt}
                               type="button"
                               onClick={() => handleSelectOption(q.id, opt)}
-                              className={`flex items-center gap-3 p-3.5 rounded-xl border text-left text-[12.5px] font-medium transition-all cursor-pointer ${
+                              disabled={isAnswered}
+                              className={`flex items-center gap-3 p-3.5 rounded-xl border text-left text-[12.5px] font-medium transition-all ${
                                 isSelected
-                                  ? "bg-emerald-900/40 border-emerald-600/60 text-white"
-                                  : "bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-900 hover:border-slate-600 hover:text-slate-200"
+                                  ? "bg-emerald-900/40 border-emerald-600/60 text-white cursor-default"
+                                  : isAnswered
+                                  ? "bg-slate-950/30 border-slate-800/50 text-slate-600 cursor-not-allowed"
+                                  : "bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-900 hover:border-slate-600 hover:text-slate-200 cursor-pointer"
                               }`}
                             >
                               <span className={`flex-shrink-0 h-4 w-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                                isSelected ? "border-emerald-400 bg-emerald-600" : "border-slate-600"
+                                isSelected ? "border-emerald-400 bg-emerald-600" : isAnswered ? "border-slate-700" : "border-slate-600"
                               }`}>
                                 {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
                               </span>
@@ -1244,9 +1306,32 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                       </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
-            })}
+            })()}
+
+            {/* Previous / Next navigation */}
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => setCurrentQuestionIndex((i) => Math.max(0, i - 1))}
+                disabled={currentQuestionIndex === 0}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 text-[12.5px] font-semibold transition cursor-pointer"
+              >
+                <ChevronLeft className="h-4 w-4" /> Previous
+              </button>
+              <span className="text-[11px] font-mono text-slate-500 uppercase tracking-wider tabular-nums">
+                {currentQuestionIndex + 1} / {quizQuestions.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentQuestionIndex((i) => Math.min(quizQuestions.length - 1, i + 1))}
+                disabled={currentQuestionIndex === quizQuestions.length - 1}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-slate-300 text-[12.5px] font-semibold transition cursor-pointer"
+              >
+                Next <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </SecureContent>
         </div>
 
