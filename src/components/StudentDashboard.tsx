@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap, Star, WifiOff } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap, Star, WifiOff, Monitor } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import CalendarView from "./CalendarView";
 import DiscussionBoard from "./DiscussionBoard";
@@ -83,6 +83,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   // Live classroom sub-features
   const [liveStudentTab, setLiveStudentTab] = useState<"slides" | "poll" | "chat">("slides");
   const [audioOpen, setAudioOpen] = useState(true);
+  const [liveScreenStream, setLiveScreenStream] = useState<MediaStream | null>(null);
   const [handRaised, setHandRaised] = useState(false);
   const [myPollAnswer, setMyPollAnswer] = useState<string | null>(null);
   const [isSpeakingAllowed, setIsSpeakingAllowed] = useState(false);
@@ -323,6 +324,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       setAllLiveSessions([]);
       setLiveChats([]);
       setIsSpeakingAllowed(false);
+      setLiveScreenStream(null);
     }
     return () => clearInterval(interval);
   }, [activeTab, joinedCourseId]);
@@ -2303,22 +2305,56 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           </div>
                         )}
 
-                        {/* ── Slide — primary content, takes full width ── */}
-                        <SlideView
-                          content={slide}
-                          slideNumber={Math.min(currentSlide, slides.length - 1) + 1}
-                          totalSlides={slides.length}
-                          topic={activeLiveSession.topic}
-                          courseCode={activeLiveSession.course?.code}
-                        />
-                        <p className="text-center text-[10px] font-mono text-[#6e6e73] dark:text-white/30">
-                          <span className="inline-flex items-center gap-1">
-                            <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />
-                            Hover slide → fullscreen &nbsp;·&nbsp; Slides auto-advance
-                          </span>
-                        </p>
+                        {/* ── Screen share — takes over as primary view when active ── */}
+                        {liveScreenStream ? (
+                          <div className="relative w-full rounded-2xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+                            <video
+                              ref={el => {
+                                if (el && el.srcObject !== liveScreenStream) {
+                                  el.srcObject = liveScreenStream;
+                                  el.play().catch(() => {});
+                                }
+                              }}
+                              autoPlay
+                              playsInline
+                              className="w-full h-full object-contain"
+                            />
+                            <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 bg-black/70 rounded-lg text-[10px] font-bold text-white uppercase tracking-wider">
+                              <span className="h-1.5 w-1.5 bg-blue-400 rounded-full animate-pulse" />
+                              <Monitor className="h-3 w-3 text-blue-400" />
+                              Screen Share
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {/* ── Slide — primary content ── */}
+                            <SlideView
+                              content={slide}
+                              slideNumber={Math.min(currentSlide, slides.length - 1) + 1}
+                              totalSlides={slides.length}
+                              topic={activeLiveSession.topic}
+                              courseCode={activeLiveSession.course?.code}
+                            />
+                            <p className="text-center text-[10px] font-mono text-[#6e6e73] dark:text-white/30">
+                              <span className="inline-flex items-center gap-1">
+                                <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full" />
+                                Hover slide → fullscreen &nbsp;·&nbsp; Slides auto-advance
+                              </span>
+                            </p>
+                          </>
+                        )}
 
-                        {/* ── Compact audio bar ── */}
+                        {/* ── Audio room — always mounted so screen share + mic work ── */}
+                        <LiveAudioRoom
+                          roomId={activeLiveSession.id}
+                          displayName={user.fullName}
+                          role="student"
+                          isMicAllowed={isSpeakingAllowed}
+                          onScreenStream={setLiveScreenStream}
+                          className={audioOpen ? "" : "hidden"}
+                        />
+
+                        {/* Compact audio toggle bar (always visible) */}
                         <div className="flex items-center justify-between px-3.5 py-2 bg-slate-900 dark:bg-black/50 rounded-[10px]">
                           <div className="flex items-center gap-2">
                             <span className="relative flex h-2 w-2">
@@ -2332,20 +2368,9 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           </div>
                           <button onClick={() => setAudioOpen(o => !o)}
                             className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-slate-400 hover:text-white border border-white/10 hover:border-white/20 rounded-[7px] transition cursor-pointer">
-                            <Mic className="h-3 w-3" /> {audioOpen ? "Hide" : "Audio"}
+                            <Mic className="h-3 w-3" /> {audioOpen ? "Hide" : "Participants"}
                           </button>
                         </div>
-
-                        {/* Collapsible audio room */}
-                        {audioOpen && (
-                          <LiveAudioRoom
-                            roomId={activeLiveSession.id}
-                            displayName={user.fullName}
-                            role="student"
-                            isMicAllowed={isSpeakingAllowed}
-                          />
-                        )}
-                        <div style={{ display: "none" }}>{String(audioOpen)}</div>
 
                         {/* Sub-tabs: Chat + Poll only */}
                         <div className="flex gap-1 bg-black/[0.04] dark:bg-white/[0.04] rounded-[12px] p-1 border border-black/[0.06] dark:border-white/[0.05]">

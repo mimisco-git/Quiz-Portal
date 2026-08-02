@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import * as Ably from "ably";
-import { Mic, MicOff, Users, Volume2, WifiOff } from "lucide-react";
+import { Mic, MicOff, Users, Volume2, WifiOff, Monitor, MonitorOff } from "lucide-react";
 
 interface Participant {
   connectionId: string;
@@ -13,6 +13,8 @@ export interface LiveAudioRoomHandle {
   muteAll: () => void;
   grantMic: (displayName: string) => void;
   revokeMic: (displayName: string) => void;
+  startScreenShare: () => Promise<void>;
+  stopScreenShare: () => void;
 }
 
 interface Props {
@@ -21,6 +23,8 @@ interface Props {
   role: "lecturer" | "student";
   isMicAllowed?: boolean;
   className?: string;
+  /** Called with the incoming screen-share stream (or null when it ends) — student side only */
+  onScreenStream?: (stream: MediaStream | null) => void;
 }
 
 // Google STUN + Open Relay TURN (free, no account needed)
@@ -40,24 +44,31 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 
 const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
-  ({ roomId, displayName, role, isMicAllowed = false, className = "" }, ref) => {
+  ({ roomId, displayName, role, isMicAllowed = false, className = "", onScreenStream }, ref) => {
 
     const ablyRef    = useRef<Ably.Realtime | null>(null);
     const myConnId   = useRef<string>("");
     const pcsRef     = useRef<Map<string, RTCPeerConnection>>(new Map());
-    const localStreamRef    = useRef<MediaStream | null>(null);
-    const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
-    const remoteStreamsRef  = useRef<Map<string, MediaStream>>(new Map());
+    const localStreamRef        = useRef<MediaStream | null>(null);
+    const pendingCandidatesRef  = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+    const remoteStreamsRef       = useRef<Map<string, MediaStream>>(new Map());
 
-    const [participants, setParticipants] = useState<Participant[]>([]);
-    const [isMuted,      setIsMuted]      = useState(role === "student");
-    const [isConnected,  setIsConnected]  = useState(false);
-    const [micError,     setMicError]     = useState<string | null>(null);
-    const [speakingSet,  setSpeakingSet]  = useState<Set<string>>(new Set());
+    // Screen share
+    const screenStreamRef   = useRef<MediaStream | null>(null);
+    const screenSendersRef  = useRef<Map<string, RTCRtpSender>>(new Map());
+    const onScreenStreamRef = useRef(onScreenStream);
+    useEffect(() => { onScreenStreamRef.current = onScreenStream; }, [onScreenStream]);
+
+    const [participants,    setParticipants]    = useState<Participant[]>([]);
+    const [isMuted,         setIsMuted]         = useState(role === "student");
+    const [isConnected,     setIsConnected]     = useState(false);
+    const [micError,        setMicError]        = useState<string | null>(null);
+    const [speakingSet,     setSpeakingSet]     = useState<Set<string>>(new Set());
+    const [isScreenSharing, setIsScreenSharing] = useState(false);
 
     const analyserRefs = useRef<Map<string, { ctx: AudioContext; raf: number }>>(new Map());
 
-    // ── Attach stored remote streams after every render (fixes race with <audio> elements)
+    // ── Attach stored remote streams after every render ───────────────────
     useEffect(() => {
       remoteStreamsRef.current.forEach((stream, connId) => {
         const el = document.getElementById(`audio-${connId}`) as HTMLAudioElement | null;
@@ -123,30 +134,96 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
       ch?.publish("signal", { from: myConnId.current, signal });
     }, []);
 
+    // ── Screen sharing ────────────────────────────────────────────────────
+    const stopScreenShare = useCallback(() => {
+      screenStreamRef.current?.getTracks().forEach(t => t.stop());
+      screenStreamRef.current = null;
+      setIsScreenSharing(false);
+
+      const toRemove = new Map(screenSendersRef.current);
+      screenSendersRef.current.clear();
+
+      for (const [peerId, pc] of pcsRef.current) {
+        const sender = toRemove.get(peerId);
+        if (!sender) continue;
+        try { pc.removeTrack(sender); } catch {}
+        (async () => {
+          try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            sendSignal(peerId, { type: "offer", sdp: pc.localDescription });
+          } catch {}
+        })();
+      }
+    }, [sendSignal]);
+
+    const startScreenShare = useCallback(async () => {
+      try {
+        const stream = await (navigator.mediaDevices as any).getDisplayMedia({
+          video: { cursor: "always", displaySurface: "monitor" },
+          audio: false,
+        });
+        screenStreamRef.current = stream;
+        const videoTrack = stream.getVideoTracks()[0];
+        if (!videoTrack) { stream.getTracks().forEach((t: MediaStreamTrack) => t.stop()); return; }
+
+        for (const [peerId, pc] of pcsRef.current) {
+          try {
+            const sender = pc.addTrack(videoTrack, stream);
+            screenSendersRef.current.set(peerId, sender);
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            sendSignal(peerId, { type: "offer", sdp: pc.localDescription });
+          } catch {}
+        }
+        setIsScreenSharing(true);
+        // Handle browser "Stop sharing" button
+        videoTrack.addEventListener("ended", () => stopScreenShare());
+      } catch {
+        // User cancelled the picker — no action needed
+      }
+    }, [sendSignal, stopScreenShare]);
+
     // ── Create RTCPeerConnection ───────────────────────────────────────────
     const createPC = useCallback((peerId: string): RTCPeerConnection => {
       pcsRef.current.get(peerId)?.close();
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
       pcsRef.current.set(peerId, pc);
 
+      // Add local audio stream
       localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
+
+      // If already screen-sharing, add the video track to the new peer connection
+      const screenTrack = screenStreamRef.current?.getVideoTracks()[0];
+      if (screenTrack && !screenTrack.ended) {
+        const sender = pc.addTrack(screenTrack, screenStreamRef.current!);
+        screenSendersRef.current.set(peerId, sender);
+      }
 
       pc.onicecandidate = ({ candidate }) => {
         if (candidate) sendSignal(peerId, { type: "candidate", candidate: candidate.toJSON() });
       };
 
       pc.ontrack = (ev) => {
-        const stream = ev.streams[0] ?? new MediaStream([ev.track]);
-        remoteStreamsRef.current.set(peerId, stream);
-        attachAnalyser(peerId, stream);
-        setParticipants(prev => [...prev]); // trigger re-render so post-render effect attaches stream
+        if (ev.track.kind === "video") {
+          // Incoming screen share from the lecturer
+          const stream = ev.streams[0] ?? new MediaStream([ev.track]);
+          onScreenStreamRef.current?.(stream);
+          ev.track.addEventListener("ended", () => onScreenStreamRef.current?.(null));
+        } else {
+          // Audio track — existing behaviour
+          const stream = ev.streams[0] ?? new MediaStream([ev.track]);
+          remoteStreamsRef.current.set(peerId, stream);
+          attachAnalyser(peerId, stream);
+          setParticipants(prev => [...prev]);
+        }
       };
 
       pc.onconnectionstatechange = () => { if (pc.connectionState === "failed") pc.restartIce(); };
       return pc;
     }, [sendSignal, attachAnalyser]);
 
-    // ── Send WebRTC offer (explicit createOffer — required by Safari) ──────
+    // ── Send WebRTC offer ─────────────────────────────────────────────────
     const sendOffer = useCallback(async (peerId: string) => {
       const pc = pcsRef.current.get(peerId);
       if (!pc) return;
@@ -163,6 +240,7 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
       pcsRef.current.delete(peerId);
       pendingCandidatesRef.current.delete(peerId);
       remoteStreamsRef.current.delete(peerId);
+      screenSendersRef.current.delete(peerId);
       detachAnalyser(peerId);
       const el = document.getElementById(`audio-${peerId}`) as HTMLAudioElement | null;
       if (el) el.srcObject = null;
@@ -196,7 +274,7 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
       } catch { }
     }, [createPC, sendSignal]);
 
-    // ── Lecturer controls via ref ─────────────────────────────────────────
+    // ── Expose controls via ref ───────────────────────────────────────────
     useImperativeHandle(ref, () => ({
       muteAll: () => {
         if (!ablyRef.current) return;
@@ -210,7 +288,9 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
         const peer = participants.find(p => p.displayName === name);
         if (peer) ablyRef.current?.channels.get(`signal:${peer.connectionId}`).publish("force-mute", {});
       },
-    }), [participants, roomId]);
+      startScreenShare,
+      stopScreenShare,
+    }), [participants, roomId, startScreenShare, stopScreenShare]);
 
     // ── Main effect: mic + Ably + WebRTC ─────────────────────────────────
     useEffect(() => {
@@ -232,7 +312,7 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
           return;
         }
 
-        // 2. Connect to Ably (signaling server — free, no persistent backend needed)
+        // 2. Connect to Ably
         const token = localStorage.getItem("edu_token");
         const ably = new Ably.Realtime({
           authUrl: "/api/ably-token",
@@ -250,7 +330,6 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
 
           // 3. Subscribe to MY personal signal channel
           const myChannel = ably.channels.get(`signal:${myConnId.current}`);
-
           myChannel.subscribe("signal", (msg: Ably.Message) => {
             const { from, signal } = msg.data;
             handleSignal(from, signal);
@@ -258,15 +337,15 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
           myChannel.subscribe("force-mute", () => { setIsMuted(true); applyMute(true); });
           myChannel.subscribe("mic-granted", () => { setIsMuted(false); applyMute(false); });
 
-          // 4. Listen for room-wide mute-all (students only)
+          // 4. Room-wide mute-all
           roomChannel.subscribe("mute-all", () => {
             if (role === "student") { setIsMuted(true); applyMute(true); }
           });
 
-          // 5. Enter presence (announces us to the room)
+          // 5. Enter presence
           await roomChannel.presence.enter({ displayName, role });
 
-          // 6. Get existing peers → we are the newcomer → send offers to all
+          // 6. Get existing peers → send offers
           const existing = await roomChannel.presence.get();
           const others = existing.filter((m: Ably.PresenceMessage) => m.connectionId !== myConnId.current);
           if (others.length > 0) {
@@ -282,7 +361,7 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
             }
           }
 
-          // 7. New peer enters → we already exist → create PC, wait for their offer
+          // 7. New peer enters → create PC, wait for their offer
           roomChannel.presence.subscribe("enter", (m: Ably.PresenceMessage) => {
             if (m.connectionId === myConnId.current || destroyed) return;
             setParticipants(prev => [
@@ -305,6 +384,10 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
 
       return () => {
         destroyed = true;
+        // Stop screen share on unmount
+        screenStreamRef.current?.getTracks().forEach(t => t.stop());
+        screenStreamRef.current = null;
+        screenSendersRef.current.clear();
         ablyRef.current?.channels.get(`room:${roomId}`).presence.leave().catch(() => {});
         ablyRef.current?.close();
         ablyRef.current = null;
@@ -326,7 +409,7 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
 
     return (
       <div className={`flex flex-col gap-3 ${className}`}>
-        {/* Hidden audio elements — attached to remote streams after render */}
+        {/* Hidden audio elements */}
         {participants.map(p => (
           <audio key={p.connectionId} id={`audio-${p.connectionId}`} autoPlay playsInline style={{ display: "none" }} />
         ))}
@@ -359,18 +442,39 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
                 </span>
               </div>
 
-              <button
-                type="button"
-                onClick={role === "student" && !isMicAllowed ? undefined : toggleMute}
-                disabled={role === "student" && !isMicAllowed}
-                title={role === "student" && !isMicAllowed ? "Raise hand to request mic" : isMuted ? "Unmute" : "Mute"}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[9px] text-[11px] font-semibold transition-all cursor-pointer disabled:cursor-not-allowed select-none ${
-                  isMuted ? "bg-red-600/80 hover:bg-red-600 text-white" : "bg-emerald-500/90 hover:bg-emerald-500 text-white"
-                }`}
-              >
-                {isMuted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className={`h-3.5 w-3.5 ${selfSpeaking ? "animate-pulse" : ""}`} />}
-                {isMuted ? "Muted" : "Live"}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Screen share button — lecturer only */}
+                {role === "lecturer" && isConnected && (
+                  <button
+                    type="button"
+                    onClick={isScreenSharing ? stopScreenShare : startScreenShare}
+                    title={isScreenSharing ? "Stop screen sharing" : "Share your screen"}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[9px] text-[11px] font-semibold transition-all cursor-pointer select-none ${
+                      isScreenSharing
+                        ? "bg-blue-600/90 hover:bg-blue-600 text-white"
+                        : "bg-white/[0.08] hover:bg-white/[0.14] text-slate-300 hover:text-white"
+                    }`}
+                  >
+                    {isScreenSharing
+                      ? <><MonitorOff className="h-3.5 w-3.5" /> Stop</>
+                      : <><Monitor    className="h-3.5 w-3.5" /> Share Screen</>}
+                  </button>
+                )}
+
+                {/* Mic toggle */}
+                <button
+                  type="button"
+                  onClick={role === "student" && !isMicAllowed ? undefined : toggleMute}
+                  disabled={role === "student" && !isMicAllowed}
+                  title={role === "student" && !isMicAllowed ? "Raise hand to request mic" : isMuted ? "Unmute" : "Mute"}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[9px] text-[11px] font-semibold transition-all cursor-pointer disabled:cursor-not-allowed select-none ${
+                    isMuted ? "bg-red-600/80 hover:bg-red-600 text-white" : "bg-emerald-500/90 hover:bg-emerald-500 text-white"
+                  }`}
+                >
+                  {isMuted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className={`h-3.5 w-3.5 ${selfSpeaking ? "animate-pulse" : ""}`} />}
+                  {isMuted ? "Muted" : "Live"}
+                </button>
+              </div>
             </div>
 
             {/* Speaking indicator */}
@@ -384,6 +488,20 @@ const LiveAudioRoom = forwardRef<LiveAudioRoomHandle, Props>(
                 </span>
                 <Volume2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                 <span className="text-[11.5px] font-semibold text-emerald-400">Speaking…</span>
+              </div>
+            )}
+
+            {/* Screen sharing indicator (lecturer) */}
+            {role === "lecturer" && isScreenSharing && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-blue-950/30 border border-blue-700/30 rounded-[10px]">
+                <span className="flex gap-[3px] items-end h-4">
+                  {[1,2,3].map(i => (
+                    <span key={i} className="w-[3px] bg-blue-400 rounded-full animate-pulse"
+                      style={{ height: `${8+i*4}px`, animationDelay: `${i*0.1}s` }} />
+                  ))}
+                </span>
+                <Monitor className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                <span className="text-[11.5px] font-semibold text-blue-400">Screen is visible to all students</span>
               </div>
             )}
 
