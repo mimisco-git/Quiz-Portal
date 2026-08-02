@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import TurndownService from "turndown";
-import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles } from "lucide-react";
+import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, Mic, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles, Eye } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import NotificationBell from "./NotificationBell";
@@ -57,6 +57,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [noteContent, setNoteContent] = useState("");
   const [publishedNotes, setPublishedNotes] = useState<LectureNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
+  const [viewingNote, setViewingNote] = useState<LectureNote | null>(null);
   const [docxImporting, setDocxImporting] = useState(false);
   const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
   const docxInputRef = useRef<HTMLInputElement>(null);
@@ -2258,6 +2259,45 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {/* ── 3. PUBLISH NOTES ── */}
           {activeTab === "notes" && (
             <div className="space-y-4">
+              {/* Note reader overlay */}
+              <AnimatePresence>
+                {viewingNote && (
+                  <motion.div
+                    key="note-reader"
+                    initial={{ opacity: 0, x: 40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 40 }}
+                    transition={{ type: "spring", stiffness: 320, damping: 30 }}
+                    className="fixed inset-0 z-50 bg-white dark:bg-[#0a0a0a] overflow-y-auto"
+                  >
+                    {/* Header */}
+                    <div className="sticky top-0 z-10 bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur border-b border-black/[0.06] dark:border-white/[0.06] px-4 py-3 flex items-center gap-3">
+                      <button
+                        onClick={() => setViewingNote(null)}
+                        className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:opacity-70 transition cursor-pointer"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to Notes
+                      </button>
+                      <span className="text-[#d1d1d6] dark:text-white/20 text-xs">|</span>
+                      <span className="text-[12px] text-[#8e8e93] dark:text-white/40 truncate">{viewingNote.title}</span>
+                    </div>
+                    {/* Content */}
+                    <div className="max-w-3xl mx-auto px-5 py-8">
+                      <h1 className="text-[22px] font-bold text-[#1d1d1f] dark:text-white mb-1 leading-tight">{viewingNote.title}</h1>
+                      <p className="text-[11px] text-[#8e8e93] dark:text-white/35 mb-6">
+                        {(() => { const c = courses.find(x => x.id === viewingNote.courseId); return c ? `${c.code} - ${c.title}` : ""; })()}
+                        {" · "}
+                        {new Date(viewingNote.createdAt).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })}
+                      </p>
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <MarkdownView content={viewingNote.content} />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Published notes list */}
               <motion.div className="apple-card overflow-hidden" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
                 <div className="px-6 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
@@ -2287,13 +2327,22 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                               {new Date(n.createdAt).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
                             </p>
                           </div>
-                          <button
-                            onClick={() => handleDeleteNote(n.id, n.title)}
-                            title="Delete note"
-                            className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-[8px] text-[#8e8e93] dark:text-white/35 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-500 dark:hover:text-red-400 transition cursor-pointer"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => setViewingNote(n)}
+                              title="Read note"
+                              className="flex items-center justify-center w-8 h-8 rounded-[8px] text-[#8e8e93] dark:text-white/35 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:text-emerald-600 dark:hover:text-emerald-400 transition cursor-pointer"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteNote(n.id, n.title)}
+                              title="Delete note"
+                              className="flex items-center justify-center w-8 h-8 rounded-[8px] text-[#8e8e93] dark:text-white/35 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-500 dark:hover:text-red-400 transition cursor-pointer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
