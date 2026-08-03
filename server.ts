@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import express from "express";
 import Ably from "ably";
 import cors from "cors";
@@ -14,6 +15,10 @@ import rateLimit from "express-rate-limit";
 import webpush from "web-push";
 import { prisma } from "./src/lib/db.js";
 import { seedDatabase } from "./src/lib/seed.js";
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV ?? "production", tracesSampleRate: 0.2 });
+}
 
 // ── Web Push (VAPID) setup — graceful no-op if keys not configured ──
 const PUSH_ENABLED = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
@@ -4302,6 +4307,7 @@ app.delete("/api/question-bank/:id", authenticateToken, async (req: any, res) =>
 // Global JSON error handler — 4-param signature required for Express error middleware
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("Unhandled error:", err);
+  if (process.env.SENTRY_DSN) Sentry.captureException(err);
   // Never expose internal error messages (stack traces, DB schema, file paths) to clients
   res.status(500).json({ error: "An unexpected server error occurred. Please try again." });
 });
