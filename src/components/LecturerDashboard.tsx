@@ -2527,46 +2527,35 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {/* ── 3. PUBLISH NOTES ── */}
           {activeTab === "notes" && (
             <div className="space-y-4">
-              {/* Note reader overlay */}
-              <AnimatePresence>
-                {viewingNote && (
-                  <motion.div
-                    key="note-reader"
-                    initial={{ opacity: 0, x: 40 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 40 }}
-                    transition={{ type: "spring", stiffness: 320, damping: 30 }}
-                    className="fixed inset-0 z-50 bg-white dark:bg-[#0a0a0a] overflow-y-auto"
-                  >
-                    {/* Header */}
-                    <div className="sticky top-0 z-10 bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur border-b border-black/[0.06] dark:border-white/[0.06] px-4 py-3 flex items-center gap-3">
+              {/* Note reader — inline card (same experience as students) */}
+              {viewingNote ? (
+                <motion.div
+                  key="note-reader"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="apple-card"
+                >
+                  <div className="px-5 py-4 border-b border-black/[0.06] dark:border-white/[0.06] flex items-start justify-between gap-4">
+                    <div>
                       <button
                         onClick={() => setViewingNote(null)}
-                        className="flex items-center gap-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 hover:opacity-70 transition cursor-pointer"
+                        className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-600 mb-1.5 inline-flex items-center gap-1 cursor-pointer"
                       >
-                        <ArrowLeft className="h-4 w-4" />
-                        Back to Notes
+                        <ArrowLeft className="h-3 w-3" /> Back to Notes
                       </button>
-                      <span className="text-[#d1d1d6] dark:text-white/20 text-xs">|</span>
-                      <span className="text-[12px] text-[#8e8e93] dark:text-white/40 truncate">{viewingNote.title}</span>
+                      <h2 className="apple-title">{viewingNote.title}</h2>
                     </div>
-                    {/* Content */}
-                    <div className="max-w-3xl mx-auto px-5 py-8">
-                      <h1 className="text-[22px] font-bold text-[#1d1d1f] dark:text-white mb-1 leading-tight">{viewingNote.title}</h1>
-                      <p className="text-[11px] text-[#8e8e93] dark:text-white/35 mb-6">
-                        {(() => { const c = courses.find(x => x.id === viewingNote.courseId); return c ? `${c.code} - ${c.title}` : ""; })()}
-                        {" · "}
-                        {new Date(viewingNote.createdAt).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })}
-                      </p>
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <MarkdownView content={viewingNote.content} />
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Published notes list */}
+                    <span className="text-[11px] font-mono text-[#6e6e73] dark:text-white/35 flex items-center gap-1 mt-6 flex-shrink-0">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(viewingNote.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                    </span>
+                  </div>
+                  <div className="p-5 sm:p-7">
+                    <MarkdownView content={viewingNote.content} />
+                  </div>
+                </motion.div>
+              ) : (
+              /* Published notes list */
               <motion.div className="apple-card overflow-hidden" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
                 <div className="px-6 py-4 border-b border-black/[0.06] dark:border-white/[0.06]">
                   <h2 className="apple-title">Published Notes</h2>
@@ -2617,6 +2606,7 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                   </div>
                 )}
               </motion.div>
+              )} {/* end else (not viewingNote) */}
 
               {/* Create note form */}
               <motion.div id="notes-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0.06 }}>

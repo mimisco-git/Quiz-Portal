@@ -523,10 +523,11 @@ export default function LandingScreen({
                     animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                     exit={{ opacity: 0, y: 14, scale: 0.95, filter: "blur(10px)" }}
                     transition={{ type: "spring", stiffness: 480, damping: 32 }}
-                    className="w-full max-w-[340px]"
+                    className="w-full max-w-[340px] flex flex-col"
+                    style={{ maxHeight: "calc(100dvh - 4rem)" }}
                   >
                     {/* Glass panel */}
-                    <div className="rounded-[22px] overflow-hidden" style={{ background: "rgba(8,13,10,0.78)", backdropFilter: "blur(56px) saturate(200%)", WebkitBackdropFilter: "blur(56px) saturate(200%)", border: "1px solid rgba(255,255,255,0.11)", boxShadow: "0 32px 72px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.10) inset, 0 -1px 0 rgba(0,0,0,0.20) inset" }}>
+                    <div className="rounded-[22px] overflow-hidden flex flex-col" style={{ maxHeight: "calc(100dvh - 5rem)", background: "rgba(8,13,10,0.78)", backdropFilter: "blur(56px) saturate(200%)", WebkitBackdropFilter: "blur(56px) saturate(200%)", border: "1px solid rgba(255,255,255,0.11)", boxShadow: "0 32px 72px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.10) inset, 0 -1px 0 rgba(0,0,0,0.20) inset" }}>
 
                       {/* Panel header — pulsing dot + back */}
                       <motion.div
@@ -555,7 +556,7 @@ export default function LandingScreen({
                         </motion.button>
                       </motion.div>
 
-                      <div className="px-6 py-5 space-y-4">
+                      <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
                         {/* Alerts */}
                         <AnimatePresence>
                           {error && (
