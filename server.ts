@@ -861,29 +861,32 @@ app.post("/api/auth/lecturer-register", authLimiter, async (req, res) => {
         password: hashedPassword,
         securityQuestion: securityQuestion?.trim() || null,
         securityAnswer: hashedAnswer,
+        status: "pending",
       },
     });
 
-    const token = jwt.sign(
-      {
-        id: lecturer.id,
-        name: lecturer.name,
-        email: lecturer.email,
-        role: "lecturer",
-      },
-      JWT_SECRET,
-      { expiresIn: "8h" }
-    );
+    // Notify admin of new registration
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (adminEmail) {
+      sendEmail(adminEmail, `New Lecturer Registration: ${lecturer.name}`, `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+          <h2 style="color:#047857">New Lecturer Awaiting Approval</h2>
+          <p><strong>Name:</strong> ${lecturer.name}</p>
+          <p><strong>Email:</strong> ${lecturer.email}</p>
+          <p>Log in to the admin panel at <a href="${APP_URL}/admin">${APP_URL}/admin</a> to approve or reject this registration.</p>
+        </div>`).catch(() => {});
+    }
+    // Confirm to the lecturer their request was received
+    sendEmail(normalizedEmail, "QuizOS — Registration Received", `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <h2 style="color:#047857">Application Received, ${lecturer.name}!</h2>
+        <p>Your lecturer account registration on QuizOS has been received and is pending admin approval.</p>
+        <p>You will receive another email once your account has been reviewed. This usually takes less than 24 hours.</p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+        <p style="font-size:12px;color:#6b7280">FUTO Academic Portal · quizos.online</p>
+      </div>`).catch(() => {});
 
-    return res.status(201).json({
-      token,
-      user: {
-        id: lecturer.id,
-        name: lecturer.name,
-        email: lecturer.email,
-        role: "lecturer",
-      },
-    });
+    return res.status(201).json({ pending: true, message: "Registration received. You will be notified by email once your account is approved." });
   } catch (error: any) {
     console.error("Lecturer registration error:", error);
     return res.status(500).json({ error: "Failed to register lecturer." });
@@ -921,30 +924,96 @@ app.post("/api/auth/lecturer-login", authLimiter, async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
+    if (lecturer.status === "pending") {
+      return res.status(403).json({ error: "Your account is pending admin approval. You will receive an email once approved.", pending: true });
+    }
+    if (lecturer.status === "rejected") {
+      return res.status(403).json({ error: "Your registration was not approved. Please contact the administrator.", rejected: true });
+    }
+
     const token = jwt.sign(
-      {
-        id: lecturer.id,
-        name: lecturer.name,
-        email: lecturer.email,
-        role: "lecturer",
-      },
-      JWT_SECRET,
-      { expiresIn: "8h" }
+      { id: lecturer.id, name: lecturer.name, email: lecturer.email, role: "lecturer" },
+      JWT_SECRET, { expiresIn: "8h" }
     );
 
     return res.json({
       token,
-      user: {
-        id: lecturer.id,
-        name: lecturer.name,
-        email: lecturer.email,
-        role: "lecturer",
-      },
+      user: { id: lecturer.id, name: lecturer.name, email: lecturer.email, role: "lecturer" },
     });
   } catch (error: any) {
     console.error("Lecturer login error:", error);
     return res.status(500).json({ error: "An internal server error occurred." });
   }
+});
+
+// ── Admin auth & management ──────────────────────────────────
+app.post("/api/auth/admin-login", authLimiter, async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword) return res.status(503).json({ error: "Admin access not configured." });
+  if (email.trim().toLowerCase() !== adminEmail.toLowerCase()) return res.status(401).json({ error: "Invalid credentials." });
+  const matches = await bcrypt.compare(password, adminPassword).catch(() => false)
+    || password === adminPassword; // fallback for plaintext env var
+  if (!matches) return res.status(401).json({ error: "Invalid credentials." });
+  const token = jwt.sign({ role: "admin", email: adminEmail }, JWT_SECRET, { expiresIn: "8h" });
+  return res.json({ token, user: { role: "admin", email: adminEmail } });
+});
+
+const authenticateAdmin = (req: any, res: any, next: any) => {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
+  try {
+    const decoded: any = jwt.verify(auth.slice(7), JWT_SECRET);
+    if (decoded.role !== "admin") return res.status(403).json({ error: "Admins only" });
+    req.admin = decoded;
+    next();
+  } catch { return res.status(401).json({ error: "Invalid token" }); }
+};
+
+app.get("/api/admin/lecturers", authenticateAdmin, async (_req, res) => {
+  try {
+    const lecturers = await prisma.lecturer.findMany({
+      select: { id: true, name: true, email: true, status: true, departments: true },
+      orderBy: { name: "asc" },
+    });
+    return res.json(lecturers);
+  } catch { return res.status(500).json({ error: "Failed to fetch lecturers" }); }
+});
+
+app.put("/api/admin/lecturers/:id/approve", authenticateAdmin, async (req, res) => {
+  try {
+    const lecturer = await prisma.lecturer.update({ where: { id: req.params.id }, data: { status: "approved" } });
+    sendEmail(lecturer.email, "QuizOS — Account Approved ✅", `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <h2 style="color:#047857">You're Approved, ${lecturer.name}!</h2>
+        <p>Your QuizOS lecturer account has been approved. You can now sign in at <a href="${APP_URL}" style="color:#047857">${APP_URL}</a>.</p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+        <p style="font-size:12px;color:#6b7280">FUTO Academic Portal · quizos.online</p>
+      </div>`).catch(() => {});
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: "Failed to approve" }); }
+});
+
+app.put("/api/admin/lecturers/:id/reject", authenticateAdmin, async (req, res) => {
+  try {
+    const lecturer = await prisma.lecturer.update({ where: { id: req.params.id }, data: { status: "rejected" } });
+    sendEmail(lecturer.email, "QuizOS — Registration Update", `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <h2 style="color:#dc2626">Registration Not Approved</h2>
+        <p>Hi ${lecturer.name}, unfortunately your QuizOS lecturer account registration was not approved at this time.</p>
+        <p>If you believe this is an error, please contact the administrator.</p>
+      </div>`).catch(() => {});
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: "Failed to reject" }); }
+});
+
+app.delete("/api/admin/lecturers/:id", authenticateAdmin, async (req, res) => {
+  try {
+    await prisma.lecturer.delete({ where: { id: req.params.id } });
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: "Failed to delete" }); }
 });
 
 // -------------------------------------------------------------

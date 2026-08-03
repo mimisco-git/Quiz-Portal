@@ -109,6 +109,9 @@ export default function LandingScreen({
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [clock, setClock] = useState(new Date());
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 1000);
@@ -198,6 +201,11 @@ export default function LandingScreen({
       const res  = await fetch("/api/auth/lecturer-register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: regLecturerName, email: regLecturerEmail, password: regLecturerPassword, securityQuestion: regLecturerSecQ, securityAnswer: regLecturerSecA }) });
       const data = await apiJSON(res);
       if (!res.ok) throw new Error(data.error || "Lecturer registration failed");
+      if (data.pending) {
+        setSuccess("Registration received! You will get an email once your account is approved.");
+        setLoading(false);
+        return;
+      }
       setSuccess("Lecturer account created!");
       setTimeout(() => onLoginSuccess(data.token, data.user), 1000);
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
@@ -298,6 +306,16 @@ export default function LandingScreen({
       if (!res.ok) throw new Error(data.error || "Reset failed. Please check your answer.");
       setSuccess("Password reset! Signing you in…");
       setTimeout(() => onLoginSuccess(data.token, data.user), 800);
+    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
+  };
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null); setLoading(true);
+    try {
+      const res = await fetch("/api/auth/admin-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: adminEmail, password: adminPassword }) });
+      const data = await apiJSON(res);
+      if (!res.ok) throw new Error(data.error || "Invalid credentials.");
+      onLoginSuccess(data.token, data.user);
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   };
 
@@ -976,15 +994,65 @@ export default function LandingScreen({
             </div>
 
             {/* ── bottom tagline ── */}
-            <div className="absolute bottom-5 inset-x-0 text-center pointer-events-none select-none">
-              <p className="text-white/14 text-[9.5px] font-mono tracking-[0.28em] uppercase">
+            <div className="absolute bottom-5 inset-x-0 text-center select-none flex flex-col items-center gap-1">
+              <p className="text-white/14 text-[9.5px] font-mono tracking-[0.28em] uppercase pointer-events-none">
                 © 2026 · FUTO Academic Portal
               </p>
+              <button onClick={() => setShowAdminLogin(v => !v)} className="text-white/10 hover:text-white/25 text-[9px] font-mono tracking-widest uppercase transition cursor-pointer">
+                System Admin
+              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* Admin login modal */}
+      <AnimatePresence>
+        {showAdminLogin && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowAdminLogin(false)}>
+            <motion.form initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              onSubmit={handleAdminLogin} onClick={e => e.stopPropagation()}
+              className="bg-[#1a1a2e] border border-white/10 rounded-[20px] p-6 w-full max-w-sm space-y-4 shadow-2xl">
+              <div className="flex items-center gap-2.5 mb-1">
+                <div className="w-8 h-8 rounded-[10px] bg-emerald-600 flex items-center justify-center">
+                  <ShieldCheck className="h-4 w-4 text-white" />
+                </div>
+                <span className="text-white/80 text-[13px] font-bold">Admin Access</span>
+                <button type="button" onClick={() => setShowAdminLogin(false)} className="ml-auto text-white/30 hover:text-white/60 cursor-pointer">✕</button>
+              </div>
+              {error && <p className="text-[11.5px] text-red-400 bg-red-500/10 rounded-[8px] px-3 py-2">{error}</p>}
+              <div>
+                <label className="block text-[10.5px] font-semibold text-white/40 uppercase tracking-wider mb-1.5">Email</label>
+                <input type="email" required value={adminEmail} onChange={e => setAdminEmail(e.target.value)}
+                  className="w-full bg-white/[0.06] border border-white/[0.1] rounded-[10px] px-3 py-2.5 text-[13px] text-white placeholder-white/20 outline-none focus:border-emerald-500/60"
+                  placeholder="admin@quizos.online" autoFocus />
+              </div>
+              <div>
+                <label className="block text-[10.5px] font-semibold text-white/40 uppercase tracking-wider mb-1.5">Password</label>
+                <input type="password" required value={adminPassword} onChange={e => setAdminPassword(e.target.value)}
+                  className="w-full bg-white/[0.06] border border-white/[0.1] rounded-[10px] px-3 py-2.5 text-[13px] text-white placeholder-white/20 outline-none focus:border-emerald-500/60"
+                  placeholder="••••••••" />
+              </div>
+              <button type="submit" disabled={loading}
+                className="w-full py-2.5 rounded-[10px] bg-emerald-600 hover:bg-emerald-500 text-white text-[13px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer">
+                {loading ? "Signing in…" : "Sign In"}
+              </button>
+            </motion.form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
+  );
+}
+
+// needed for admin modal icon without adding new lucide import
+function ShieldCheck({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    </svg>
   );
 }
