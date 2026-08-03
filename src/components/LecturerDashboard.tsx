@@ -105,7 +105,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   // Analytics modal
   const [analyticsData, setAnalyticsData] = useState<any | null>(null);
   const [analyticsQuizTitle, setAnalyticsQuizTitle] = useState("");
+  const [analyticsQuizId, setAnalyticsQuizId] = useState<string | null>(null);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+  const [liveData, setLiveData] = useState<any | null>(null);
 
   // Announcements
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -969,7 +971,9 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   const handleShowAnalytics = async (quizId: string, title: string) => {
     setAnalyticsQuizTitle(title);
+    setAnalyticsQuizId(quizId);
     setAnalyticsData(null);
+    setLiveData(null);
     setIsLoadingAnalytics(true);
     try {
       const res = await fetch(`/api/quizzes/${quizId}/analytics`, { headers: { Authorization: `Bearer ${token}` } });
@@ -978,6 +982,19 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     } catch (e: any) { showError(e.message); }
     finally { setIsLoadingAnalytics(false); }
   };
+
+  useEffect(() => {
+    if (!analyticsQuizId) { setLiveData(null); return; }
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/quizzes/${analyticsQuizId}/live`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) setLiveData(await res.json());
+      } catch { /* ignore */ }
+    };
+    poll();
+    const id = setInterval(poll, 10000);
+    return () => clearInterval(id);
+  }, [analyticsQuizId, token]);
 
   const fetchAnnouncements = async () => {
     try {
@@ -3089,14 +3106,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
           {/* ── ANALYTICS MODAL ── */}
           {(analyticsData || isLoadingAnalytics) && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setAnalyticsData(null)}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => { setAnalyticsData(null); setAnalyticsQuizId(null); }}>
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="apple-card max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                 <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
                   <div>
                     <h2 className="apple-title flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-500" /> Analytics</h2>
                     <p className="apple-subtitle truncate">{analyticsQuizTitle}</p>
                   </div>
-                  <button onClick={() => setAnalyticsData(null)} className="p-1.5 rounded-[8px] hover:bg-black/[0.05] dark:hover:bg-white/[0.07] cursor-pointer"><X className="h-4 w-4 text-[#6e6e73]" /></button>
+                  <button onClick={() => { setAnalyticsData(null); setAnalyticsQuizId(null); }} className="p-1.5 rounded-[8px] hover:bg-black/[0.05] dark:hover:bg-white/[0.07] cursor-pointer"><X className="h-4 w-4 text-[#6e6e73]" /></button>
                 </div>
                 <div className="p-5 space-y-5">
                   {isLoadingAnalytics ? (
@@ -3183,6 +3200,51 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           ))}
                         </div>
                       </div>
+
+                      {/* Live Now */}
+                      {liveData && (
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2 flex items-center gap-1.5">
+                            <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                            Live Now ({liveData.active?.length ?? 0} active)
+                            <span className="ml-auto text-[9px] font-normal normal-case text-[#8e8e93] dark:text-white/30">refreshes every 10s</span>
+                          </p>
+                          {liveData.active?.length === 0 ? (
+                            <p className="text-[11.5px] text-[#6e6e73] dark:text-white/40 text-center py-3">No students are currently taking this quiz.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {liveData.active.map((s: any, i: number) => (
+                                <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-[8px] bg-red-50/60 dark:bg-red-900/10 border border-red-200/50 dark:border-red-500/15">
+                                  <Radio className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                                  <span className="flex-1 text-[11.5px] font-medium text-[#1d1d1f] dark:text-white/80 truncate">{s.studentName}</span>
+                                  <span className="text-[10.5px] text-[#6e6e73] dark:text-white/40 flex-shrink-0">{s.regNumber}</span>
+                                  <span className="text-[10.5px] font-mono text-emerald-600 dark:text-emerald-400 flex-shrink-0">{s.answeredCount}/{s.totalQuestions}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Not Attempted */}
+                      {analyticsData.notAttempted?.length > 0 && (
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 mb-2 flex items-center gap-1.5">
+                            <AlertTriangle className="h-3 w-3 text-amber-500" />
+                            Not Attempted ({analyticsData.notAttempted.length})
+                          </p>
+                          <div className="space-y-1 max-h-48 overflow-y-auto">
+                            {analyticsData.notAttempted.map((s: any) => (
+                              <div key={s.id} className="flex items-center gap-3 px-3 py-1.5 rounded-[8px] bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/40 dark:border-amber-500/15">
+                                <Users className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                                <span className="flex-1 text-[11.5px] text-[#1d1d1f] dark:text-white/80 truncate">{s.fullName}</span>
+                                <span className="text-[10.5px] text-[#6e6e73] dark:text-white/40 flex-shrink-0">{s.regNumber}</span>
+                                <span className="text-[10px] text-[#8e8e93] dark:text-white/30 flex-shrink-0">{s.department} · {s.year}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

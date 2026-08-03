@@ -1071,13 +1071,11 @@ app.post("/api/notes", authenticateToken, async (req: any, res) => {
   }
 
   try {
-    const newNote = await prisma.lectureNote.create({
-      data: {
-        title,
-        content,
-        courseId,
-      },
-    });
+    const [newNote, course] = await Promise.all([
+      prisma.lectureNote.create({ data: { title, content, courseId } }),
+      prisma.course.findUnique({ where: { id: courseId }, select: { code: true } }),
+    ]);
+    sendPushToAll("student", `📖 New Note: ${title}`, `${course?.code || "Course"} · A new lecture note has been published. Open the app to read it.`, "/").catch(() => {});
     return res.status(201).json(newNote);
   } catch (error: any) {
     console.error("Error creating lecture note:", error);
@@ -3638,8 +3636,8 @@ app.get("/api/quizzes/:id/analytics", authenticateToken, async (req: any, res) =
       where: { id: req.params.id },
       include: {
         questions: true,
-        course: { select: { lecturerId: true, code: true } },
-        attempts: { where: { isCompleted: true }, select: { score: true, answersJson: true } },
+        course: { select: { lecturerId: true, code: true, departmentId: true, targetYear: true, department: { select: { name: true } } } },
+        attempts: { where: { isCompleted: true }, select: { score: true, answersJson: true, studentId: true } },
       },
     });
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
@@ -3677,6 +3675,17 @@ app.get("/api/quizzes/:id/analytics", authenticateToken, async (req: any, res) =
       };
     });
 
+    const attemptedIds = new Set(quiz.attempts.map((a) => a.studentId));
+    const studentWhere: any = {};
+    if (quiz.course.department?.name) studentWhere.department = quiz.course.department.name;
+    if (quiz.course.targetYear) studentWhere.year = quiz.course.targetYear;
+    const eligibleStudents = await prisma.student.findMany({
+      where: Object.keys(studentWhere).length ? studentWhere : undefined,
+      select: { id: true, fullName: true, regNumber: true, department: true, year: true },
+      orderBy: { fullName: "asc" },
+    });
+    const notAttempted = eligibleStudents.filter((s) => !attemptedIds.has(s.id));
+
     return res.json({
       quizTitle: quiz.title,
       courseCode: quiz.course.code,
@@ -3687,9 +3696,43 @@ app.get("/api/quizzes/:id/analytics", authenticateToken, async (req: any, res) =
       failCount: total - passCount,
       scores,
       questionStats,
+      notAttempted,
     });
   } catch (err) {
     return res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
+app.get("/api/quizzes/:id/live", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  try {
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: req.params.id },
+      select: { course: { select: { lecturerId: true } }, questions: { select: { id: true } } },
+    });
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    if (quiz.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied" });
+
+    const active = await prisma.studentAttempt.findMany({
+      where: { quizId: req.params.id, isCompleted: false },
+      include: { student: { select: { fullName: true, regNumber: true } } },
+      orderBy: { startedAt: "asc" },
+    });
+    const totalQs = quiz.questions.length;
+    const result = active.map((a) => {
+      let answeredCount = 0;
+      try { answeredCount = Object.keys(JSON.parse(a.answersJson ?? "{}")).length; } catch { /* skip */ }
+      return {
+        studentName: a.student.fullName,
+        regNumber: a.student.regNumber,
+        startedAt: a.startedAt,
+        answeredCount,
+        totalQuestions: totalQs,
+      };
+    });
+    return res.json({ active: result });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to fetch live data" });
   }
 });
 
