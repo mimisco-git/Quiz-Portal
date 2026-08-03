@@ -2170,6 +2170,26 @@ app.get("/api/student/profile", authenticateToken, async (req: any, res) => {
   } catch { return res.status(500).json({ error: "Failed to fetch profile." }); }
 });
 
+app.put("/api/student/profile", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only." });
+  const { fullName, email } = req.body;
+  if (!fullName?.trim()) return res.status(400).json({ error: "Full name is required." });
+  if (!email?.trim()) return res.status(400).json({ error: "Email is required." });
+  if (fullName.length > MAX_NAME) return res.status(400).json({ error: "Name is too long." });
+  if (email.length > MAX_EMAIL) return res.status(400).json({ error: "Email is too long." });
+  try {
+    const normalizedEmail = email.trim().toLowerCase();
+    const conflict = await prisma.student.findFirst({ where: { email: normalizedEmail, NOT: { id: req.user.id } } });
+    if (conflict) return res.status(400).json({ error: "That email is already in use by another account." });
+    const updated = await prisma.student.update({
+      where: { id: req.user.id },
+      data: { fullName: fullName.trim(), email: normalizedEmail },
+      select: { id: true, fullName: true, email: true, regNumber: true, department: true, year: true },
+    });
+    return res.json(updated);
+  } catch { return res.status(500).json({ error: "Failed to update profile." }); }
+});
+
 app.patch("/api/student/department", authenticateToken, async (req: any, res) => {
   if (req.user.role !== "student") return res.status(403).json({ error: "Students only." });
   const { department } = req.body;

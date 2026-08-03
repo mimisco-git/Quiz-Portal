@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, ChevronLeft, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap, Star, WifiOff, Monitor } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, ChevronLeft, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap, Star, WifiOff, Monitor, User, Save } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import CalendarView from "./CalendarView";
 import DiscussionBoard from "./DiscussionBoard";
@@ -48,7 +48,11 @@ function formatCountdown(target: Date): string {
 }
 
 export default function StudentDashboard({ token, user, theme, onToggleTheme, onLogout, deepLink }: StudentDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "assignments" | "history" | "calendar" | "discussions">("notes");
+  const [activeTab, setActiveTab] = useState<"notes" | "quizzes" | "live-classroom" | "exams" | "assignments" | "history" | "calendar" | "discussions" | "profile">("notes");
+  const [profileFullName, setProfileFullName] = useState(user.fullName);
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [periodTick, setPeriodTick] = useState(0);
   const [currentYear, setCurrentYear] = useState(user.year);
@@ -520,7 +524,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
     fetch("/api/departments").then(r => r.ok ? r.json() : []).then(setAvailableDepartments).catch(() => {});
     fetch("/api/student/profile", { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
-      .then(p => { if (p) { setCurrentDepartment(p.department); setAdditionalDepts(p.additionalDepartments || []); } })
+      .then(p => { if (p) { setCurrentDepartment(p.department); setAdditionalDepts(p.additionalDepartments || []); setProfileEmail(p.email || ""); setProfileFullName(p.fullName || user.fullName); } })
       .catch(() => {});
 
     // Update study streak on login
@@ -557,6 +561,28 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
       }
     } catch (err) {
       console.error("Error fetching all notes for materials section:", err);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    setProfileSaving(true);
+    setProfileMsg(null);
+    try {
+      const res = await fetch("/api/student/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ fullName: profileFullName, email: profileEmail }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setProfileMsg({ text: "Profile updated.", ok: true });
+      } else {
+        setProfileMsg({ text: data.error || "Update failed.", ok: false });
+      }
+    } catch {
+      setProfileMsg({ text: "Network error.", ok: false });
+    } finally {
+      setProfileSaving(false);
     }
   };
 
@@ -1567,6 +1593,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
             { id: "calendar",       icon: Calendar,      label: "Calendar",     live: false },
             { id: "discussions",    icon: MessageSquare, label: "Discussions",  live: false },
             { id: "live-classroom", icon: Radio,         label: "Live Class",   live: true  },
+            { id: "profile",        icon: User,          label: "My Profile",   live: false },
           ].map((item) => {
             const isActive = activeTab === (item.id as typeof activeTab);
             return (
@@ -1774,6 +1801,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                 { id: "calendar",       icon: Calendar,      label: "Calendar"    },
                 { id: "discussions",    icon: MessageSquare, label: "Discussions" },
                 { id: "live-classroom", icon: Radio,         label: "Live Class"  },
+                { id: "profile",        icon: User,          label: "My Profile"  },
               ].map((item) => {
                 const isActive = activeTab === (item.id as typeof activeTab);
                 return (
@@ -3480,6 +3508,82 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
           {/* ── DISCUSSIONS TAB ── */}
           {activeTab === "discussions" && (
             <DiscussionBoard token={token} userId={user.id} userRole="student" userName={user.fullName} courses={courses.map(c => ({ id: c.id, code: c.code, title: c.title }))} />
+          )}
+
+          {/* ── PROFILE TAB ── */}
+          {activeTab === "profile" && (
+            <div className="max-w-lg mx-auto space-y-5 py-2">
+              <h2 className="text-[17px] font-bold text-[#1d1d1f] dark:text-white/90">My Profile</h2>
+
+              {/* Avatar */}
+              <div className="apple-card p-6 flex flex-col items-center gap-4">
+                <div className="relative">
+                  <UserAvatar
+                    userId={user.id}
+                    role="student"
+                    size={88}
+                    initials={user.fullName}
+                    refreshTrigger={avatarRefreshTrigger}
+                    className="rounded-full ring-[2px] ring-black/10 dark:ring-white/15 shadow-md"
+                  />
+                  <button
+                    onClick={() => setIsAvatarModalOpen(true)}
+                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-emerald-500 hover:bg-emerald-600 flex items-center justify-center shadow-md transition cursor-pointer"
+                    title="Change photo"
+                  >
+                    <Camera className="h-3.5 w-3.5 text-white" />
+                  </button>
+                </div>
+                <p className="text-[12px] text-[#6e6e73] dark:text-white/40">Tap the camera to update your passport photo</p>
+              </div>
+
+              {/* Editable fields */}
+              <div className="apple-card p-5 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">Full Name</label>
+                  <input
+                    type="text"
+                    value={profileFullName}
+                    onChange={e => setProfileFullName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[10px] bg-black/[0.04] dark:bg-white/[0.06] text-[14px] text-[#1d1d1f] dark:text-white/90 outline-none focus:ring-2 focus:ring-emerald-500/40 border border-black/[0.06] dark:border-white/[0.08] transition"
+                    placeholder="Your full name"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">Email Address</label>
+                  <input
+                    type="email"
+                    value={profileEmail}
+                    onChange={e => setProfileEmail(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-[10px] bg-black/[0.04] dark:bg-white/[0.06] text-[14px] text-[#1d1d1f] dark:text-white/90 outline-none focus:ring-2 focus:ring-emerald-500/40 border border-black/[0.06] dark:border-white/[0.08] transition"
+                    placeholder="your@email.com"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40">Reg Number</label>
+                  <div className="px-3.5 py-2.5 rounded-[10px] bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/[0.05] text-[14px] text-[#6e6e73] dark:text-white/40 font-mono select-all">
+                    {user.regNumber}
+                  </div>
+                </div>
+
+                {profileMsg && (
+                  <p className={`text-[12px] font-semibold ${profileMsg.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
+                    {profileMsg.text}
+                  </p>
+                )}
+
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={profileSaving}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-[10px] bg-emerald-500 hover:bg-emerald-600 text-white text-[13.5px] font-semibold transition disabled:opacity-60 cursor-pointer"
+                >
+                  {profileSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {profileSaving ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
+            </div>
           )}
 
           </div>{/* /max-w-5xl */}
