@@ -205,6 +205,12 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
 
   const [filterCourseId, setFilterCourseId] = useState("");
   const [filterQuizId, setFilterQuizId] = useState("");
+
+  // Bulk student import
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
+  const bulkCsvRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -676,6 +682,27 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
       }
     } catch (err: any) {
       showError(err.message);
+    }
+  };
+
+  const handleBulkImport = async (file: File) => {
+    setBulkImporting(true);
+    setBulkResult(null);
+    try {
+      const csv = await file.text();
+      const res = await fetch("/api/students/bulk-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ csv }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showError(data.error || "Import failed"); return; }
+      setBulkResult(data);
+    } catch (err: any) {
+      showError(err.message);
+    } finally {
+      setBulkImporting(false);
+      if (bulkCsvRef.current) bulkCsvRef.current.value = "";
     }
   };
 
@@ -1852,10 +1879,54 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
           {/* ── 1. GRADEBOOK ── */}
           {activeTab === "gradebook" && (
             <motion.div id="gradebook-panel" className="apple-card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }}>
-              <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06]">
-                <h2 className="apple-title">Student Assessment Gradebook</h2>
-                <p className="apple-subtitle">Evaluate, mark, and adjust examination attempt logs.</p>
+              <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.06] flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <h2 className="apple-title">Student Assessment Gradebook</h2>
+                  <p className="apple-subtitle">Evaluate, mark, and adjust examination attempt logs.</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <input ref={bulkCsvRef} type="file" accept=".csv,.txt" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleBulkImport(f); }} />
+                  <button
+                    type="button"
+                    onClick={() => { setShowBulkImport(v => !v); setBulkResult(null); }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] border border-black/[0.10] dark:border-white/[0.12] text-[12px] font-semibold text-[#3a3a3c] dark:text-white/70 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition cursor-pointer"
+                  >
+                    <Upload className="h-3.5 w-3.5" /> Bulk Import Students
+                  </button>
+                </div>
               </div>
+
+              {/* Bulk import panel */}
+              {showBulkImport && (
+                <div className="px-6 py-4 border-b border-black/[0.06] dark:border-white/[0.06] bg-black/[0.01] dark:bg-white/[0.02] space-y-3">
+                  <p className="text-[12px] font-semibold text-[#3a3a3c] dark:text-white/70">
+                    Upload a CSV file with columns: <span className="font-mono text-emerald-600 dark:text-emerald-400">fullName, email, regNumber, department, year</span>
+                  </p>
+                  <p className="text-[11px] text-[#8e8e93] dark:text-white/35">
+                    • First row is treated as a header and skipped automatically<br />
+                    • Email is optional — defaults to <span className="font-mono">REGNUMBER@futo.edu.ng</span><br />
+                    • Default password = registration number (student must change on first login)<br />
+                    • Duplicate reg numbers or emails are skipped silently
+                  </p>
+                  <button
+                    type="button"
+                    disabled={bulkImporting}
+                    onClick={() => bulkCsvRef.current?.click()}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[12.5px] font-semibold rounded-[10px] transition cursor-pointer"
+                  >
+                    {bulkImporting ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Importing…</> : <><Upload className="h-3.5 w-3.5" /> Choose CSV File</>}
+                  </button>
+                  {bulkResult && (
+                    <div className={`rounded-[10px] border p-3 text-[12px] space-y-1 ${bulkResult.errors.length ? "border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/20" : "border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-950/20"}`}>
+                      <p className="font-bold text-emerald-700 dark:text-emerald-400">✓ {bulkResult.created} students created</p>
+                      {bulkResult.skipped > 0 && <p className="text-[#6e6e73] dark:text-white/40">{bulkResult.skipped} already existed (skipped)</p>}
+                      {bulkResult.errors.map((e, i) => <p key={i} className="text-red-600 dark:text-red-400 text-[11px]">{e}</p>)}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="p-5 space-y-4">
 
                 {/* Filters */}

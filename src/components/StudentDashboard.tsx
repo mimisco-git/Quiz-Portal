@@ -111,6 +111,8 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [assignmentSubmissionHistory, setAssignmentSubmissionHistory] = useState<any[]>([]);
   const [gradeFilter, setGradeFilter] = useState<"all" | "quiz" | "exam" | "assignment">("all");
   const [expandedGradeId, setExpandedGradeId] = useState<string | null>(null);
+  const [reviewAttempt, setReviewAttempt] = useState<any | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
 
   // Deep-link: id of item to highlight after navigating to its tab
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -3362,6 +3364,25 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                                         {row.isGraded ? "No written feedback for this submission." : "Grade pending — check back after your lecturer runs AI grading."}
                                       </p>
                                     )}
+                                    {/* Review answers button — quizzes only */}
+                                    {row.type === "quiz" && row.isGraded && (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          const attemptId = row.id.replace("q_", "");
+                                          setReviewLoading(true);
+                                          try {
+                                            const res = await fetch(`/api/quiz/attempt/${attemptId}/review`, { headers: { Authorization: `Bearer ${token}` } });
+                                            if (res.ok) setReviewAttempt(await res.json());
+                                          } finally { setReviewLoading(false); }
+                                        }}
+                                        disabled={reviewLoading}
+                                        className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] font-semibold rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition cursor-pointer disabled:opacity-50"
+                                      >
+                                        <CheckCircle className="h-3.5 w-3.5" />
+                                        {reviewLoading ? "Loading…" : "Review Answers"}
+                                      </button>
+                                    )}
                                   </div>
                                 </motion.div>
                               )}
@@ -3375,6 +3396,83 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
               </motion.div>
             );
           })()}
+
+          {/* ── QUIZ REVIEW MODAL ── */}
+          <AnimatePresence>
+            {reviewAttempt && (() => {
+              const answers: Record<string, string> = reviewAttempt.answersJson ? JSON.parse(reviewAttempt.answersJson) : {};
+              const questions: any[] = reviewAttempt.quiz?.questions || [];
+              const correct = questions.filter(q => answers[q.id] === q.correctOption).length;
+              return (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-8 overflow-y-auto"
+                  style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)" }}
+                  onClick={() => setReviewAttempt(null)}
+                >
+                  <motion.div
+                    initial={{ scale: 0.94, y: 20 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0.94, y: 20 }}
+                    transition={{ type: "spring", stiffness: 360, damping: 30 }}
+                    className="w-full max-w-2xl bg-white dark:bg-[#111] rounded-[20px] overflow-hidden shadow-2xl"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {/* Header */}
+                    <div className="px-6 py-5 border-b border-black/[0.07] dark:border-white/[0.07] flex items-center justify-between">
+                      <div>
+                        <h2 className="text-[16px] font-bold text-[#1d1d1f] dark:text-white">{reviewAttempt.quiz?.title}</h2>
+                        <p className="text-[11px] text-[#8e8e93] dark:text-white/40 mt-0.5">
+                          {correct} / {questions.length} correct · {((correct / questions.length) * 100).toFixed(1)}%
+                        </p>
+                      </div>
+                      <button onClick={() => setReviewAttempt(null)} className="p-2 rounded-xl hover:bg-black/[0.06] dark:hover:bg-white/[0.08] text-[#6e6e73] dark:text-white/40 transition cursor-pointer">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {/* Questions */}
+                    <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                      {questions.map((q, i) => {
+                        const studentAnswer = answers[q.id];
+                        const isCorrect = studentAnswer === q.correctOption;
+                        const options: string[] = JSON.parse(q.optionsJson);
+                        return (
+                          <div key={q.id} className={`rounded-[14px] border p-4 ${isCorrect ? "border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/20" : "border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-red-950/20"}`}>
+                            <div className="flex items-start gap-3">
+                              <span className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-bold ${isCorrect ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`}>{i + 1}</span>
+                              <div className="flex-1 space-y-2.5">
+                                <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 leading-snug"><MathText text={q.text} /></p>
+                                <div className="grid grid-cols-1 gap-1.5">
+                                  {options.map(opt => {
+                                    const isStudent = opt === studentAnswer;
+                                    const isRight = opt === q.correctOption;
+                                    return (
+                                      <div key={opt} className={`flex items-center gap-2.5 px-3 py-2 rounded-[9px] text-[12px] font-medium border ${
+                                        isRight ? "bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700/60 text-emerald-800 dark:text-emerald-300"
+                                        : isStudent && !isRight ? "bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700/50 text-red-800 dark:text-red-300"
+                                        : "bg-black/[0.02] dark:bg-white/[0.03] border-black/[0.07] dark:border-white/[0.07] text-[#6e6e73] dark:text-white/40"
+                                      }`}>
+                                        <span className={`h-3.5 w-3.5 rounded-full border-2 flex-shrink-0 ${isRight ? "border-emerald-500 bg-emerald-500" : isStudent ? "border-red-500 bg-red-500" : "border-current/40"}`} />
+                                        <span className="flex-1"><MathText text={opt} /></span>
+                                        {isRight && <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 ml-auto">Correct</span>}
+                                        {isStudent && !isRight && <span className="text-[10px] font-bold text-red-600 dark:text-red-400 ml-auto">Your answer</span>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                </motion.div>
+              );
+            })()}
+          </AnimatePresence>
 
           {/* ── CALENDAR TAB ── */}
           {activeTab === "calendar" && <CalendarView token={token} />}

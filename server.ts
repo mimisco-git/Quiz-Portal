@@ -259,6 +259,54 @@ app.post("/api/auth/student-register", authLimiter, async (req, res) => {
   }
 });
 
+// Bulk student import — lecturer uploads CSV (fullName,email,regNumber,department,year)
+app.post("/api/students/bulk-import", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only" });
+  const { csv } = req.body;
+  if (!csv || typeof csv !== "string") return res.status(400).json({ error: "csv field is required" });
+
+  const lines = csv.split("\n").map((l: string) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return res.status(400).json({ error: "CSV must have a header row and at least one data row" });
+
+  // Detect and skip header row
+  const firstLower = lines[0].toLowerCase();
+  const dataLines = firstLower.includes("name") || firstLower.includes("email") || firstLower.includes("reg") ? lines.slice(1) : lines;
+
+  const created: string[] = [];
+  const skipped: string[] = [];
+  const errors: string[] = [];
+
+  for (const line of dataLines) {
+    const cols = line.split(",").map((c: string) => c.trim().replace(/^"|"$/g, ""));
+    const [fullName, email, regNumber, department, year] = cols;
+    if (!fullName || !regNumber) { errors.push(`Row skipped — missing name or reg number: "${line}"`); continue; }
+    const normalizedReg = regNumber.toUpperCase();
+    const normalizedEmail = (email || `${normalizedReg.replace(/\//g, "")}@futo.edu.ng`).toLowerCase();
+    try {
+      const exists = await prisma.student.findFirst({ where: { OR: [{ regNumber: normalizedReg }, { email: normalizedEmail }] } });
+      if (exists) { skipped.push(normalizedReg); continue; }
+      // Default password = reg number (student must change on first login)
+      const passwordHash = await bcrypt.hash(normalizedReg, 10);
+      await prisma.student.create({
+        data: {
+          fullName,
+          email: normalizedEmail,
+          regNumber: normalizedReg,
+          department: department || "General",
+          year: year || "Year 1",
+          passwordHash,
+          mustChangePassword: true,
+        },
+      });
+      created.push(normalizedReg);
+    } catch (e: any) {
+      errors.push(`${normalizedReg}: ${e.message}`);
+    }
+  }
+
+  return res.json({ created: created.length, skipped: skipped.length, errors });
+});
+
 // Student Login — registration number + password only
 app.post("/api/auth/student-login", authLimiter, async (req, res) => {
   const { regNumber, password } = req.body;
@@ -1360,6 +1408,24 @@ app.post("/api/quiz/save-progress", authenticateToken, async (req: any, res) => 
   } catch (error: any) {
     console.error("Error saving quiz progress:", error);
     return res.status(500).json({ error: "Error saving progress" });
+  }
+});
+
+// Quiz answer review — student sees their answers vs correct after completion
+app.get("/api/quiz/attempt/:attemptId/review", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "student") return res.status(403).json({ error: "Students only" });
+  const { attemptId } = req.params;
+  try {
+    const attempt = await prisma.studentAttempt.findUnique({
+      where: { id: attemptId },
+      include: { quiz: { include: { questions: true } } },
+    });
+    if (!attempt || attempt.studentId !== req.user.id) return res.status(404).json({ error: "Attempt not found" });
+    if (!attempt.isCompleted) return res.status(400).json({ error: "Quiz not completed yet" });
+    return res.json(attempt);
+  } catch (error: any) {
+    console.error("Error fetching attempt review:", error);
+    return res.status(500).json({ error: "Error fetching review" });
   }
 });
 

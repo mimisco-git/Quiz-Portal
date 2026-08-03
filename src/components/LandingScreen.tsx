@@ -733,6 +733,25 @@ export default function LandingScreen({
                               <div>
                                 <label className={lbl}>Password</label>
                                 <input type="password" required minLength={8} value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="Min. 8 characters" className={inp} />
+                                {regPassword.length > 0 && (() => {
+                                  let s = 0;
+                                  if (regPassword.length >= 8) s++;
+                                  if (/[A-Z]/.test(regPassword)) s++;
+                                  if (/[0-9]/.test(regPassword)) s++;
+                                  if (/[^A-Za-z0-9]/.test(regPassword)) s++;
+                                  const labels = ["", "Weak", "Fair", "Good", "Strong"];
+                                  const colors = ["", "#ef4444", "#f97316", "#eab308", "#10b981"];
+                                  return (
+                                    <div className="mt-1.5 space-y-1">
+                                      <div className="flex gap-1">
+                                        {[1,2,3,4].map(i => (
+                                          <div key={i} className="h-1 flex-1 rounded-full transition-all duration-300" style={{ background: i <= s ? colors[s] : "rgba(255,255,255,0.12)" }} />
+                                        ))}
+                                      </div>
+                                      <p className="text-[10.5px] font-semibold" style={{ color: colors[s] }}>{labels[s]}</p>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                               <div>
                                 <label className={lbl}>Confirm Password</label>
