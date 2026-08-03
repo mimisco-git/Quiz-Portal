@@ -42,6 +42,7 @@
     "react-router-dom": "^7.18.1",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0",
+    "resend": "^6.18.1",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "turndown": "^7.2.4",

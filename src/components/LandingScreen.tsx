@@ -99,7 +99,10 @@ export default function LandingScreen({
   const [forgotAnswer, setForgotAnswer]             = useState("");
   const [forgotNewPassword, setForgotNewPassword]   = useState("");
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
-  const [forgotStep, setForgotStep]                 = useState<"enter-reg" | "set-password">("enter-reg");
+  const [forgotStep, setForgotStep]                 = useState<"enter-reg" | "set-password" | "email-sent" | "email-reset">("enter-reg");
+  const [emailResetToken, setEmailResetToken]       = useState("");
+  const [emailResetNewPwd, setEmailResetNewPwd]     = useState("");
+  const [emailResetConfirmPwd, setEmailResetConfirmPwd] = useState("");
 
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [error, setError]     = useState<string | null>(null);
@@ -110,6 +113,17 @@ export default function LandingScreen({
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("resetToken");
+    if (token) {
+      setEmailResetToken(token);
+      setSelectedUser("student");
+      setMode("forgot");
+      setForgotStep("email-reset");
+      window.history.replaceState({}, "", "/");
+    }
   }, []);
 
   useEffect(() => {
@@ -241,8 +255,36 @@ export default function LandingScreen({
       const res  = await fetch("/api/auth/student-get-security-question", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regNumber: forgotRegNumber }) });
       const data = await apiJSON(res);
       if (!res.ok) throw new Error(data.error || "Registration number not found.");
+      if (!data.securityQuestion) {
+        // Bulk-imported student — no security question set, go straight to email reset
+        await handleSendResetEmail();
+        return;
+      }
       setForgotQuestion(data.securityQuestion);
       setForgotStep("set-password");
+    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
+  };
+
+  const handleSendResetEmail = async () => {
+    setError(null); setLoading(true);
+    try {
+      const res  = await fetch("/api/auth/send-reset-email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regNumber: forgotRegNumber }) });
+      const data = await apiJSON(res);
+      if (!res.ok) throw new Error(data.error || "Failed to send email.");
+      setForgotStep("email-sent");
+    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
+  };
+
+  const handleEmailReset = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null); setLoading(true);
+    if (emailResetNewPwd !== emailResetConfirmPwd) { setError("Passwords do not match."); setLoading(false); return; }
+    if (emailResetNewPwd.length < 8) { setError("Password must be at least 8 characters."); setLoading(false); return; }
+    try {
+      const res  = await fetch("/api/auth/reset-password-via-token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: emailResetToken, newPassword: emailResetNewPwd, confirmPassword: emailResetConfirmPwd }) });
+      const data = await apiJSON(res);
+      if (!res.ok) throw new Error(data.error || "Reset failed.");
+      setSuccess("Password reset! Signing you in…");
+      setTimeout(() => onLoginSuccess(data.token, data.user), 800);
     } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   };
 
@@ -661,10 +703,10 @@ export default function LandingScreen({
                                 </span>
                               </div>
 
-                              {forgotStep === "enter-reg" ? (
+                              {forgotStep === "enter-reg" && (
                                 <form onSubmit={handleForgotGetQuestion} className="space-y-4">
                                   <div className="bg-emerald-400/10 border border-emerald-400/20 rounded-xl p-3 text-[12px] text-emerald-300/90 leading-relaxed">
-                                    Enter your registration number to retrieve your security question. You will need to answer it to reset your password.
+                                    Enter your registration number. We'll use your security question or send you an email reset link.
                                   </div>
                                   <div>
                                     <label className={lbl}>Registration Number</label>
@@ -674,7 +716,9 @@ export default function LandingScreen({
                                     {loading ? "Looking up…" : "Continue"} <ArrowRight className="h-4 w-4" />
                                   </button>
                                 </form>
-                              ) : (
+                              )}
+
+                              {forgotStep === "set-password" && (
                                 <form onSubmit={handleForgotResetPassword} className="space-y-4">
                                   <div className="flex items-start gap-2 bg-white/[0.05] border border-white/[0.08] rounded-xl p-3">
                                     <HelpCircle className="h-4 w-4 text-white/40 shrink-0 mt-0.5" />
@@ -698,7 +742,41 @@ export default function LandingScreen({
                                   <button type="submit" disabled={loading} className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer">
                                     {loading ? "Resetting…" : "Reset Password & Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
                                   </button>
-                                  <button type="button" onClick={() => { setForgotStep("enter-reg"); setError(null); }} className={link + " block text-center w-full"}>Try a different reg number</button>
+                                  <div className="flex items-center gap-2 justify-center">
+                                    <button type="button" onClick={() => { setForgotStep("enter-reg"); setError(null); }} className={link}>Different reg number</button>
+                                    <span className="text-white/20">·</span>
+                                    <button type="button" disabled={loading} onClick={handleSendResetEmail} className={link}>Email me a reset link instead</button>
+                                  </div>
+                                </form>
+                              )}
+
+                              {forgotStep === "email-sent" && (
+                                <div className="space-y-4 text-center">
+                                  <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                                    <CheckCircle className="h-6 w-6 text-emerald-400" />
+                                  </div>
+                                  <p className="text-white/80 text-[14px] font-medium">Reset link sent!</p>
+                                  <p className="text-white/50 text-[12px] leading-relaxed">Check your email inbox for a password reset link. It expires in 15 minutes.</p>
+                                  <button type="button" onClick={() => { setForgotStep("enter-reg"); setForgotRegNumber(""); setError(null); }} className={link + " block text-center w-full"}>Back to login</button>
+                                </div>
+                              )}
+
+                              {forgotStep === "email-reset" && (
+                                <form onSubmit={handleEmailReset} className="space-y-4">
+                                  <div className="bg-emerald-400/10 border border-emerald-400/20 rounded-xl p-3 text-[12px] text-emerald-300/90 leading-relaxed">
+                                    Enter your new password below.
+                                  </div>
+                                  <div>
+                                    <label className={lbl}>New Password</label>
+                                    <input type="password" required minLength={8} value={emailResetNewPwd} onChange={e => setEmailResetNewPwd(e.target.value)} placeholder="Min. 8 characters" className={inp} autoFocus />
+                                  </div>
+                                  <div>
+                                    <label className={lbl}>Confirm New Password</label>
+                                    <input type="password" required value={emailResetConfirmPwd} onChange={e => setEmailResetConfirmPwd(e.target.value)} placeholder="Repeat your new password" className={inp} />
+                                  </div>
+                                  <button type="submit" disabled={loading} className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer">
+                                    {loading ? "Resetting…" : "Set New Password & Sign In"} {!loading && <ArrowRight className="h-4 w-4" />}
+                                  </button>
                                 </form>
                               )}
                             </motion.div>

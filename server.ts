@@ -13,11 +13,23 @@ import JSZip from "jszip";
 import OpenAI from "openai";
 import rateLimit from "express-rate-limit";
 import webpush from "web-push";
+import { Resend } from "resend";
 import { prisma } from "./src/lib/db.js";
 import { seedDatabase } from "./src/lib/seed.js";
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV ?? "production", tracesSampleRate: 0.2 });
+}
+
+// ── Email (Resend) — graceful no-op if key not configured ──
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const EMAIL_FROM = process.env.EMAIL_FROM ?? "QuizOS <noreply@quizos.online>";
+const APP_URL = process.env.FRONTEND_URL ?? "https://www.quizos.online";
+
+async function sendEmail(to: string, subject: string, html: string) {
+  if (!resend) return;
+  try { await resend.emails.send({ from: EMAIL_FROM, to, subject, html }); }
+  catch (e) { console.error("Email error:", e); }
 }
 
 // ── Web Push (VAPID) setup — graceful no-op if keys not configured ──
@@ -246,6 +258,16 @@ app.post("/api/auth/student-register", authLimiter, async (req, res) => {
       { expiresIn: "4h" }
     );
 
+    sendEmail(normalizedEmail, "Welcome to QuizOS 🎓", `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <h2 style="color:#047857">Welcome to QuizOS, ${fullName.trim()}!</h2>
+        <p>Your student account has been created successfully.</p>
+        <p><strong>Registration Number:</strong> <code>${normalizedReg}</code></p>
+        <p>Sign in at <a href="${APP_URL}" style="color:#047857">${APP_URL}</a> using your registration number and the password you just set.</p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+        <p style="font-size:12px;color:#6b7280">FUTO Academic Portal · quizos.online</p>
+      </div>`).catch(() => {});
+
     return res.status(201).json({
       token,
       user: {
@@ -303,6 +325,19 @@ app.post("/api/students/bulk-import", authenticateToken, async (req: any, res) =
           mustChangePassword: true,
         },
       });
+      sendEmail(normalizedEmail, "Your QuizOS Account 🎓", `
+        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+          <h2 style="color:#047857">Welcome to QuizOS, ${fullName}!</h2>
+          <p>Your lecturer has created an account for you on the FUTO Academic Portal.</p>
+          <table style="border-collapse:collapse;width:100%;margin:16px 0">
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold">Registration Number</td><td style="padding:8px;border:1px solid #e5e7eb;font-family:monospace">${normalizedReg}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold">Default Password</td><td style="padding:8px;border:1px solid #e5e7eb;font-family:monospace">${normalizedReg}</td></tr>
+          </table>
+          <p>⚠️ You will be asked to change your password on first login.</p>
+          <a href="${APP_URL}" style="display:inline-block;background:#047857;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">Sign In Now</a>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+          <p style="font-size:12px;color:#6b7280">FUTO Academic Portal · quizos.online</p>
+        </div>`).catch(() => {});
       created.push(normalizedReg);
     } catch (e: any) {
       errors.push(`${normalizedReg}: ${e.message}`);
@@ -580,6 +615,78 @@ app.post("/api/auth/student-forgot-password", strictLimiter, async (req, res) =>
   } catch (error: any) {
     console.error("Student forgot-password error:", error);
     return res.status(500).json({ error: "Something went wrong. Please try again." });
+  }
+});
+
+// Email-based password reset — step 1: send link
+app.post("/api/auth/send-reset-email", strictLimiter, async (req, res) => {
+  const { regNumber } = req.body;
+  if (!regNumber) return res.status(400).json({ error: "Registration number is required." });
+  try {
+    const student = await prisma.student.findUnique({
+      where: { regNumber: regNumber.trim().toUpperCase() },
+      select: { id: true, email: true, fullName: true, passwordHash: true },
+    });
+    // Always return ok to prevent user enumeration
+    if (!student) return res.json({ ok: true });
+    // Single-use token: signed with current password hash so it invalidates after reset
+    const token = jwt.sign({ id: student.id, type: "password-reset" }, JWT_SECRET + student.passwordHash, { expiresIn: "15m" });
+    const resetUrl = `${APP_URL}/?resetToken=${token}`;
+    await sendEmail(student.email, "QuizOS Password Reset", `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <h2 style="color:#047857">Password Reset</h2>
+        <p>Hi ${student.fullName},</p>
+        <p>Click the button below to reset your QuizOS password. This link expires in <strong>15 minutes</strong>.</p>
+        <a href="${resetUrl}" style="display:inline-block;background:#047857;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin:8px 0">Reset My Password</a>
+        <p style="font-size:12px;color:#6b7280;margin-top:16px">If you didn't request this, you can safely ignore this email.</p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+        <p style="font-size:12px;color:#6b7280">FUTO Academic Portal · quizos.online</p>
+      </div>`);
+    return res.json({ ok: true });
+  } catch (e: any) {
+    return res.status(500).json({ error: "Failed to send reset email." });
+  }
+});
+
+// Email-based password reset — step 2: set new password via token
+app.post("/api/auth/reset-password-via-token", strictLimiter, async (req, res) => {
+  const { token, newPassword, confirmPassword } = req.body;
+  if (!token || !newPassword || !confirmPassword) return res.status(400).json({ error: "All fields are required." });
+  if (newPassword !== confirmPassword) return res.status(400).json({ error: "Passwords do not match." });
+  if (newPassword.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters." });
+  if (newPassword.length > 128) return res.status(400).json({ error: "Password is too long." });
+
+  let decoded: any;
+  try { decoded = jwt.decode(token); } catch { return res.status(400).json({ error: "Invalid reset link." }); }
+  if (!decoded?.id || decoded?.type !== "password-reset") return res.status(400).json({ error: "Invalid reset link." });
+
+  try {
+    const student = await prisma.student.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, fullName: true, regNumber: true, department: true, year: true, passwordHash: true },
+    });
+    if (!student) return res.status(400).json({ error: "Invalid or expired reset link." });
+
+    try { jwt.verify(token, JWT_SECRET + student.passwordHash); }
+    catch { return res.status(400).json({ error: "Reset link has expired or already been used." }); }
+
+    if (newPassword.toUpperCase() === student.regNumber.toUpperCase()) {
+      return res.status(400).json({ error: "Password cannot be the same as your registration number." });
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const updated = await prisma.student.update({ where: { id: student.id }, data: { passwordHash, mustChangePassword: false } });
+    clearFailedLogin(updated.regNumber);
+
+    const jwtToken = jwt.sign(
+      { id: updated.id, fullName: updated.fullName, regNumber: updated.regNumber, department: updated.department, year: updated.year, role: "student", mustChangePassword: false },
+      JWT_SECRET, { expiresIn: "4h" }
+    );
+    return res.json({
+      token: jwtToken,
+      user: { id: updated.id, fullName: updated.fullName, regNumber: updated.regNumber, department: updated.department, year: updated.year, role: "student", mustChangePassword: false },
+    });
+  } catch (e: any) {
+    return res.status(500).json({ error: "Failed to reset password." });
   }
 });
 
