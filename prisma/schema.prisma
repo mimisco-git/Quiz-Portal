@@ -17,7 +17,8 @@ model Lecturer {
   departments      String         @default("[]") // JSON array of dept names this lecturer teaches
   securityQuestion String?
   securityAnswer   String?
-  status           String         @default("approved")
+  status              String         @default("approved")
+  mustChangePassword  Boolean        @default(false)
   courses          Course[]
   announcements    Announcement[]
   bankQuestions    BankQuestion[]

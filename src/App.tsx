@@ -5,6 +5,7 @@ import StudentDashboard from "./components/StudentDashboard";
 import LecturerDashboard from "./components/LecturerDashboard";
 import AdminDashboard from "./components/AdminDashboard";
 import ForceChangePasswordScreen from "./components/ForceChangePasswordScreen";
+import LecturerForceChangePasswordScreen from "./components/LecturerForceChangePasswordScreen";
 import DeepLinkPreview from "./components/DeepLinkPreview";
 import { User } from "./types";
 import { motion, AnimatePresence } from "motion/react";
@@ -297,6 +298,20 @@ export default function App() {
               onToggleTheme={toggleTheme}
               onLogout={handleLogout}
               deepLink={deepLink}
+            />
+          </motion.div>
+        ) : user.role === "lecturer" && user.mustChangePassword ? (
+          <motion.div
+            key="lecturer-force-change-password"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <LecturerForceChangePasswordScreen
+              token={token}
+              onPasswordChanged={handleLoginSuccess}
+              onLogout={handleLogout}
             />
           </motion.div>
         ) : (

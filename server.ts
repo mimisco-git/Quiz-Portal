@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/node";
+import crypto from "crypto";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import express from "express";
@@ -765,6 +766,36 @@ app.post("/api/auth/lecturer-forgot-password", strictLimiter, async (req, res) =
   }
 });
 
+// Forced password change for lecturers — requires a valid token (even mustChangePassword=true)
+(app.post as any)(
+  "/api/auth/lecturer-change-password",
+  (req: any, _res: any, next: any) => { req._allowMustChange = true; next(); },
+  authenticateToken,
+  async (req: any, res: any) => {
+    if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only." });
+    const { newPassword, confirmPassword } = req.body;
+    if (!newPassword || !confirmPassword) return res.status(400).json({ error: "New password and confirmation are required." });
+    if (newPassword.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters." });
+    if (newPassword.length > 128) return res.status(400).json({ error: "Password is too long." });
+    if (newPassword !== confirmPassword) return res.status(400).json({ error: "Passwords do not match." });
+    try {
+      const passwordHash = await bcrypt.hash(newPassword, 12);
+      const updated = await prisma.lecturer.update({
+        where: { id: req.user.id },
+        data: { password: passwordHash, mustChangePassword: false },
+      });
+      const token = jwt.sign(
+        { id: updated.id, name: updated.name, email: updated.email, role: "lecturer", mustChangePassword: false },
+        JWT_SECRET, { expiresIn: "8h" }
+      );
+      return res.json({ token, user: { id: updated.id, name: updated.name, email: updated.email, role: "lecturer", mustChangePassword: false } });
+    } catch (error: any) {
+      console.error("Lecturer change-password error:", error);
+      return res.status(500).json({ error: "Failed to update password." });
+    }
+  }
+);
+
 // Answer security question and fix/update year
 app.post("/api/auth/student-fix-year", strictLimiter, async (req, res) => {
   const { regNumber, securityAnswer, newYear } = req.body;
@@ -945,13 +976,13 @@ app.post("/api/auth/lecturer-login", authLimiter, async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: lecturer.id, name: lecturer.name, email: lecturer.email, role: "lecturer" },
+      { id: lecturer.id, name: lecturer.name, email: lecturer.email, role: "lecturer", mustChangePassword: lecturer.mustChangePassword },
       JWT_SECRET, { expiresIn: "8h" }
     );
 
     return res.json({
       token,
-      user: { id: lecturer.id, name: lecturer.name, email: lecturer.email, role: "lecturer" },
+      user: { id: lecturer.id, name: lecturer.name, email: lecturer.email, role: "lecturer", mustChangePassword: lecturer.mustChangePassword },
     });
   } catch (error: any) {
     console.error("Lecturer login error:", error);
@@ -1027,6 +1058,34 @@ app.delete("/api/admin/lecturers/:id", authenticateAdmin, async (req, res) => {
     await prisma.lecturer.delete({ where: { id: req.params.id } });
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: "Failed to delete" }); }
+});
+
+app.post("/api/admin/lecturers/:id/reset-password", authenticateAdmin, async (req: any, res) => {
+  try {
+    const lecturer = await prisma.lecturer.findUnique({ where: { id: req.params.id } });
+    if (!lecturer) return res.status(404).json({ error: "Lecturer not found." });
+
+    // Generate a random 12-char alphanumeric temp password
+    const tempPassword = crypto.randomBytes(9).toString("base64url").slice(0, 12);
+    const hashed = await bcrypt.hash(tempPassword, 12);
+    await prisma.lecturer.update({
+      where: { id: req.params.id },
+      data: { password: hashed, mustChangePassword: true },
+    });
+
+    sendEmail(lecturer.email, "QuizOS — Password Reset by Administrator", `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <h2 style="color:#047857">Your Password Has Been Reset</h2>
+        <p>Hi ${lecturer.name}, a system administrator has reset your QuizOS password.</p>
+        <p>Your temporary password is:</p>
+        <div style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;padding:14px 20px;margin:12px 0;font-size:22px;font-weight:bold;letter-spacing:2px;text-align:center;font-family:monospace">${tempPassword}</div>
+        <p>Sign in at <a href="${APP_URL}" style="color:#047857">${APP_URL}</a> using this temporary password. You will be required to set a new permanent password immediately after logging in.</p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0"/>
+        <p style="font-size:12px;color:#6b7280">If you did not expect this, please contact your administrator.</p>
+      </div>`).catch(() => {});
+
+    return res.json({ ok: true, tempPassword });
+  } catch { return res.status(500).json({ error: "Failed to reset password." }); }
 });
 
 // -------------------------------------------------------------
