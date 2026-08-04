@@ -155,6 +155,7 @@ model LectureSession {
   attachmentName String?
   attachmentData String?
   scheduledAt    DateTime?
+  recordingUrl   String?
   endsAt         DateTime?
   chats          LectureChat[]
   attendance     LectureAttendance[]

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import TurndownService from "turndown";
-import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, MicOff, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles, Eye, Monitor, KeyRound, ShieldCheck, Clock } from "lucide-react";
+import { GraduationCap, BookOpen, PlusCircle, Trash2, Award, ClipboardList, Check, Save, Radio, Users, Send, MessageSquare, AlertTriangle, Download, Sun, Moon, Camera, LogOut, FileText, Upload, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Star, MicOff, Layers, BarChart2, ThumbsUp, ArrowLeft, CheckCircle, X, Pencil, Copy, Trophy, Megaphone, TrendingUp, Calendar, Sparkles, Eye, Monitor, KeyRound, ShieldCheck, Clock, Circle, Video } from "lucide-react";
 import { Course, LectureNote, Quiz, StudentAttempt, Question } from "../types";
 import UserAvatar from "./UserAvatar";
 import NotificationBell from "./NotificationBell";
@@ -128,6 +128,14 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
   const [schedNow, setSchedNow] = useState(Date.now());
   const [liveChats, setLiveChats] = useState<any[]>([]);
   const [lecturerChatMessage, setLecturerChatMessage] = useState("");
+
+  // Recording
+  const [isRecording, setIsRecording] = useState(false);
+  const [isUploadingRecording, setIsUploadingRecording] = useState(false);
+  const [recordingDone, setRecordingDone] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
 
   // Student password reset
   const [resetPwdModal, setResetPwdModal] = useState<{ studentId: string; studentName: string } | null>(null);
@@ -1442,6 +1450,55 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
     }
   };
 
+  const handleToggleRecording = async () => {
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+    setRecordingDone(false);
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 } as any, audio: true });
+      recordingStreamRef.current = stream;
+      recordedChunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus") ? "video/webm;codecs=vp8,opus" : "video/webm";
+      const mr = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mr;
+      mr.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        setIsRecording(false);
+        recordingStreamRef.current?.getTracks().forEach(t => t.stop());
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+        if (blob.size < 1000 || !broadcastingSession) return;
+        setIsUploadingRecording(true);
+        try {
+          const presignRes = await fetch(`/api/lectures/${broadcastingSession.id}/presign-recording`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ mimeType }),
+          });
+          if (!presignRes.ok) throw new Error("Presign failed");
+          const { uploadUrl, publicUrl } = await presignRes.json();
+          await fetch(uploadUrl, { method: "PUT", body: blob, headers: { "Content-Type": mimeType } });
+          await fetch(`/api/lectures/${broadcastingSession.id}/recording-complete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ recordingUrl: publicUrl }),
+          });
+          setRecordingDone(true);
+        } catch {
+          showError("Recording upload failed. Please try again.");
+        } finally {
+          setIsUploadingRecording(false);
+        }
+      };
+      stream.getVideoTracks()[0].onended = () => { if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop(); };
+      mr.start(5000);
+      setIsRecording(true);
+    } catch {
+      // User cancelled the screen picker — do nothing
+    }
+  };
+
   const handleSendLecturerChat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!lecturerChatMessage.trim() || !broadcastingSession) return;
@@ -2195,6 +2252,19 @@ export default function LecturerDashboard({ token, user, theme, onToggleTheme, o
                           <button onClick={handleSummarize} disabled={isSummarizing}
                             className="px-3 py-1.5 text-[11px] font-semibold border border-black/[0.09] dark:border-white/[0.10] rounded-[8px] hover:border-emerald-300 text-[#3a3a3c] dark:text-white/60 transition-colors disabled:opacity-50">
                             {isSummarizing ? "Summarizing…" : "AI Summary"}
+                          </button>
+                          <button onClick={handleToggleRecording} disabled={isUploadingRecording}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold border rounded-[8px] transition-colors disabled:opacity-50 ${
+                              isUploadingRecording ? "border-black/[0.09] dark:border-white/[0.10] text-[#6e6e73] dark:text-white/40"
+                              : isRecording ? "border-red-400 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400"
+                              : recordingDone ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400"
+                              : "border-black/[0.09] dark:border-white/[0.10] text-[#3a3a3c] dark:text-white/60 hover:border-red-300"
+                            }`}>
+                            {isUploadingRecording ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : isRecording ? <Circle className="h-2 w-2 fill-red-500 text-red-500 animate-pulse" />
+                              : recordingDone ? <Video className="h-3 w-3" />
+                              : <Circle className="h-2 w-2 fill-current" />}
+                            {isUploadingRecording ? "Saving…" : isRecording ? "Stop Rec" : recordingDone ? "Saved ✓" : "Record"}
                           </button>
                           <button onClick={handleEndLiveLecture}
                             className="px-4 py-1.5 bg-[#1d1d1f] dark:bg-white/[0.10] hover:bg-red-700 dark:hover:bg-red-700 text-white rounded-[10px] text-[12px] font-semibold transition flex-shrink-0">

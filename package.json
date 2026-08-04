@@ -12,6 +12,8 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1102.0",
+    "@aws-sdk/s3-request-presigner": "^3.1102.0",
     "@google/genai": "^2.4.0",
     "@libsql/client": "^0.17.4",
     "@prisma/adapter-libsql": "5.22.0",

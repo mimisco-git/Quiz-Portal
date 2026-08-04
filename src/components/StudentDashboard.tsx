@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { BookOpen, Award, LogOut, FileText, ChevronRight, ChevronLeft, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap, Star, WifiOff, Monitor, User, Save } from "lucide-react";
+import { BookOpen, Award, LogOut, FileText, ChevronRight, ChevronLeft, Play, Clock, AlertTriangle, CheckCircle, ShieldAlert, Send, Radio, Filter, Calendar, Sun, Moon, Camera, Upload, Loader2, ThumbsUp, ArrowLeft, Mic, Layers, BarChart2, MessageSquare, Users, X, ClipboardList, Trophy, Megaphone, TrendingUp, Bell, Pencil, ChevronDown, Download, Flame, Zap, Star, WifiOff, Monitor, User, Save, Video } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import CalendarView from "./CalendarView";
 import DiscussionBoard from "./DiscussionBoard";
@@ -79,6 +79,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
   const [activeLiveSession, setActiveLiveSession] = useState<any | null>(null);
   const [allLiveSessions, setAllLiveSessions] = useState<any[]>([]);
   const [scheduledSessions, setScheduledSessions] = useState<any[]>([]);
+  const [sessionRecordings, setSessionRecordings] = useState<any[]>([]);
   const [schedNow, setSchedNow] = useState(Date.now());
   const [joinedCourseId, setJoinedCourseId] = useState<string | null>(null);
   const [liveChats, setLiveChats] = useState<any[]>([]);
@@ -149,9 +150,10 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
 
   const fetchAllLiveSessions = async () => {
     try {
-      const [activeRes, scheduledRes] = await Promise.all([
+      const [activeRes, scheduledRes, recRes] = await Promise.all([
         fetch("/api/lectures/active-all", { headers: { Authorization: `Bearer ${token}` } }),
         fetch("/api/lectures/scheduled", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/lectures/recordings", { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       if (activeRes.ok) {
         const activeSessions: any[] = await activeRes.json();
@@ -166,6 +168,7 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
         }
       }
       if (scheduledRes.ok) setScheduledSessions(await scheduledRes.json());
+      if (recRes.ok) setSessionRecordings(await recRes.json());
     } catch {}
   };
 
@@ -2460,6 +2463,34 @@ export default function StudentDashboard({ token, user, theme, onToggleTheme, on
                           ))}
                         </div>
                       ) : null}
+
+                      {/* ── Past Recordings ── */}
+                      {sessionRecordings.length > 0 && (
+                        <div className="mt-4 space-y-3">
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-[#6e6e73] dark:text-white/40 flex items-center gap-2">
+                            <Video className="h-3.5 w-3.5" /> Past Recordings
+                          </p>
+                          {sessionRecordings.map((rec: any) => (
+                            <div key={rec.id} className="flex items-center justify-between gap-3 p-4 border border-black/[0.07] dark:border-white/[0.07] rounded-[14px] bg-black/[0.02] dark:bg-white/[0.02]">
+                              <div className="min-w-0">
+                                <p className="text-[13px] font-semibold text-[#1d1d1f] dark:text-white/90 truncate">{rec.topic}</p>
+                                <p className="text-[11.5px] text-[#6e6e73] dark:text-white/50 truncate">
+                                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{rec.course?.code}</span>
+                                  {" · "}{rec.course?.title}
+                                  {" · "}{rec.course?.lecturer?.name}
+                                </p>
+                                <p className="text-[10.5px] font-mono text-[#6e6e73] dark:text-white/30 mt-0.5">
+                                  {new Date(rec.createdAt).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}
+                                </p>
+                              </div>
+                              <a href={rec.recordingUrl} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-semibold rounded-[10px] transition flex-shrink-0">
+                                <Play className="h-3.5 w-3.5 fill-white" /> Watch
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ) : (() => {
                     const slides = activeLiveSession.content.split(/^---$/m).map((s: string) => s.trim()).filter(Boolean);

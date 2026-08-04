@@ -1,4 +1,6 @@
 import * as Sentry from "@sentry/node";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import express from "express";
 import Ably from "ably";
 import cors from "cors";
@@ -31,6 +33,17 @@ async function sendEmail(to: string, subject: string, html: string) {
   try { await resend.emails.send({ from: EMAIL_FROM, to, subject, html }); }
   catch (e) { console.error("Email error:", e); }
 }
+
+// ── Cloudflare R2 (lecture recordings) — graceful no-op if not configured ──
+const r2 = (process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY)
+  ? new S3Client({
+      region: "auto",
+      endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID!, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY! },
+    })
+  : null;
+const R2_BUCKET = process.env.R2_BUCKET_NAME ?? "";
+const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
 
 // ── Web Push (VAPID) setup — graceful no-op if keys not configured ──
 const PUSH_ENABLED = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
@@ -2457,6 +2470,54 @@ app.post("/api/lectures/:id/end", authenticateToken, async (req: any, res) => {
     console.error("Error ending live lecture:", error);
     return res.status(500).json({ error: "Error ending live lecture" });
   }
+});
+
+// ── Recording: generate presigned R2 upload URL ──
+app.post("/api/lectures/:id/presign-recording", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only." });
+  if (!r2) return res.status(503).json({ error: "Recording storage not configured." });
+  const { id } = req.params;
+  const { mimeType } = req.body;
+  const key = `recordings/${id}-${Date.now()}.webm`;
+  try {
+    const cmd = new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, ContentType: mimeType || "video/webm" });
+    const uploadUrl = await getSignedUrl(r2, cmd, { expiresIn: 3600 });
+    const publicUrl = `${R2_PUBLIC_URL}/${key}`;
+    return res.json({ uploadUrl, publicUrl });
+  } catch (e) {
+    console.error("R2 presign error:", e);
+    return res.status(500).json({ error: "Failed to generate upload URL." });
+  }
+});
+
+// ── Recording: save public URL after upload completes ──
+app.post("/api/lectures/:id/recording-complete", authenticateToken, async (req: any, res) => {
+  if (req.user.role !== "lecturer") return res.status(403).json({ error: "Lecturers only." });
+  const { id } = req.params;
+  const { recordingUrl } = req.body;
+  if (!recordingUrl) return res.status(400).json({ error: "recordingUrl is required." });
+  try {
+    const session = await prisma.lectureSession.findUnique({ where: { id }, include: { course: { select: { lecturerId: true } } } });
+    if (!session) return res.status(404).json({ error: "Session not found." });
+    if (session.course.lecturerId !== req.user.id) return res.status(403).json({ error: "Access denied." });
+    const updated = await prisma.lectureSession.update({ where: { id }, data: { recordingUrl } });
+    return res.json(updated);
+  } catch { return res.status(500).json({ error: "Failed to save recording." }); }
+});
+
+// ── Recordings list (students + lecturers) ──
+app.get("/api/lectures/recordings", authenticateToken, async (_req: any, res) => {
+  try {
+    const recordings = await prisma.lectureSession.findMany({
+      where: { recordingUrl: { not: null } },
+      select: {
+        id: true, topic: true, recordingUrl: true, createdAt: true,
+        course: { select: { id: true, code: true, title: true, lecturer: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.json(recordings);
+  } catch { return res.status(500).json({ error: "Failed to fetch recordings." }); }
 });
 
 app.delete("/api/lectures/:id", authenticateToken, async (req: any, res) => {
